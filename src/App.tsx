@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { useEffect } from "react";
 
 import LoginPage from './pages/auth/LoginPage';
 import CreateAdminPage from './pages/auth/CreateAdminPage';
@@ -89,6 +90,14 @@ function AppWithTheme() {
 }
 
 export default function App() {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        window.location.reload();
+      });
+    }
+  }, []);
+
   return (
     <ThemeProvider>
       <AuthProvider>

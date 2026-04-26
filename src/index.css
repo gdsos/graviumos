@@ -22,4 +22,33 @@
   .form-input {
     @apply w-full px-3 py-2 rounded-lg border-2 border-gray-300 bg-white text-black;
   }
+  #app-loader {
+  position: fixed;
+  inset: 0;
+  background: #0b0b0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  z-index: 9999;
+  color: white;
+  font-family: 'Montserrat', sans-serif;
+}
+
+#app-loader::after {
+  content: "";
+  width: 32px;
+  height: 32px;
+  margin-top: 16px;
+  border: 3px solid rgba(255,255,255,0.2);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 }
