@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import { useEffect } from "react";
 
 import LoginPage from './pages/auth/LoginPage';
 import CreateAdminPage from './pages/auth/CreateAdminPage';
@@ -32,7 +33,7 @@ import PortalPayroll from './pages/portal/PortalPayroll';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-canvas flex items-center justify-center"><div className="text-primary">Loading...</div></div>;
+  if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/login/admin" replace />;
   if (profile && profile.role !== 'super_admin') return <Navigate to="/portal/overview" replace />;
   return <>{children}</>;
@@ -40,13 +41,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-canvas flex items-center justify-center"><div className="text-primary">Loading...</div></div>;
+  if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/login/employee" replace />;
   return <>{children}</>;
 }
 
 function AppWithTheme() {
   const { theme } = useTheme();
+
   return (
     <PorscheDesignSystemProvider theme={theme}>
       <BrowserRouter>
@@ -90,6 +92,13 @@ function AppWithTheme() {
 }
 
 export default function App() {
+  // splash removal
+  useEffect(() => {
+    const el = document.getElementById("app-loader");
+    if (el) el.remove();
+  }, []);
+
+  // PWA update reload
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("controllerchange", () => {
