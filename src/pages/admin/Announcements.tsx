@@ -13,7 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
+const FONT = "inherit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ function FormField({ label, required, children }: { label: string; required?: bo
     <div>
       <label
         className="block text-xs font-medium text-contrast-high mb-1.5 uppercase tracking-wide"
-        style={{ fontFamily: FONT }}
+        
       >
         {label}{required && <span className="text-notification-error ml-0.5">*</span>}
       </label>
@@ -68,7 +68,7 @@ function RelativeTime({ date }: { date: string }) {
   else label = d.toLocaleDateString('en-IN');
 
   return (
-    <span title={d.toLocaleString('en-IN')} style={{ fontFamily: FONT }}>
+    <span title={d.toLocaleString('en-IN')} >
       {label}
     </span>
   );
@@ -265,7 +265,7 @@ export default function Announcements() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-4xl mx-auto" style={{ fontFamily: FONT }}>
+    <div className="max-w-4xl mx-auto" >
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
@@ -342,7 +342,7 @@ export default function Announcements() {
                         <PIcon name="information" size="x-small" color="notification-info" />
                       </div>
                       <div className="min-w-0">
-                        <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }} className="leading-snug">
+                        <PText size="small" weight="semi-bold"  className="leading-snug">
                           {announcement.title}
                         </PText>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -353,7 +353,7 @@ export default function Announcements() {
                               ? 'Company-wide'
                               : announcement.department?.name ?? 'Department'}
                           </PTag>
-                          <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                          <PText size="xx-small" color="contrast-medium" >
                             <RelativeTime date={announcement.created_at} />
                           </PText>
                         </div>
@@ -392,7 +392,7 @@ export default function Announcements() {
                 <div className="px-5 pb-5">
                   <div
                     className="bg-canvas rounded-lg p-4 border border-contrast-low"
-                    style={{ fontFamily: FONT }}
+                    
                   >
                     <PText size="small" color="contrast-medium" style={{ fontFamily: FONT, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {preview}
@@ -401,7 +401,7 @@ export default function Announcements() {
                       <button
                         onClick={() => toggleExpand(announcement.id)}
                         className="mt-2 text-xs font-medium text-primary hover:underline transition-colors"
-                        style={{ fontFamily: FONT }}
+                        
                       >
                         {isExpanded ? 'Show less' : 'Read more'}
                       </button>
@@ -461,7 +461,7 @@ export default function Announcements() {
             <div className="flex flex-col gap-2.5 pt-1">
               <label
                 className="flex items-center gap-2.5 cursor-pointer group"
-                style={{ fontFamily: FONT }}
+                
               >
                 <input
                   type="radio"
@@ -477,7 +477,7 @@ export default function Announcements() {
               </label>
               <label
                 className="flex items-center gap-2.5 cursor-pointer group"
-                style={{ fontFamily: FONT }}
+                
               >
                 <input
                   type="radio"

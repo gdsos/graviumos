@@ -80,7 +80,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
               className="h-10 brightness-0 invert"
               style={{ height: '40px' }}
             />
-            <span className="text-white font-bold text-3xl tracking-tight" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>OS</span>
+            <span className="text-white font-bold text-3xl tracking-tight" >OS</span>
           </div>
           <PHeading tag="h2" size="large" theme="dark" className="mb-4 text-white">
             {portalType === 'admin' ? 'Admin Portal' : 'Employee Portal'}
@@ -103,7 +103,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
               alt="GRAVIUM"
               style={{ height: '36px', filter: isDark ? 'invert(1)' : 'none' }}
             />
-            <span className="font-bold text-2xl text-primary" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>OS</span>
+            <span className="font-bold text-2xl text-primary" >OS</span>
           </div>
 
           <PHeading tag="h1" size="x-large" className="mb-2">
@@ -126,7 +126,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-5">
             <div>
-              <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+              <label className="block text-sm font-medium text-primary mb-1.5" >
                 Email address
               </label>
               <input
@@ -136,11 +136,11 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                 required
                 placeholder="you@gravium.com"
                 className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-                style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+                
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+              <label className="block text-sm font-medium text-primary mb-1.5" >
                 Password
               </label>
               <div className="relative">
@@ -152,13 +152,13 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                   placeholder="••••••••"
                   autoComplete="current-password"
                   className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors pr-16"
-                  style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+                  
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-contrast-medium hover:text-primary transition-colors"
-                  style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+                  
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>

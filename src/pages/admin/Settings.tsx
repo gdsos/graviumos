@@ -11,16 +11,16 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
+const FONT = "inherit";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function SectionHeading({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-4">
-      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>{title}</PText>
+      <PText size="small" weight="semi-bold" >{title}</PText>
       {description && (
-        <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }} className="mt-0.5">
+        <PText size="x-small" color="contrast-medium"  className="mt-0.5">
           {description}
         </PText>
       )}
@@ -46,9 +46,9 @@ function SettingRow({
   return (
     <div className="flex items-start justify-between gap-6 py-4 border-b border-contrast-low last:border-0">
       <div className="min-w-0 flex-1">
-        <PText size="small" style={{ fontFamily: FONT }}>{label}</PText>
+        <PText size="small" >{label}</PText>
         {description && (
-          <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }} className="mt-0.5">
+          <PText size="x-small" color="contrast-medium"  className="mt-0.5">
             {description}
           </PText>
         )}
@@ -56,11 +56,11 @@ function SettingRow({
       <div className="w-48 flex-shrink-0">
         {readOnly ? (
           <div className="flex items-center gap-1">
-            <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
+            <PText size="small" weight="semi-bold" >
               {value ?? '—'}
             </PText>
             {suffix && (
-              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{suffix}</PText>
+              <PText size="x-small" color="contrast-medium" >{suffix}</PText>
             )}
           </div>
         ) : (
@@ -102,7 +102,7 @@ function NumberInput({
         style={{ width: suffix ? '100px' : '100%' }}
       />
       {suffix && (
-        <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{suffix}</PText>
+        <PText size="x-small" color="contrast-medium" >{suffix}</PText>
       )}
     </div>
   );
@@ -279,7 +279,7 @@ export default function Settings() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-3xl mx-auto" style={{ fontFamily: FONT }}>
+    <div className="max-w-3xl mx-auto" >
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
@@ -292,7 +292,7 @@ export default function Settings() {
         </div>
         {isSuperAdmin ? (
           <div className="flex items-center gap-2">
-            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>Edit Mode</PText>
+            <PText size="x-small" color="contrast-medium" >Edit Mode</PText>
             <PSwitch
               checked={editMode}
               onUpdate={e => {
@@ -304,7 +304,7 @@ export default function Settings() {
           </div>
         ) : (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-notification-warning-soft border border-notification-warning">
-            <PText size="x-small" color="notification-warning" style={{ fontFamily: FONT }}>
+            <PText size="x-small" color="notification-warning" >
               View Only
             </PText>
           </div>
@@ -489,7 +489,7 @@ export default function Settings() {
                   ].map(item => (
                     <div key={item.label} className="flex items-center gap-1.5">
                       <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                      <PText size="xx-small" color="contrast-medium" >
                         {item.label}: {item.pct}%
                       </PText>
                     </div>
@@ -585,14 +585,14 @@ export default function Settings() {
                   : 'border-notification-success bg-notification-success-soft'
               }`}
             >
-              <PText size="x-small" style={{ fontFamily: FONT }}>
+              <PText size="x-small" >
                 Total Allocation
               </PText>
               <PText
                 size="small"
                 weight="semi-bold"
                 color={profitFirstWarning ? 'notification-warning' : 'notification-success'}
-                style={{ fontFamily: FONT }}
+                
               >
                 {profitFirstTotal.toFixed(2)}%
               </PText>
@@ -602,7 +602,7 @@ export default function Settings() {
           {/* ── Actions ──────────────────────────────────────────────────── */}
           {canEdit && (
             <div className="flex items-center justify-between bg-surface rounded-xl border border-contrast-low p-4">
-              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+              <PText size="x-small" color="contrast-medium" >
                 {settings ? `Last updated: ${new Date(settings.updated_at).toLocaleString('en-IN')}` : 'No settings saved yet.'}
               </PText>
               <div className="flex gap-3">
@@ -630,7 +630,7 @@ export default function Settings() {
           {/* Read-only note for non-admins */}
           {!canEdit && (
             <div className="flex items-center gap-3 bg-surface rounded-xl border border-contrast-low p-4">
-              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+              <PText size="x-small" color="contrast-medium" >
                 You are viewing settings in read-only mode. Contact a Super Admin to make changes.
               </PText>
             </div>

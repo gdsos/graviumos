@@ -35,7 +35,7 @@ const STATUS_COLORS: Record<string, Parameters<typeof PTag>[0]['color']> = {
 
 const PROJECT_STATUSES = ['Active', 'Completed', 'On Hold', 'Cancelled'] as const;
 
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
+const FONT = "inherit";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
     <div>
       <label
         className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: FONT }}
+        
       >
         {label}
       </label>
@@ -70,14 +70,14 @@ function StatCard({
         highlight ? 'border-primary bg-primary/5' : 'border-contrast-low bg-surface'
       }`}
     >
-      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+      <PText size="x-small" color="contrast-medium" >
         {label}
       </PText>
-      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
+      <PText size="medium" weight="semi-bold" >
         {value}
       </PText>
       {sub && (
-        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+        <PText size="xx-small" color="contrast-medium" >
           {sub}
         </PText>
       )}
@@ -394,7 +394,7 @@ export default function Projects() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
+    <div className="max-w-7xl mx-auto" >
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -449,17 +449,17 @@ export default function Projects() {
                           }`}
                         >
                           <td className="px-4 py-3">
-                            <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                            <PText size="small" weight="semi-bold" >
                               {project.name}
                             </PText>
                             {project.start_date && (
-                              <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                              <PText size="xx-small" color="contrast-medium" >
                                 {new Date(project.start_date).toLocaleDateString('en-IN')}
                               </PText>
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <PText size="small" style={{ fontFamily: FONT }}>{project.client}</PText>
+                            <PText size="small" >{project.client}</PText>
                           </td>
                           <td className="px-4 py-3">
                             <PTag color={STATUS_COLORS[project.status] || 'background-surface'}>
@@ -469,7 +469,7 @@ export default function Projects() {
                           {canEditFinancials && (
                             <>
                               <td className="px-4 py-3">
-                                <PText size="small" style={{ fontFamily: FONT }}>
+                                <PText size="small" >
                                   {formatINR(project.revenue ?? 0)}
                                 </PText>
                               </td>
@@ -477,7 +477,7 @@ export default function Projects() {
                                 <PText
                                   size="small"
                                   color={estProfit >= 0 ? 'notification-success' : 'notification-error'}
-                                  style={{ fontFamily: FONT }}
+                                  
                                 >
                                   {formatINR(estProfit)}
                                 </PText>
@@ -521,10 +521,10 @@ export default function Projects() {
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <PHeading tag="h2" size="medium" style={{ fontFamily: FONT }}>
+                  <PHeading tag="h2" size="medium" >
                     {selectedProject.name}
                   </PHeading>
-                  <PText size="small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                  <PText size="small" color="contrast-medium" >
                     {selectedProject.client}
                   </PText>
                 </div>
@@ -543,7 +543,7 @@ export default function Projects() {
               </div>
 
               {selectedProject.description && (
-                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                <PText size="x-small" color="contrast-medium" >
                   {selectedProject.description}
                 </PText>
               )}
@@ -551,12 +551,12 @@ export default function Projects() {
               {(selectedProject.start_date || selectedProject.end_date) && (
                 <div className="flex gap-4 mt-3">
                   {selectedProject.start_date && (
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                    <PText size="xx-small" color="contrast-medium" >
                       Start: {new Date(selectedProject.start_date).toLocaleDateString('en-IN')}
                     </PText>
                   )}
                   {selectedProject.end_date && (
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                    <PText size="xx-small" color="contrast-medium" >
                       End: {new Date(selectedProject.end_date).toLocaleDateString('en-IN')}
                     </PText>
                   )}
@@ -575,7 +575,7 @@ export default function Projects() {
                       ? 'bg-primary text-background-base'
                       : 'text-contrast-medium hover:text-primary hover:bg-canvas'
                   }`}
-                  style={{ fontFamily: FONT }}
+                  
                 >
                   {tab === 'cash' ? 'Cash Received' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
@@ -607,7 +607,7 @@ export default function Projects() {
                             />
                           </div>
                           <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                            <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
+                            <PText size="x-small" weight="semi-bold" className="mb-3" >
                               Derived Figures
                             </PText>
                             <div className="grid grid-cols-3 gap-3">
@@ -631,22 +631,22 @@ export default function Projects() {
                           <div className="bg-surface rounded-xl border border-contrast-low p-4">
                             <div className="flex items-center justify-between">
                               <div>
-                                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                                <PText size="x-small" color="contrast-medium" >
                                   Total Cash Received
                                 </PText>
-                                <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
+                                <PText size="medium" weight="semi-bold" >
                                   {formatINR(f.totalCashReceived)}
                                 </PText>
                               </div>
                               <div className="text-right">
-                                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                                <PText size="x-small" color="contrast-medium" >
                                   Outstanding
                                 </PText>
                                 <PText
                                   size="medium"
                                   weight="semi-bold"
                                   color={f.revenue - f.totalCashReceived > 0 ? 'notification-warning' : 'notification-success'}
-                                  style={{ fontFamily: FONT }}
+                                  
                                 >
                                   {formatINR(Math.max(0, f.revenue - f.totalCashReceived))}
                                 </PText>
@@ -657,7 +657,7 @@ export default function Projects() {
                       ) : (
                         <div className="bg-surface rounded-xl border border-contrast-low p-6 flex flex-col items-center gap-2">
                           <PIcon name="lock" size="medium" color="contrast-low" />
-                          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
+                          <PText color="contrast-medium" >
                             Financial details are visible to Finance department only.
                           </PText>
                         </div>
@@ -671,7 +671,7 @@ export default function Projects() {
                   <div className="flex flex-col gap-4">
                     {canManageSubEntries && (
                       <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                        <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
+                        <PText size="x-small" weight="semi-bold" className="mb-3" >
                           Add Expense
                         </PText>
                         <form onSubmit={handleAddExpense} className="flex flex-col gap-3">
@@ -729,7 +729,7 @@ export default function Projects() {
                       {expenses.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8">
                           <PIcon name="document" size="medium" color="contrast-low" />
-                          <PText color="contrast-medium" className="mt-2" style={{ fontFamily: FONT }}>
+                          <PText color="contrast-medium" className="mt-2" >
                             No expenses logged yet.
                           </PText>
                         </div>
@@ -750,15 +750,15 @@ export default function Projects() {
                             {expenses.map(exp => (
                               <tr key={exp.id} className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors">
                                 <td className="px-4 py-2">
-                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                                  <PText size="x-small" color="contrast-medium" >
                                     {new Date(exp.expense_date).toLocaleDateString('en-IN')}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-2">
-                                  <PText size="x-small" style={{ fontFamily: FONT }}>{exp.description}</PText>
+                                  <PText size="x-small" >{exp.description}</PText>
                                 </td>
                                 <td className="px-4 py-2">
-                                  <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                                  <PText size="x-small" weight="semi-bold" >
                                     {formatINR(exp.amount)}
                                   </PText>
                                 </td>
@@ -779,12 +779,12 @@ export default function Projects() {
                           <tfoot>
                             <tr className="border-t-2 border-contrast-low bg-canvas">
                               <td colSpan={2} className="px-4 py-2">
-                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                                <PText size="x-small" weight="semi-bold" >
                                   Total
                                 </PText>
                               </td>
                               <td className="px-4 py-2" colSpan={canManageSubEntries ? 2 : 1}>
-                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                                <PText size="x-small" weight="semi-bold" >
                                   {formatINR(expenses.reduce((s, x) => s + (x.amount ?? 0), 0))}
                                 </PText>
                               </td>
@@ -801,7 +801,7 @@ export default function Projects() {
                   <div className="flex flex-col gap-4">
                     {canManageSubEntries && (
                       <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                        <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
+                        <PText size="x-small" weight="semi-bold" className="mb-3" >
                           Add Cash Received
                         </PText>
                         <form onSubmit={handleAddCash} className="flex flex-col gap-3">
@@ -859,7 +859,7 @@ export default function Projects() {
                       {cashReceived.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8">
                           <PIcon name="purchase" size="medium" color="contrast-low" />
-                          <PText color="contrast-medium" className="mt-2" style={{ fontFamily: FONT }}>
+                          <PText color="contrast-medium" className="mt-2" >
                             No payments recorded yet.
                           </PText>
                         </div>
@@ -880,15 +880,15 @@ export default function Projects() {
                             {cashReceived.map(entry => (
                               <tr key={entry.id} className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors">
                                 <td className="px-4 py-2">
-                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                                  <PText size="x-small" color="contrast-medium" >
                                     {new Date(entry.received_date).toLocaleDateString('en-IN')}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-2">
-                                  <PText size="x-small" style={{ fontFamily: FONT }}>{entry.description}</PText>
+                                  <PText size="x-small" >{entry.description}</PText>
                                 </td>
                                 <td className="px-4 py-2">
-                                  <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                                  <PText size="x-small" weight="semi-bold" >
                                     {formatINR(entry.amount)}
                                   </PText>
                                 </td>
@@ -909,12 +909,12 @@ export default function Projects() {
                           <tfoot>
                             <tr className="border-t-2 border-contrast-low bg-canvas">
                               <td colSpan={2} className="px-4 py-2">
-                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                                <PText size="x-small" weight="semi-bold" >
                                   Total Received
                                 </PText>
                               </td>
                               <td className="px-4 py-2" colSpan={canManageSubEntries ? 2 : 1}>
-                                <PText size="x-small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
+                                <PText size="x-small" weight="semi-bold" color="notification-success" >
                                   {formatINR(cashReceived.reduce((s, x) => s + (x.amount ?? 0), 0))}
                                 </PText>
                               </td>

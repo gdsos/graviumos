@@ -47,7 +47,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
     <div>
       <label
         className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+        
       >
         {label}
       </label>
@@ -58,7 +58,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
+const FONT = "inherit";
 
 const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing', 'Overdue', 'Completed'];
 
@@ -140,7 +140,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
       onClick={onClick}
       className="w-full text-left bg-canvas rounded-xl border-2 border-contrast-low hover:border-primary focus:outline-none focus:border-primary transition-colors p-4 flex flex-col gap-3"
     >
-      <PText size="small" weight="semi-bold" className="line-clamp-2" style={{ fontFamily: FONT }}>
+      <PText size="small" weight="semi-bold" className="line-clamp-2" >
         {task.title}
       </PText>
 
@@ -166,7 +166,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
         <PText
           size="x-small"
           color={deadlineOverdue ? 'notification-error' : 'contrast-medium'}
-          style={{ fontFamily: FONT }}
+          
         >
           {formatDeadline(task.deadline)}
         </PText>
@@ -176,7 +176,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
       {task.effectiveStatus === 'Completed' && task.completed_at && (
         <div className="flex items-center gap-1.5">
           <PIcon name="check" size="x-small" color="notification-success" />
-          <PText size="x-small" color="notification-success" style={{ fontFamily: FONT }}>
+          <PText size="x-small" color="notification-success" >
             Completed on {formatDeadline(task.completed_at)}
           </PText>
         </div>
@@ -185,7 +185,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
       {/* Progress */}
       <div className="flex flex-col gap-1">
         <ProgressBar value={progress} />
-        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+        <PText size="xx-small" color="contrast-medium" >
           {hasSubtasks
             ? `${task.subtasks.filter(s => s.is_completed).length}/${task.subtasks.length} subtasks · ${progress}%`
             : `${progress}%`}
@@ -212,7 +212,7 @@ function KanbanColumn({ status, tasks, onCardClick }: KanbanColumnProps) {
           weight="semi-bold"
           color="contrast-high"
           className="uppercase tracking-wider"
-          style={{ fontFamily: FONT }}
+          
         >
           {status}
         </PText>
@@ -224,7 +224,7 @@ function KanbanColumn({ status, tasks, onCardClick }: KanbanColumnProps) {
       <div className="flex flex-col gap-2.5">
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-contrast-low/50">
-            <PText size="x-small" color="contrast-low" style={{ fontFamily: FONT }}>
+            <PText size="x-small" color="contrast-low" >
               No tasks
             </PText>
           </div>
@@ -594,14 +594,14 @@ export default function MyTasks() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-full" style={{ fontFamily: FONT }}>
+    <div className="max-w-full" >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">
             {isDeptHeadOnly ? 'Tasks' : 'My Tasks'}
           </PHeading>
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
+          <PText color="contrast-medium" >
             {isDeptHeadOnly
               ? activeTab === 'assigned'
                 ? `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you`
@@ -626,7 +626,7 @@ export default function MyTasks() {
                 ? 'text-primary border-b-2 border-primary -mb-[2px]'
                 : 'text-contrast-medium hover:text-primary'
             }`}
-            style={{ fontFamily: FONT }}
+            
           >
             All Tasks
           </button>
@@ -637,7 +637,7 @@ export default function MyTasks() {
                 ? 'text-primary border-b-2 border-primary -mb-[2px]'
                 : 'text-contrast-medium hover:text-primary'
             }`}
-            style={{ fontFamily: FONT }}
+            
           >
             My Tasks
           </button>
@@ -657,7 +657,7 @@ export default function MyTasks() {
       {/* Kanban board */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
+          <PText color="contrast-medium" >
             Loading your tasks…
           </PText>
         </div>
@@ -702,7 +702,7 @@ export default function MyTasks() {
             {/* Meta */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
+                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
                   Deadline
                 </PText>
                 <div className="flex items-center gap-1.5">
@@ -722,7 +722,7 @@ export default function MyTasks() {
                         ? 'notification-error'
                         : 'primary'
                     }
-                    style={{ fontFamily: FONT }}
+                    
                   >
                     {formatDeadline(detailTask.deadline)}
                   </PText>
@@ -730,10 +730,10 @@ export default function MyTasks() {
               </div>
               {detailTask.completed_at && (
                 <div className="flex flex-col gap-1">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
+                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
                     Completed At
                   </PText>
-                  <PText size="small" style={{ fontFamily: FONT }}>
+                  <PText size="small" >
                     {formatDeadline(detailTask.completed_at)}
                   </PText>
                 </div>
@@ -743,11 +743,11 @@ export default function MyTasks() {
             {/* Description */}
             {detailTask.description && (
               <div className="flex flex-col gap-1.5">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
+                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
                   Description
                 </PText>
                 <div className="bg-canvas rounded-lg border border-contrast-low px-3 py-2.5">
-                  <PText size="small" color="contrast-high" style={{ fontFamily: FONT }}>
+                  <PText size="small" color="contrast-high" >
                     {detailTask.description}
                   </PText>
                 </div>
@@ -757,10 +757,10 @@ export default function MyTasks() {
             {/* Progress section */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
+                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
                   Progress
                 </PText>
-                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                <PText size="x-small" weight="semi-bold" >
                   {detailTask.subtasks.length > 0
                     ? calcProgress(detailTask.subtasks)
                     : updateProgress}%
@@ -779,7 +779,7 @@ export default function MyTasks() {
                   <label
                     htmlFor="progress-slider"
                     className="block text-xs font-medium text-contrast-high"
-                    style={{ fontFamily: FONT }}
+                    
                   >
                     Adjust Progress
                   </label>
@@ -794,13 +794,13 @@ export default function MyTasks() {
                     className="w-full accent-primary"
                   />
                   <div className="flex justify-between">
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>0%</PText>
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>100%</PText>
+                    <PText size="xx-small" color="contrast-medium" >0%</PText>
+                    <PText size="xx-small" color="contrast-medium" >100%</PText>
                   </div>
                 </div>
               )}
               {detailTask.subtasks.length > 0 && (
-                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                <PText size="x-small" color="contrast-medium" >
                   {detailTask.subtasks.filter(s => s.is_completed).length} of {detailTask.subtasks.length} subtasks completed
                 </PText>
               )}
@@ -810,7 +810,7 @@ export default function MyTasks() {
             <div className="flex flex-col gap-1.5">
               <label
                 className="block text-xs font-medium text-contrast-high"
-                style={{ fontFamily: FONT }}
+                
               >
                 Update Status
               </label>
@@ -848,14 +848,14 @@ export default function MyTasks() {
 
             {/* Subtasks */}
             <div className="flex flex-col gap-3">
-              <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
+              <PText size="small" weight="semi-bold" >
                 Subtasks
               </PText>
 
               {detailTask.subtasks.length === 0 ? (
                 <div className="flex items-center gap-2 py-2">
                   <PIcon name="list" size="x-small" color="contrast-low" />
-                  <PText size="x-small" color="contrast-low" style={{ fontFamily: FONT }}>
+                  <PText size="x-small" color="contrast-low" >
                     No subtasks — use the progress slider above
                   </PText>
                 </div>
@@ -876,7 +876,7 @@ export default function MyTasks() {
                         size="small"
                         color={sub.is_completed ? 'contrast-medium' : 'primary'}
                         className={sub.is_completed ? 'line-through flex-1' : 'flex-1'}
-                        style={{ fontFamily: FONT }}
+                        
                       >
                         {sub.title}
                       </PText>
@@ -1153,7 +1153,7 @@ export default function MyTasks() {
 
             {/* Status update section */}
             <div className="flex flex-col gap-2">
-              <label className="block text-xs font-medium text-contrast-high" style={{ fontFamily: FONT }}>
+              <label className="block text-xs font-medium text-contrast-high" >
                 Update Status
               </label>
               <select
