@@ -11,21 +11,17 @@ export default function AppLayout({ isAdmin }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-muted/40 text-foreground">
+    <div className="flex h-screen overflow-hidden bg-canvas">
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(c => !c)}
         isAdmin={isAdmin}
       />
-
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar />
-
-        <main className="flex-1 overflow-y-auto px-8 py-6">
-  <div className="max-w-7xl mx-auto">
-    <Outlet />
-  </div>
-</main>
+        <TopBar onMenuToggle={() => setSidebarCollapsed(c => !c)} isAdmin={isAdmin} />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <Outlet />
+        </main>
       </div>
     </div>
   );

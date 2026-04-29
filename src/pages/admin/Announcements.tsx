@@ -13,7 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -87,7 +87,7 @@ export default function CreateAdminPage() {
       <div className="w-full max-w-md">
         <div className="flex items-center gap-2 mb-10 justify-center">
           <img src="/GRAVIUM.png" alt="GRAVIUM" style={{ height: '36px' }} className="dark:invert" />
-          <span className="font-bold text-2xl text-primary">OS</span>
+          <span className="font-bold text-2xl text-primary" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>OS</span>
         </div>
 
         <PHeading tag="h1" size="x-large" className="mb-2">
@@ -121,7 +121,7 @@ export default function CreateAdminPage() {
 
         <form onSubmit={handleCreate} className="flex flex-col gap-5">
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" >
+            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
               Full Name
             </label>
             <input
@@ -131,11 +131,11 @@ export default function CreateAdminPage() {
               required
               placeholder="John Doe"
               className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-              
+              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" >
+            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
               Email address
             </label>
             <input
@@ -145,11 +145,11 @@ export default function CreateAdminPage() {
               required
               placeholder="admin@gravium.com"
               className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-              
+              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" >
+            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
               Password
             </label>
             <div className="relative">
@@ -160,7 +160,7 @@ export default function CreateAdminPage() {
                 required
                 placeholder="Min. 8 characters"
                 className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors pr-12"
-                
+                style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
               />
               <button
                 type="button"
@@ -174,7 +174,7 @@ export default function CreateAdminPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" >
+            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
               Confirm Password
             </label>
             <input
@@ -184,11 +184,11 @@ export default function CreateAdminPage() {
               required
               placeholder="Repeat password"
               className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-              
+              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" >
+            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
               Admin Key
             </label>
             <div className="relative">
@@ -199,7 +199,7 @@ export default function CreateAdminPage() {
                 required
                 placeholder="Enter the admin key"
                 className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors pr-12"
-                
+                style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
                 <PIcon name="key" size="small" color="contrast-medium" />

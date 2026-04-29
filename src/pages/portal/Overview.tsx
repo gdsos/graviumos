@@ -18,7 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
@@ -108,13 +108,13 @@ function KpiScoreCircle({ score }: { score: number }) {
           </span>
           <span
             className="text-xs text-contrast-medium mt-0.5"
-            
+            style={{ fontFamily: FONT }}
           >
             / 10
           </span>
         </div>
       </div>
-      <PText size="x-small" color="contrast-medium" >
+      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
         KPI Score
       </PText>
     </div>
@@ -146,7 +146,7 @@ function TaskSummaryCard({
       >
         {count}
       </span>
-      <PText size="xx-small" color="contrast-medium" >
+      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
         task{count !== 1 ? 's' : ''}
       </PText>
     </div>
@@ -365,7 +365,7 @@ export default function Overview() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl mx-auto" >
+    <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
         <div>
@@ -373,7 +373,7 @@ export default function Overview() {
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
             {profile?.full_name?.split(' ')[0] || 'there'} 👋
           </PHeading>
-          <PText color="contrast-medium" >
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Here's your personal workspace overview
           </PText>
         </div>
@@ -391,11 +391,11 @@ export default function Overview() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-5">
         {/* KPI Score Card */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col items-center gap-4">
-          <PHeading tag="h3" size="small" >
+          <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
             Performance Score
           </PHeading>
           <KpiScoreCircle score={profile?.kpi_score ?? 0} />
-          <PText size="x-small" color="contrast-medium" className="text-center" >
+          <PText size="x-small" color="contrast-medium" className="text-center" style={{ fontFamily: FONT }}>
             {(profile?.kpi_score ?? 0) >= 8
               ? 'Excellent performance — keep it up!'
               : (profile?.kpi_score ?? 0) >= 6
@@ -407,10 +407,10 @@ export default function Overview() {
         {/* Attendance Card */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4 md:col-span-1 xl:col-span-2">
           <div className="flex items-center justify-between">
-            <PHeading tag="h3" size="small" >
+            <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
               Today's Attendance
             </PHeading>
-            <PText size="x-small" color="contrast-medium" >
+            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
               {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
             </PText>
           </div>
@@ -427,14 +427,14 @@ export default function Overview() {
           {attendanceLoading ? (
             <div className="flex items-center gap-2 py-4">
               <PIcon name="clock" size="small" color="contrast-low" />
-              <PText color="contrast-medium" >Loading attendance…</PText>
+              <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading attendance…</PText>
             </div>
           ) : (
             <>
               {/* Check-in / Check-out time display */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1 bg-canvas rounded-xl border border-contrast-low p-4">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
+                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
                     Check-In
                   </PText>
                   <div className="flex items-center gap-2 mt-1">
@@ -447,14 +447,14 @@ export default function Overview() {
                       size="medium"
                       weight="semi-bold"
                       color={isCheckedIn ? 'notification-success' : 'contrast-medium'}
-                      
+                      style={{ fontFamily: FONT }}
                     >
                       {isCheckedIn ? formatTime(attendance!.check_in) : '—'}
                     </PText>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 bg-canvas rounded-xl border border-contrast-low p-4">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
+                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
                     Check-Out
                   </PText>
                   <div className="flex items-center gap-2 mt-1">
@@ -467,7 +467,7 @@ export default function Overview() {
                       size="medium"
                       weight="semi-bold"
                       color={isCheckedOut ? 'notification-info' : 'contrast-medium'}
-                      
+                      style={{ fontFamily: FONT }}
                     >
                       {isCheckedOut ? formatTime(attendance!.check_out) : '—'}
                     </PText>
@@ -478,7 +478,7 @@ export default function Overview() {
               {/* Location stamp */}
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-canvas border border-contrast-low">
                 <PIcon name="geo-localization" size="x-small" color="contrast-medium" />
-                <PText size="x-small" color="contrast-medium" >
+                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                   {locationLoading ? 'Getting location…' : (locationStamp || attendance?.location_stamp || 'Location not available')}
                 </PText>
               </div>
@@ -488,7 +488,7 @@ export default function Overview() {
                 {attendanceComplete ? (
                   <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-success-soft border border-contrast-low">
                     <PIcon name="check" size="small" color="notification-success" />
-                    <PText size="small" weight="semi-bold" color="notification-success" >
+                    <PText size="small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
                       Attendance Complete
                     </PText>
                   </div>
@@ -519,10 +519,10 @@ export default function Overview() {
       {/* ── Row 2: Task Summary ───────────────────────────────────────────── */}
       <div className="bg-surface rounded-2xl border border-contrast-low p-6 mb-5">
         <div className="flex items-center justify-between mb-4">
-          <PHeading tag="h3" size="small" >
+          <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
             My Tasks
           </PHeading>
-          <PText size="x-small" color="contrast-medium" >
+          <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
             Total: {tasksLoading ? '…' : Object.values(taskCounts).reduce((a, b) => a + b, 0)}
           </PText>
         </div>
@@ -548,7 +548,7 @@ export default function Overview() {
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <PIcon name="news" size="small" color="contrast-high" />
-            <PHeading tag="h3" size="small" >
+            <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
               Announcements
             </PHeading>
           </div>
@@ -562,7 +562,7 @@ export default function Overview() {
           ) : announcements.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
               <PIcon name="information" size="medium" color="contrast-low" />
-              <PText color="contrast-medium" >
+              <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                 No announcements right now
               </PText>
             </div>
@@ -574,7 +574,7 @@ export default function Overview() {
                   className="rounded-xl bg-canvas border border-contrast-low px-4 py-3 flex flex-col gap-1 hover:border-contrast-medium transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <PText size="small" weight="semi-bold" >
+                    <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
                       {ann.title}
                     </PText>
                     <PTag
@@ -584,10 +584,10 @@ export default function Overview() {
                       {ann.target_type === 'company' ? 'Company' : 'Dept'}
                     </PTag>
                   </div>
-                  <PText size="x-small" color="contrast-medium" >
+                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     {ann.content.length > 120 ? ann.content.slice(0, 120) + '…' : ann.content}
                   </PText>
-                  <PText size="xx-small" color="contrast-low" >
+                  <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
                     {formatRelativeDate(ann.created_at)}
                   </PText>
                 </div>
@@ -600,7 +600,7 @@ export default function Overview() {
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <PIcon name="bell" size="small" color="contrast-high" />
-            <PHeading tag="h3" size="small" >
+            <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
               Recent Notifications
             </PHeading>
           </div>
@@ -614,7 +614,7 @@ export default function Overview() {
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
               <PIcon name="bell" size="medium" color="contrast-low" />
-              <PText color="contrast-medium" >
+              <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                 No notifications yet
               </PText>
             </div>
@@ -639,15 +639,15 @@ export default function Overview() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <PText size="x-small" weight="semi-bold" >
+                    <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                       {notif.title}
                     </PText>
-                    <PText size="xx-small" color="contrast-medium" >
+                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                       {notif.message.length > 80 ? notif.message.slice(0, 80) + '…' : notif.message}
                     </PText>
                   </div>
                   <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                    <PText size="xx-small" color="contrast-low" >
+                    <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
                       {formatRelativeDate(notif.created_at)}
                     </PText>
                     {!notif.is_read && (

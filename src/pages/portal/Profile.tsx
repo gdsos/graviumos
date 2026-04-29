@@ -16,7 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 interface ProfileFormState {
   profile_picture_url: string;
@@ -42,13 +42,13 @@ function FormField({
     <div className="flex flex-col gap-1">
       <label
         className="block text-xs font-medium text-contrast-high"
-        
+        style={{ fontFamily: FONT }}
       >
         {label}
       </label>
       {children}
       {hint && (
-        <PText size="xx-small" color="contrast-medium" >
+        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
           {hint}
         </PText>
       )}
@@ -59,10 +59,10 @@ function FormField({
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >
+      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
         {label}
       </PText>
-      <PText size="small" >
+      <PText size="small" style={{ fontFamily: FONT }}>
         {value || '—'}
       </PText>
     </div>
@@ -81,7 +81,7 @@ function KpiBar({ score }: { score: number }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <PText size="x-small" color="contrast-medium" >
+        <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
           KPI Score
         </PText>
         <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT, color }}>
@@ -94,7 +94,7 @@ function KpiBar({ score }: { score: number }) {
           style={{ width: `${pct}%`, background: color }}
         />
       </div>
-      <PText size="xx-small" color="contrast-medium" >
+      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
         {score >= 8 ? 'Excellent' : score >= 6 ? 'Good' : score >= 4 ? 'Average' : 'Needs improvement'}
       </PText>
     </div>
@@ -127,7 +127,7 @@ function Avatar({ url, name }: { url: string; name: string }) {
         >
           <span
             className="text-2xl font-bold text-background-base"
-            
+            style={{ fontFamily: FONT }}
           >
             {initials || '?'}
           </span>
@@ -330,7 +330,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="flex items-center justify-center h-48">
-        <PText color="contrast-medium" >
+        <PText color="contrast-medium" style={{ fontFamily: FONT }}>
           Loading profile…
         </PText>
       </div>
@@ -352,13 +352,13 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto" >
+    <div className="max-w-4xl mx-auto" style={{ fontFamily: FONT }}>
       {/* Header */}
       <div className="mb-8">
         <PHeading tag="h1" size="x-large" className="mb-1">
           My Profile
         </PHeading>
-        <PText color="contrast-medium" >
+        <PText color="contrast-medium" style={{ fontFamily: FONT }}>
           Manage your personal information and preferences
         </PText>
       </div>
@@ -374,11 +374,11 @@ export default function ProfilePage() {
             <div className="flex-1 flex flex-col gap-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <PHeading tag="h2" size="large" >
+                  <PHeading tag="h2" size="large" style={{ fontFamily: FONT }}>
                     {profile.full_name}
                   </PHeading>
                   {profile.employee_code && (
-                    <PText size="x-small" color="contrast-medium" >
+                    <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                       {profile.employee_code}
                     </PText>
                   )}
@@ -402,7 +402,7 @@ export default function ProfilePage() {
                     </PTag>
                   ))
                 ) : (
-                  <PText size="x-small" color="contrast-low" >
+                  <PText size="x-small" color="contrast-low" style={{ fontFamily: FONT }}>
                     No departments assigned
                   </PText>
                 )}
@@ -430,10 +430,10 @@ export default function ProfilePage() {
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <PHeading tag="h3" size="small" >
+              <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
                 Full Name
               </PHeading>
-              <PText size="small" color="contrast-medium" className="mt-1" >
+              <PText size="small" color="contrast-medium" className="mt-1" style={{ fontFamily: FONT }}>
                 {profile.full_name}
               </PText>
             </div>
@@ -442,10 +442,10 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-warning-soft border border-contrast-low">
                 <PIcon name="clock" size="x-small" color="notification-warning" />
                 <div>
-                  <PText size="x-small" weight="semi-bold" color="notification-warning" >
+                  <PText size="x-small" weight="semi-bold" color="notification-warning" style={{ fontFamily: FONT }}>
                     Name Change Pending
                   </PText>
-                  <PText size="xx-small" color="contrast-medium" >
+                  <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     Requested: {String((nameRequest.payload as Record<string, string>)?.new_name || '—')}
                   </PText>
                 </div>
@@ -489,7 +489,7 @@ export default function ProfilePage() {
 
         {/* ── Editable Profile Fields ──────────────────────────────────────── */}
         <form onSubmit={handleSave} className="bg-surface rounded-2xl border border-contrast-low p-6">
-          <PHeading tag="h3" size="small" className="mb-4" >
+          <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
             Personal Details
           </PHeading>
 
@@ -554,7 +554,7 @@ export default function ProfilePage() {
 
             {/* Social links */}
             <div className="pt-2">
-              <PText size="x-small" weight="semi-bold" className="mb-3" >
+              <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
                 Social Links
               </PText>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -614,7 +614,7 @@ export default function ProfilePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-contrast-low bg-canvas text-contrast-medium hover:text-primary hover:border-primary transition-colors text-xs"
-                    
+                    style={{ fontFamily: FONT }}
                   >
                     <PIcon name="external" size="x-small" color="inherit" />
                     GitHub
@@ -626,7 +626,7 @@ export default function ProfilePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-contrast-low bg-canvas text-contrast-medium hover:text-primary hover:border-primary transition-colors text-xs"
-                    
+                    style={{ fontFamily: FONT }}
                   >
                     <PIcon name="logo-linkedin" size="x-small" color="inherit" />
                     LinkedIn
@@ -638,7 +638,7 @@ export default function ProfilePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-contrast-low bg-canvas text-contrast-medium hover:text-primary hover:border-primary transition-colors text-xs"
-                    
+                    style={{ fontFamily: FONT }}
                   >
                     <PIcon name="logo-x" size="x-small" color="inherit" />
                     Twitter / X
@@ -684,7 +684,7 @@ export default function ProfilePage() {
 
         {/* ── Account info (readonly) ──────────────────────────────────────── */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
-          <PHeading tag="h3" size="small" className="mb-4" >
+          <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
             Account Information
           </PHeading>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
@@ -735,12 +735,12 @@ export default function ProfilePage() {
           <div className="flex flex-col gap-1">
             <label
               className="block text-xs font-medium text-contrast-high"
-              
+              style={{ fontFamily: FONT }}
             >
               Current Name
             </label>
             <div className="px-3 py-2 rounded-lg border border-contrast-low bg-canvas/50">
-              <PText size="small" color="contrast-medium" >
+              <PText size="small" color="contrast-medium" style={{ fontFamily: FONT }}>
                 {profile.full_name}
               </PText>
             </div>

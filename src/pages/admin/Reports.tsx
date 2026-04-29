@@ -25,7 +25,7 @@ const defaultReportState: ReportState = {
   error: '',
 };
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 // ─── CSV Helper ───────────────────────────────────────────────────────────────
 
@@ -382,7 +382,7 @@ export default function Reports() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-5xl mx-auto" >
+    <div className="max-w-5xl mx-auto" style={{ fontFamily: FONT }}>
       {/* Header */}
       <div className="mb-8">
         <PHeading tag="h1" size="x-large" className="mb-1">Reports</PHeading>
@@ -396,7 +396,7 @@ export default function Reports() {
           <div className="flex flex-col gap-1.5 min-w-[180px]">
             <label
               className="text-xs font-medium text-contrast-high uppercase tracking-wide"
-              
+              style={{ fontFamily: FONT }}
             >
               From
             </label>
@@ -410,7 +410,7 @@ export default function Reports() {
           <div className="flex flex-col gap-1.5 min-w-[180px]">
             <label
               className="text-xs font-medium text-contrast-high uppercase tracking-wide"
-              
+              style={{ fontFamily: FONT }}
             >
               To
             </label>
@@ -452,7 +452,7 @@ export default function Reports() {
                     <div className="flex items-center gap-2 mb-0.5">
                       <PText size="small" weight="semi-bold">{card.label}</PText>
                       {card.restricted && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-notification-warning-soft text-notification-warning font-medium" >
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-notification-warning-soft text-notification-warning font-medium" style={{ fontFamily: FONT }}>
                           <PIcon name="lock" size="x-small" color="inherit" />
                           Restricted
                         </span>
@@ -468,7 +468,7 @@ export default function Reports() {
                     <span
                       key={col}
                       className="text-xs px-2 py-0.5 rounded bg-canvas border border-contrast-low text-contrast-medium"
-                      
+                      style={{ fontFamily: FONT }}
                     >
                       {col}
                     </span>

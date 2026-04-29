@@ -33,7 +33,7 @@ interface TaskWithDetails extends Task {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 const STATUS_FILTER_OPTIONS: StatusFilter[] = ['All', 'Active', 'Completed', 'On Hold', 'Cancelled'];
 
@@ -245,11 +245,11 @@ function PortalProjectsView() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto" >
+    <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">Projects</PHeading>
-          <PText color="contrast-medium" >
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Browse all company projects
             {!showFinancials && ' — financial details visible to Finance team only'}
           </PText>
@@ -265,7 +265,7 @@ function PortalProjectsView() {
                   ? 'bg-primary text-background-base border-primary'
                   : 'bg-canvas border-contrast-low text-contrast-medium hover:text-primary hover:border-primary'
               }`}
-              
+              style={{ fontFamily: FONT }}
             >
               {opt}
             </button>
@@ -279,12 +279,12 @@ function PortalProjectsView() {
 
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium" >Loading projects…</PText>
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading projects…</PText>
         </div>
       ) : filteredProjects.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-2xl border border-contrast-low gap-3">
           <PIcon name="highway" size="large" color="contrast-low" />
-          <PText color="contrast-medium" >No projects found for this filter</PText>
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>No projects found for this filter</PText>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -298,7 +298,7 @@ function PortalProjectsView() {
                 className="text-left bg-surface rounded-2xl border-2 border-contrast-low hover:border-primary focus:outline-none focus:border-primary transition-colors p-5 flex flex-col gap-3"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <PText size="small" weight="semi-bold" className="flex-1 line-clamp-2" >
+                  <PText size="small" weight="semi-bold" className="flex-1 line-clamp-2" style={{ fontFamily: FONT }}>
                     {project.name}
                   </PText>
                   <PTag color={STATUS_TAG_COLOR[project.status] || 'background-surface'} compact>{project.status}</PTag>
@@ -306,7 +306,7 @@ function PortalProjectsView() {
 
                 <div className="flex items-center gap-1.5">
                   <PIcon name="user" size="x-small" color="contrast-medium" />
-                  <PText size="x-small" color="contrast-medium" >{project.client}</PText>
+                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{project.client}</PText>
                 </div>
 
                 {project.description && (
@@ -320,30 +320,30 @@ function PortalProjectsView() {
                     {project.start_date && (
                       <div className="flex items-center gap-1">
                         <PIcon name="calendar" size="x-small" color="contrast-low" />
-                        <PText size="xx-small" color="contrast-low" >{formatDate(project.start_date)}</PText>
+                        <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>{formatDate(project.start_date)}</PText>
                       </div>
                     )}
                     {project.start_date && project.end_date && (
                       <PIcon name="arrow-compact-right" size="x-small" color="contrast-low" />
                     )}
                     {project.end_date && (
-                      <PText size="xx-small" color="contrast-low" >{formatDate(project.end_date)}</PText>
+                      <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>{formatDate(project.end_date)}</PText>
                     )}
                   </div>
                 )}
 
                 {showFinancials && (
                   <div className="flex items-center justify-between pt-2 border-t border-contrast-low">
-                    <PText size="xx-small" color="contrast-medium" >Revenue</PText>
-                    <PText size="x-small" weight="semi-bold" >{formatINR(project.revenue ?? 0)}</PText>
-                    <PText size="xx-small" color={estProfit >= 0 ? 'notification-success' : 'notification-error'} >
+                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>Revenue</PText>
+                    <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>{formatINR(project.revenue ?? 0)}</PText>
+                    <PText size="xx-small" color={estProfit >= 0 ? 'notification-success' : 'notification-error'} style={{ fontFamily: FONT }}>
                       {estProfit >= 0 ? '+' : ''}{formatINR(estProfit)}
                     </PText>
                   </div>
                 )}
 
                 <div className="flex items-center justify-end mt-auto">
-                  <div className="flex items-center gap-1 text-xs text-contrast-medium" >
+                  <div className="flex items-center gap-1 text-xs text-contrast-medium" style={{ fontFamily: FONT }}>
                     View details
                     <PIcon name="arrow-head-right" size="x-small" color="contrast-medium" />
                   </div>
@@ -369,12 +369,12 @@ function PortalProjectsView() {
               <PTag color={STATUS_TAG_COLOR[selectedProject.status] || 'background-surface'}>{selectedProject.status}</PTag>
               <div className="flex items-center gap-1.5">
                 <PIcon name="user" size="x-small" color="contrast-medium" />
-                <PText size="small" color="contrast-medium" >{selectedProject.client}</PText>
+                <PText size="small" color="contrast-medium" style={{ fontFamily: FONT }}>{selectedProject.client}</PText>
               </div>
               {(selectedProject.start_date || selectedProject.end_date) && (
                 <div className="flex items-center gap-1.5">
                   <PIcon name="calendar" size="x-small" color="contrast-medium" />
-                  <PText size="x-small" color="contrast-medium" >
+                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     {formatDate(selectedProject.start_date)} — {formatDate(selectedProject.end_date)}
                   </PText>
                 </div>
@@ -383,7 +383,7 @@ function PortalProjectsView() {
 
             {selectedProject.description && (
               <div className="bg-canvas rounded-xl border border-contrast-low px-4 py-3">
-                <PText size="small" color="contrast-high" >{selectedProject.description}</PText>
+                <PText size="small" color="contrast-high" style={{ fontFamily: FONT }}>{selectedProject.description}</PText>
               </div>
             )}
 
@@ -399,7 +399,7 @@ function PortalProjectsView() {
                         ? 'bg-primary text-background-base'
                         : 'text-contrast-medium hover:text-primary hover:bg-canvas'
                     }`}
-                    
+                    style={{ fontFamily: FONT }}
                   >
                     {tab === 'financials' ? 'Financials' : 'Project Tasks'}
                   </button>
@@ -409,15 +409,15 @@ function PortalProjectsView() {
 
             {detailLoading ? (
               <div className="flex items-center justify-center h-32">
-                <PText color="contrast-medium" >Loading…</PText>
+                <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading…</PText>
               </div>
             ) : (
               <>
                 {(detailTab === 'tasks' || !showFinancials) && (
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
-                      <PText size="small" weight="semi-bold" >Project Tasks</PText>
-                      <PText size="x-small" color="contrast-medium" >
+                      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>Project Tasks</PText>
+                      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         {!isAdmin() ? `Showing your department's tasks` : `${detailTasks.length} tasks`}
                       </PText>
                     </div>
@@ -425,7 +425,7 @@ function PortalProjectsView() {
                     {detailTasks.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 bg-canvas rounded-xl border-2 border-dashed border-contrast-low gap-2">
                         <PIcon name="list" size="medium" color="contrast-low" />
-                        <PText color="contrast-medium" >No tasks for your department in this project</PText>
+                        <PText color="contrast-medium" style={{ fontFamily: FONT }}>No tasks for your department in this project</PText>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2">
@@ -439,7 +439,7 @@ function PortalProjectsView() {
                               className="w-full text-left bg-canvas rounded-xl border border-contrast-low hover:border-primary transition-colors px-4 py-3 flex flex-col gap-2"
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <PText size="small" weight="semi-bold" className="flex-1 line-clamp-2" >{task.title}</PText>
+                                <PText size="small" weight="semi-bold" className="flex-1 line-clamp-2" style={{ fontFamily: FONT }}>{task.title}</PText>
                                 <PTag variant={TASK_STATUS_VARIANT[task.effectiveStatus]} compact>
                                   {task.effectiveStatus === 'Completed' && task.overdueByDays
                                     ? `Completed (${task.overdueByDays}d late)`
@@ -448,12 +448,12 @@ function PortalProjectsView() {
                               </div>
                               <div className="flex items-center gap-3">
                                 <ProgressBar value={progress} />
-                                <PText size="xx-small" color="contrast-medium" >{progress}%</PText>
+                                <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>{progress}%</PText>
                               </div>
                               {task.deadline && (
                                 <div className="flex items-center gap-1">
                                   <PIcon name="calendar" size="x-small" color="contrast-low" />
-                                  <PText size="xx-small" color="contrast-low" >Due {formatDate(task.deadline)}</PText>
+                                  <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>Due {formatDate(task.deadline)}</PText>
                                 </div>
                               )}
                             </button>
@@ -476,15 +476,15 @@ function PortalProjectsView() {
                           { label: 'Net Profit', value: formatINR(f.netProfit), highlight: true, sub: 'Revenue − Actual COGS' },
                         ].map(card => (
                           <div key={card.label} className={`rounded-xl border p-4 flex flex-col gap-1 ${card.highlight ? 'border-primary bg-surface' : 'border-contrast-low bg-canvas'}`}>
-                            <PText size="x-small" color="contrast-medium" >{card.label}</PText>
-                            <PText size="medium" weight="semi-bold" >{card.value}</PText>
-                            {card.sub && <PText size="xx-small" color="contrast-medium" >{card.sub}</PText>}
+                            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{card.label}</PText>
+                            <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>{card.value}</PText>
+                            {card.sub && <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>{card.sub}</PText>}
                           </div>
                         ))}
                       </div>
 
                       <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                        <PText size="x-small" weight="semi-bold" className="mb-3" >Derived Figures</PText>
+                        <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>Derived Figures</PText>
                         <div className="grid grid-cols-3 gap-3">
                           {[
                             { label: `Design Fee (${f.designFeePct}%)`, value: formatINR(f.designFee) },
@@ -492,8 +492,8 @@ function PortalProjectsView() {
                             { label: 'Commission (1.5%)', value: formatINR(f.commission) },
                           ].map(card => (
                             <div key={card.label} className="rounded-xl border border-contrast-low bg-canvas p-3 flex flex-col gap-1">
-                              <PText size="xx-small" color="contrast-medium" >{card.label}</PText>
-                              <PText size="small" weight="semi-bold" >{card.value}</PText>
+                              <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>{card.label}</PText>
+                              <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>{card.value}</PText>
                             </div>
                           ))}
                         </div>
@@ -502,12 +502,12 @@ function PortalProjectsView() {
                       <div className="bg-surface rounded-xl border border-contrast-low p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <PText size="x-small" color="contrast-medium" >Total Cash Received</PText>
-                            <PText size="medium" weight="semi-bold" color="notification-success" >{formatINR(f.totalCashReceived)}</PText>
+                            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>Total Cash Received</PText>
+                            <PText size="medium" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>{formatINR(f.totalCashReceived)}</PText>
                           </div>
                           <div className="text-right">
-                            <PText size="x-small" color="contrast-medium" >Outstanding</PText>
-                            <PText size="medium" weight="semi-bold" color={f.revenue - f.totalCashReceived > 0 ? 'notification-warning' : 'notification-success'} >
+                            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>Outstanding</PText>
+                            <PText size="medium" weight="semi-bold" color={f.revenue - f.totalCashReceived > 0 ? 'notification-warning' : 'notification-success'} style={{ fontFamily: FONT }}>
                               {formatINR(Math.max(0, f.revenue - f.totalCashReceived))}
                             </PText>
                           </div>
@@ -517,16 +517,16 @@ function PortalProjectsView() {
                       {expenses.length > 0 && (
                         <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
                           <div className="px-4 py-3 border-b border-contrast-low">
-                            <PText size="x-small" weight="semi-bold" >Expenses ({expenses.length})</PText>
+                            <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>Expenses ({expenses.length})</PText>
                           </div>
                           <div className="divide-y divide-contrast-low">
                             {expenses.map(exp => (
                               <div key={exp.id} className="flex items-center justify-between px-4 py-2">
                                 <div>
-                                  <PText size="x-small" >{exp.description}</PText>
-                                  <PText size="xx-small" color="contrast-medium" >{formatDate(exp.expense_date)}</PText>
+                                  <PText size="x-small" style={{ fontFamily: FONT }}>{exp.description}</PText>
+                                  <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>{formatDate(exp.expense_date)}</PText>
                                 </div>
-                                <PText size="x-small" weight="semi-bold" >{formatINR(exp.amount)}</PText>
+                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>{formatINR(exp.amount)}</PText>
                               </div>
                             ))}
                           </div>
@@ -566,27 +566,27 @@ function PortalProjectsView() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >Deadline</PText>
-                <PText size="small" >{formatDate(selectedTask.deadline)}</PText>
+                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>Deadline</PText>
+                <PText size="small" style={{ fontFamily: FONT }}>{formatDate(selectedTask.deadline)}</PText>
               </div>
               {selectedTask.completed_at && (
                 <div>
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" >Completed</PText>
-                  <PText size="small" >{formatDate(selectedTask.completed_at)}</PText>
+                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>Completed</PText>
+                  <PText size="small" style={{ fontFamily: FONT }}>{formatDate(selectedTask.completed_at)}</PText>
                 </div>
               )}
             </div>
 
             {selectedTask.description && (
               <div className="bg-canvas rounded-xl border border-contrast-low px-4 py-3">
-                <PText size="small" >{selectedTask.description}</PText>
+                <PText size="small" style={{ fontFamily: FONT }}>{selectedTask.description}</PText>
               </div>
             )}
 
             <div className="flex flex-col gap-2">
               <div className="flex justify-between">
-                <PText size="x-small" color="contrast-medium" >Progress</PText>
-                <PText size="x-small" weight="semi-bold" >
+                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>Progress</PText>
+                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                   {selectedTask.subtasks.length > 0 ? calcSubtaskProgress(selectedTask.subtasks) : selectedTask.progress}%
                 </PText>
               </div>
@@ -595,14 +595,14 @@ function PortalProjectsView() {
 
             {selectedTask.subtasks.length > 0 && (
               <div className="flex flex-col gap-2">
-                <PText size="x-small" weight="semi-bold" >
+                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                   Subtasks ({selectedTask.subtasks.filter(s => s.is_completed).length}/{selectedTask.subtasks.length})
                 </PText>
                 <div className="flex flex-col gap-1.5">
                   {selectedTask.subtasks.map(sub => (
                     <div key={sub.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-canvas border border-contrast-low">
                       <PIcon name={sub.is_completed ? 'check' : 'close'} size="x-small" color={sub.is_completed ? 'notification-success' : 'contrast-low'} />
-                      <PText size="small" color={sub.is_completed ? 'contrast-medium' : 'primary'} className={sub.is_completed ? 'line-through' : ''} >
+                      <PText size="small" color={sub.is_completed ? 'contrast-medium' : 'primary'} className={sub.is_completed ? 'line-through' : ''} style={{ fontFamily: FONT }}>
                         {sub.title}
                       </PText>
                     </div>

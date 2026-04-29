@@ -34,7 +34,7 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 const PIE_COLORS = ['#010205', '#6B6D70', '#AFB0B3', '#D8D8DB'];
 const PIE_COLORS_DARK = ['#FBFCFF', '#AFB0B3', '#6B6D70', '#535457'];
@@ -86,15 +86,15 @@ function KpiCard({
           size="xx-small"
           color="contrast-medium"
           className="uppercase tracking-wide"
-          
+          style={{ fontFamily: FONT }}
         >
           {label}
         </PText>
-        <PHeading tag="h3" size="medium" className="mt-1" >
+        <PHeading tag="h3" size="medium" className="mt-1" style={{ fontFamily: FONT }}>
           {value}
         </PHeading>
         {sub && (
-          <PText size="xx-small" color="contrast-medium" >
+          <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
             {sub}
           </PText>
         )}
@@ -110,7 +110,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
       weight="semi-bold"
       className="uppercase tracking-wide mb-3"
       color="contrast-medium"
-      
+      style={{ fontFamily: FONT }}
     >
       {children}
     </PText>
@@ -125,7 +125,7 @@ function TableHeaderCell({ children }: { children: React.ReactNode }) {
         color="contrast-medium"
         weight="semi-bold"
         className="uppercase tracking-wide"
-        
+        style={{ fontFamily: FONT }}
       >
         {children}
       </PText>
@@ -148,14 +148,14 @@ function AllocationRow({
     <div className="flex items-center justify-between py-3 border-b border-contrast-low last:border-0">
       <div className="flex items-center gap-3">
         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: color }} />
-        <PText size="small" >
+        <PText size="small" style={{ fontFamily: FONT }}>
           {label}
         </PText>
         <PTag color="background-surface">
           {pct}%
         </PTag>
       </div>
-      <PText size="small" weight="semi-bold" >
+      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
         {formatINR(amount)}
       </PText>
     </div>
@@ -171,15 +171,15 @@ export default function Financials() {
   // ── Access gate ────────────────────────────────────────────────────────────
   if (!isAdmin() && !isFinance()) {
     return (
-      <div className="max-w-7xl mx-auto" >
+      <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <div className="w-16 h-16 rounded-full bg-error-soft flex items-center justify-center">
             <PIcon name="lock" size="large" color="notification-error" />
           </div>
-          <PHeading tag="h2" size="large" >
+          <PHeading tag="h2" size="large" style={{ fontFamily: FONT }}>
             Access Restricted
           </PHeading>
-          <PText color="contrast-medium" >
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             This section is only accessible to Finance department members and Administrators.
           </PText>
           <PInlineNotification
@@ -376,10 +376,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto" >
+      <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
         <div className="flex items-center justify-center h-64 gap-3">
           <PIcon name="chart" size="medium" color="contrast-medium" />
-          <PText color="contrast-medium" >
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Loading financial data…
           </PText>
         </div>
@@ -388,14 +388,14 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto" >
+    <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
       {/* ── Page Header ────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <PHeading tag="h1" size="x-large" className="mb-1" >
+          <PHeading tag="h1" size="x-large" className="mb-1" style={{ fontFamily: FONT }}>
             Financials
           </PHeading>
-          <PText color="contrast-medium" >
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Profit First financial overview for GRAVIUM OS
           </PText>
         </div>
@@ -464,30 +464,30 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               <SectionHeading>Operating Expense Tracker</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1">
-                  <PText size="x-small" color="contrast-medium" >
+                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     Allocated Opex ({profitFirstOpexPct}% of Revenue)
                   </PText>
-                  <PText size="medium" weight="semi-bold" >
+                  <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                     {formatINR(allocatedOpex)}
                   </PText>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <PText size="x-small" color="contrast-medium" >
+                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     Used Opex (Total Expenses)
                   </PText>
-                  <PText size="medium" weight="semi-bold" >
+                  <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                     {formatINR(usedOpex)}
                   </PText>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <PText size="x-small" color="contrast-medium" >
+                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     Remaining Opex
                   </PText>
                   <PText
                     size="medium"
                     weight="semi-bold"
                     color={remainingOpex >= 0 ? 'notification-success' : 'notification-error'}
-                    
+                    style={{ fontFamily: FONT }}
                   >
                     {formatINR(remainingOpex)}
                   </PText>
@@ -497,10 +497,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               {allocatedOpex > 0 && (
                 <div className="mt-4">
                   <div className="flex justify-between mb-1">
-                    <PText size="xx-small" color="contrast-medium" >
+                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                       Opex utilisation
                     </PText>
-                    <PText size="xx-small" color="contrast-medium" >
+                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                       {Math.round((usedOpex / allocatedOpex) * 100)}%
                     </PText>
                   </div>
@@ -525,7 +525,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                 {totalRevenue === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 gap-2">
                     <PIcon name="chart" size="large" color="contrast-low" />
-                    <PText color="contrast-medium" >
+                    <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                       No revenue data yet.
                     </PText>
                   </div>
@@ -541,10 +541,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                       />
                     ))}
                     <div className="flex items-center justify-between pt-3 mt-1">
-                      <PText size="x-small" weight="semi-bold" color="contrast-medium" >
+                      <PText size="x-small" weight="semi-bold" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Total Revenue Base
                       </PText>
-                      <PText size="small" weight="semi-bold" >
+                      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
                         {formatINR(totalRevenue)}
                       </PText>
                     </div>
@@ -558,7 +558,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                 {totalRevenue === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-2">
                     <PIcon name="chart" size="large" color="contrast-low" />
-                    <PText color="contrast-medium" >
+                    <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                       No revenue to visualise.
                     </PText>
                   </div>
@@ -599,11 +599,11 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                               className="w-3 h-3 rounded-sm flex-shrink-0"
                               style={{ background: pieColors[i] }}
                             />
-                            <PText size="x-small" >
+                            <PText size="x-small" style={{ fontFamily: FONT }}>
                               {a.label}
                             </PText>
                           </div>
-                          <PText size="x-small" weight="semi-bold" color="contrast-medium" >
+                          <PText size="x-small" weight="semi-bold" color="contrast-medium" style={{ fontFamily: FONT }}>
                             {a.pct}%
                           </PText>
                         </div>
@@ -620,7 +620,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               {projects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-2">
                   <PIcon name="chart" size="large" color="contrast-low" />
-                  <PText color="contrast-medium" >
+                  <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                     No project data to display.
                   </PText>
                 </div>
@@ -670,7 +670,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                         className="w-3 h-3 rounded-sm"
                         style={{ background: chartBarColors[i] }}
                       />
-                      <PText size="xx-small" color="contrast-medium" >
+                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         {label}
                       </PText>
                     </div>
@@ -687,7 +687,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               {projects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-2">
                   <PIcon name="highway" size="large" color="contrast-low" />
-                  <PText color="contrast-medium" >
+                  <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                     No projects found.
                   </PText>
                 </div>
@@ -722,10 +722,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                             className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors"
                           >
                             <td className="px-4 py-3">
-                              <PText size="small" weight="semi-bold" >
+                              <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
                                 {p.name}
                               </PText>
-                              <PText size="xx-small" color="contrast-medium" >
+                              <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                 {p.client}
                               </PText>
                             </td>
@@ -735,12 +735,12 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                               </PTag>
                             </td>
                             <td className="px-4 py-3">
-                              <PText size="small" >
+                              <PText size="small" style={{ fontFamily: FONT }}>
                                 {formatINR(rev)}
                               </PText>
                             </td>
                             <td className="px-4 py-3">
-                              <PText size="small" >
+                              <PText size="small" style={{ fontFamily: FONT }}>
                                 {formatINR(projExp)}
                               </PText>
                             </td>
@@ -749,13 +749,13 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                                 size="small"
                                 weight="semi-bold"
                                 color={profit >= 0 ? 'notification-success' : 'notification-error'}
-                                
+                                style={{ fontFamily: FONT }}
                               >
                                 {formatINR(profit)}
                               </PText>
                             </td>
                             <td className="px-4 py-3">
-                              <PText size="small" color="notification-success" >
+                              <PText size="small" color="notification-success" style={{ fontFamily: FONT }}>
                                 {formatINR(projCash)}
                               </PText>
                             </td>
@@ -763,7 +763,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                               <PText
                                 size="small"
                                 color={outstanding > 0 ? 'notification-warning' : 'notification-success'}
-                                
+                                style={{ fontFamily: FONT }}
                               >
                                 {formatINR(outstanding)}
                               </PText>
@@ -775,17 +775,17 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                     <tfoot>
                       <tr className="border-t-2 border-contrast-low bg-canvas">
                         <td colSpan={2} className="px-4 py-3">
-                          <PText size="x-small" weight="semi-bold" >
+                          <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                             Totals
                           </PText>
                         </td>
                         <td className="px-4 py-3">
-                          <PText size="x-small" weight="semi-bold" >
+                          <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                             {formatINR(totalRevenue)}
                           </PText>
                         </td>
                         <td className="px-4 py-3">
-                          <PText size="x-small" weight="semi-bold" >
+                          <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                             {formatINR(totalActualCogs)}
                           </PText>
                         </td>
@@ -794,18 +794,18 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                             size="x-small"
                             weight="semi-bold"
                             color={totalProfit >= 0 ? 'notification-success' : 'notification-error'}
-                            
+                            style={{ fontFamily: FONT }}
                           >
                             {formatINR(totalProfit)}
                           </PText>
                         </td>
                         <td className="px-4 py-3">
-                          <PText size="x-small" weight="semi-bold" >
+                          <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                             {formatINR(allCash.reduce((s, c) => s + (c.amount ?? 0), 0))}
                           </PText>
                         </td>
                         <td className="px-4 py-3">
-                          <PText size="x-small" weight="semi-bold" >
+                          <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                             {formatINR(
                               projects.reduce((s, p) => {
                                 const received = allCash
@@ -839,17 +839,17 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                     weight="semi-bold"
                     className="uppercase tracking-wide mb-1"
                     color="contrast-medium"
-                    
+                    style={{ fontFamily: FONT }}
                   >
                     Select Project
                   </PText>
-                  <PText size="xx-small" color="contrast-medium" >
+                  <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                     {projects.length} project{projects.length !== 1 ? 's' : ''} available
                   </PText>
                 </div>
                 <div className="flex-1 max-w-sm">
                   {projects.length === 0 ? (
-                    <PText color="contrast-medium" >
+                    <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                       No projects found.
                     </PText>
                   ) : (
@@ -882,47 +882,47 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                   <SectionHeading>Financial Summary — {selectedProject.name}</SectionHeading>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div className="bg-surface rounded-xl border border-contrast-low p-4 flex flex-col gap-1">
-                      <PText size="x-small" color="contrast-medium" >
+                      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Revenue
                       </PText>
-                      <PText size="medium" weight="semi-bold" >
+                      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                         {formatINR(projFinancials.revenue)}
                       </PText>
                     </div>
                     <div className="bg-surface rounded-xl border border-contrast-low p-4 flex flex-col gap-1">
-                      <PText size="x-small" color="contrast-medium" >
+                      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Actual COGS
                       </PText>
-                      <PText size="medium" weight="semi-bold" >
+                      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                         {formatINR(projFinancials.actualCogs)}
                       </PText>
-                      <PText size="xx-small" color="contrast-medium" >
+                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Est. COGS: {formatINR(projFinancials.estimatedCogs)}
                       </PText>
                     </div>
                     <div className="bg-surface rounded-xl border border-contrast-low p-4 flex flex-col gap-1">
-                      <PText size="x-small" color="contrast-medium" >
+                      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Net Profit
                       </PText>
                       <PText
                         size="medium"
                         weight="semi-bold"
                         color={projFinancials.netProfit >= 0 ? 'notification-success' : 'notification-error'}
-                        
+                        style={{ fontFamily: FONT }}
                       >
                         {formatINR(projFinancials.netProfit)}
                       </PText>
-                      <PText size="xx-small" color="contrast-medium" >
+                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Revenue − Actual COGS
                       </PText>
                     </div>
                     <div
                       className="rounded-xl border-2 border-primary bg-primary/5 p-4 flex flex-col gap-1"
                     >
-                      <PText size="x-small" color="contrast-medium" >
+                      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Design Fee ({projFinancials.designFeePct}% of Revenue)
                       </PText>
-                      <PText size="medium" weight="semi-bold" >
+                      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                         {formatINR(projFinancials.designFee)}
                       </PText>
                     </div>
@@ -934,40 +934,40 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                   <SectionHeading>Derived Allocations</SectionHeading>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="flex flex-col gap-1 p-3 rounded-lg bg-canvas border border-contrast-low">
-                      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide" >
+                      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide" style={{ fontFamily: FONT }}>
                         Incentive ({projFinancials.incentivePct}% of Profit)
                       </PText>
-                      <PText size="medium" weight="semi-bold" >
+                      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                         {formatINR(projFinancials.incentive)}
                       </PText>
-                      <PText size="xx-small" color="contrast-medium" >
+                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Based on pre-design-fee profit
                       </PText>
                     </div>
                     <div className="flex flex-col gap-1 p-3 rounded-lg bg-canvas border border-contrast-low">
-                      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide" >
+                      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide" style={{ fontFamily: FONT }}>
                         Commission ({projFinancials.commissionPct}% of Profit)
                       </PText>
-                      <PText size="medium" weight="semi-bold" >
+                      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
                         {formatINR(projFinancials.commission)}
                       </PText>
-                      <PText size="xx-small" color="contrast-medium" >
+                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Based on pre-design-fee profit
                       </PText>
                     </div>
                     <div className="flex flex-col gap-1 p-3 rounded-lg bg-canvas border border-contrast-low">
-                      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide" >
+                      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide" style={{ fontFamily: FONT }}>
                         Outstanding Payment
                       </PText>
                       <PText
                         size="medium"
                         weight="semi-bold"
                         color={projFinancials.outstanding > 0 ? 'notification-warning' : 'notification-success'}
-                        
+                        style={{ fontFamily: FONT }}
                       >
                         {formatINR(projFinancials.outstanding)}
                       </PText>
-                      <PText size="xx-small" color="contrast-medium" >
+                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                         Revenue − Cash Received
                       </PText>
                     </div>
@@ -980,22 +980,22 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                     <SectionHeading>Cash Received</SectionHeading>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <PText size="xx-small" color="contrast-medium" >
+                        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                           Received
                         </PText>
-                        <PText size="small" weight="semi-bold" color="notification-success" >
+                        <PText size="small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
                           {formatINR(projFinancials.totalCashReceived)}
                         </PText>
                       </div>
                       <div className="text-right">
-                        <PText size="xx-small" color="contrast-medium" >
+                        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                           Outstanding
                         </PText>
                         <PText
                           size="small"
                           weight="semi-bold"
                           color={projFinancials.outstanding > 0 ? 'notification-warning' : 'notification-success'}
-                          
+                          style={{ fontFamily: FONT }}
                         >
                           {formatINR(projFinancials.outstanding)}
                         </PText>
@@ -1005,7 +1005,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                   {projectCash.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 gap-2">
                       <PIcon name="purchase" size="large" color="contrast-low" />
-                      <PText color="contrast-medium" >
+                      <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                         No payments recorded for this project.
                       </PText>
                     </div>
@@ -1031,22 +1031,22 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                                 className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors"
                               >
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" color="contrast-medium" >
+                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                     {new Date(entry.received_date).toLocaleDateString('en-IN')}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" >
+                                  <PText size="x-small" style={{ fontFamily: FONT }}>
                                     {entry.description || '—'}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" weight="semi-bold" color="notification-success" >
+                                  <PText size="x-small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
                                     {formatINR(entry.amount)}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" color="contrast-medium" >
+                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                     {formatINR(cumulative)}
                                   </PText>
                                 </td>
@@ -1057,12 +1057,12 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                         <tfoot>
                           <tr className="border-t-2 border-contrast-low bg-canvas">
                             <td colSpan={2} className="px-4 py-3">
-                              <PText size="x-small" weight="semi-bold" >
+                              <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                                 Total Received
                               </PText>
                             </td>
                             <td colSpan={2} className="px-4 py-3">
-                              <PText size="x-small" weight="semi-bold" color="notification-success" >
+                              <PText size="x-small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
                                 {formatINR(projFinancials.totalCashReceived)}
                               </PText>
                             </td>
@@ -1077,14 +1077,14 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                 <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
                   <div className="px-5 py-4 border-b border-contrast-low flex items-center justify-between">
                     <SectionHeading>Expenses Logged</SectionHeading>
-                    <PText size="small" weight="semi-bold" >
+                    <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
                       Total: {formatINR(projFinancials.actualCogs)}
                     </PText>
                   </div>
                   {projectExpenses.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 gap-2">
                       <PIcon name="document" size="large" color="contrast-low" />
-                      <PText color="contrast-medium" >
+                      <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                         No expenses logged for this project.
                       </PText>
                     </div>
@@ -1111,22 +1111,22 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                                 className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors"
                               >
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" color="contrast-medium" >
+                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                     {new Date(exp.expense_date).toLocaleDateString('en-IN')}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" >
+                                  <PText size="x-small" style={{ fontFamily: FONT }}>
                                     {exp.description}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" weight="semi-bold" >
+                                  <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                                     {formatINR(exp.amount)}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PText size="x-small" color="contrast-medium" >
+                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                     {pctOfRevenue}%
                                   </PText>
                                 </td>
@@ -1137,17 +1137,17 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                         <tfoot>
                           <tr className="border-t-2 border-contrast-low bg-canvas">
                             <td colSpan={2} className="px-4 py-3">
-                              <PText size="x-small" weight="semi-bold" >
+                              <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                                 Total Expenses
                               </PText>
                             </td>
                             <td className="px-4 py-3">
-                              <PText size="x-small" weight="semi-bold" >
+                              <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
                                 {formatINR(projFinancials.actualCogs)}
                               </PText>
                             </td>
                             <td className="px-4 py-3">
-                              <PText size="x-small" color="contrast-medium" >
+                              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                 {projFinancials.revenue > 0
                                   ? `${((projFinancials.actualCogs / projFinancials.revenue) * 100).toFixed(1)}%`
                                   : '—'}
@@ -1166,7 +1166,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
             {projectDetailLoading && (
               <div className="flex items-center justify-center h-48 gap-3">
                 <PIcon name="chart" size="medium" color="contrast-medium" />
-                <PText color="contrast-medium" >
+                <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                   Loading project data…
                 </PText>
               </div>
@@ -1176,7 +1176,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
             {!selectedProject && !projectDetailLoading && projects.length === 0 && (
               <div className="flex flex-col items-center justify-center h-64 gap-3 bg-surface rounded-xl border border-contrast-low">
                 <PIcon name="highway" size="large" color="contrast-low" />
-                <PText color="contrast-medium" >
+                <PText color="contrast-medium" style={{ fontFamily: FONT }}>
                   No projects available. Create a project to see financial details.
                 </PText>
               </div>

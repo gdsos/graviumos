@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FONT = "inherit";
+const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 const DEBOUNCE_MS = 500;
 
 interface WhiteboardNote {
@@ -79,7 +79,7 @@ function ToolbarBtn({ label, title, onClick }: ToolbarBtnProps) {
       title={title}
       onClick={onClick}
       className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold text-contrast-medium border border-contrast-low bg-canvas hover:bg-surface hover:text-primary hover:border-primary transition-colors select-none"
-      
+      style={{ fontFamily: FONT }}
     >
       {label}
     </button>
@@ -104,7 +104,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
   return (
     <div className="flex items-center gap-1.5">
       <PIcon name={cfg.icon} size="x-small" color={cfg.color} />
-      <PText size="x-small" color={status === 'error' ? 'notification-error' : 'contrast-medium'} >
+      <PText size="x-small" color={status === 'error' ? 'notification-error' : 'contrast-medium'} style={{ fontFamily: FONT }}>
         {cfg.label}
       </PText>
     </div>
@@ -247,14 +247,14 @@ export default function Whiteboard() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-5xl mx-auto" >
+    <div className="max-w-5xl mx-auto" style={{ fontFamily: FONT }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">
             My Whiteboard
           </PHeading>
-          <PText color="contrast-medium" >
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Private workspace — only you can see this
           </PText>
         </div>
@@ -268,7 +268,7 @@ export default function Whiteboard() {
                 ? 'bg-primary text-background-base border-primary'
                 : 'bg-canvas border-contrast-low text-contrast-medium hover:text-primary hover:border-primary'
             }`}
-            
+            style={{ fontFamily: FONT }}
           >
             <PIcon
               name={showPreview ? 'close' : 'document'}
@@ -293,7 +293,7 @@ export default function Whiteboard() {
             <div className="w-px h-6 bg-contrast-low mx-1" />
             <ToolbarBtn label="·—" title="Bullet list" onClick={() => handleFormat('ul')} />
             <div className="ml-auto flex items-center gap-2">
-              <PText size="xx-small" color="contrast-low" >
+              <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
                 Markdown formatting
               </PText>
               <PIcon name="information" size="x-small" color="contrast-low" />
@@ -304,7 +304,7 @@ export default function Whiteboard() {
         {/* Content area */}
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <PText color="contrast-medium" >
+            <PText color="contrast-medium" style={{ fontFamily: FONT }}>
               Loading your notes…
             </PText>
           </div>
@@ -332,12 +332,12 @@ export default function Whiteboard() {
 
         {/* Footer bar */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-contrast-low bg-canvas">
-          <PText size="xx-small" color="contrast-low" >
+          <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
             {wordCount} word{wordCount !== 1 ? 's' : ''} · {content.length} characters
           </PText>
           <div className="flex items-center gap-2">
             <PIcon name="lock" size="x-small" color="contrast-low" />
-            <PText size="xx-small" color="contrast-low" >
+            <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
               Private — auto-saves to your account
             </PText>
           </div>
@@ -347,7 +347,7 @@ export default function Whiteboard() {
       {/* Hint */}
       <div className="mt-4 flex items-start gap-2 px-2">
         <PIcon name="information" size="x-small" color="contrast-low" />
-        <PText size="xx-small" color="contrast-low" >
+        <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
           Your whiteboard automatically saves changes. Use the Preview button to see rendered Markdown.
           This note is completely private and only visible to you.
         </PText>
