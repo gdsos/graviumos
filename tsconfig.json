@@ -5,9 +5,7 @@
     { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
-<<<<<<< HEAD
     "ignoreDeprecations": "6.0",
-=======
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
@@ -16,12 +14,10 @@
 
     "strict": true,
     "skipLibCheck": true,
-    "ignoreDeprecations": "6.0",
 
->>>>>>> dev
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["src/*"]
     }
   }
 }
