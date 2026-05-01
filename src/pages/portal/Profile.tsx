@@ -339,10 +339,10 @@ export default function ProfilePage() {
 
   const joinDate = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    })
     : '—';
 
   const roleLabel: Record<string, string> = {
@@ -360,7 +360,9 @@ export default function ProfilePage() {
         </PHeading>
         <PText color="contrast-medium" style={{ fontFamily: FONT }}>
           Manage your personal information and preferences
-        <PText color="contrast-medium" >
+        </PText>
+
+        <PText color="contrast-medium" style={{ fontFamily: FONT }}>
           Manage your account settings and personal information
         </PText>
       </div>

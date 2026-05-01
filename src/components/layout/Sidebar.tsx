@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { Button } from "../../components/ui/button";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   LayoutDashboard,
@@ -11,13 +11,13 @@ import {
   FileText,
   Megaphone,
   Settings,
-  User,
   LogOut,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
   label: string;
-  icon: string;
+  icon: LucideIcon;
   path: string;
   adminOnly?: boolean;
   financeOnly?: boolean;
@@ -51,7 +51,6 @@ const employeeNavItems: NavItem[] = [
   { label: "Financials", icon: DollarSign, path: "/portal/financials", financeOnly: true },
   { label: "Payroll", icon: FileText, path: "/portal/payroll", financeOnly: true },
   { label: "Whiteboard", icon: FileText, path: "/portal/whiteboard" },
-  { label: "Profile", icon: User, path: "/portal/profile" },
 ];
 
 export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) {
@@ -95,6 +94,8 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
         {navItems.map(item => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
+          
+          <Icon size={16} />
 
           return (
             <Link key={item.path} to={item.path}>
