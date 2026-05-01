@@ -11,9 +11,9 @@ import {
   FileText,
   Megaphone,
   Settings,
-  LogOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface NavItem {
   label: string;
@@ -55,78 +55,95 @@ const employeeNavItems: NavItem[] = [
 
 export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) {
   const location = useLocation();
-  const { profile, isFinance, isMS, signOut } = useAuth();
+  const { isFinance, isMS } = useAuth();
 
-  const navItems = isAdmin ? adminNavItems : employeeNavItems.filter(item => {
-    if (item.financeOnly && !isFinance()) return false;
-    if (item.msOnly && !isMS()) return false;
-    return true;
-  });
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkScreen = () => setIsMobile(window.innerWidth < 768);
+    checkScreen();
+    window.addEventListener("resize", checkScreen);
+    return () => window.removeEventListener("resize", checkScreen);
+  }, []);
+
+  const navItems = isAdmin
+    ? adminNavItems
+    : employeeNavItems.filter((item) => {
+        if (item.financeOnly && !isFinance()) return false;
+        if (item.msOnly && !isMS()) return false;
+        return true;
+      });
 
   return (
-    <aside className={`flex flex-col border-r bg-background transition-all ${collapsed ? "w-16" : "w-45"}`}>
-      
-      {/* Header */}
-     <div
-  onClick={onToggle}
-  className="flex items-center border-b p-4 cursor-pointer"
->
-  {collapsed ? (
-    <img
-      src="/Logo-Icon.png"
-      alt="Logo"
-      className="h-7 mx-auto"
-    />
-  ) : (
-    <div className="flex items-center gap-2">
-      <img
-        src="/GRAVIUM.png"
-        alt="Gravium"
-        className="h-7"
-      />
-      <span className="font-semibold tracking-tight">OS</span>
-    </div>
-  )}
-</div>
+    <>
+      {/* Mobile Overlay */}
+      {isMobile && !collapsed && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40"
+          onClick={onToggle}
+        />
+      )}
 
-      {/* Nav */}
-      <nav className="flex-1 p-2 space-y-1">
-        {navItems.map(item => {
-          const isActive = location.pathname === item.path;
-          const Icon = item.icon;
-          
-          <Icon size={16} />
+      <aside
+        className={`
+          fixed md:static top-0 left-0 h-full z-50
+          flex flex-col border-r bg-background transition-all duration-300
+          ${isMobile
+            ? collapsed
+              ? "-translate-x-full w-64"
+              : "translate-x-0 w-64"
+            : collapsed
+              ? "w-16"
+              : "w-64"
+          }
+        `}
+      >
+        {/* Header */}
+        <div
+          onClick={onToggle}
+          className="flex items-center border-b p-4 cursor-pointer"
+        >
+          {collapsed ? (
+            <img src="/Logo-Icon.png" alt="Logo" className="h-7 mx-auto" />
+          ) : (
+            <div className="flex items-center gap-2">
+              <img src="/GRAVIUM.png" alt="Gravium" className="h-7" />
+              <span className="font-semibold tracking-tight">OS</span>
+            </div>
+          )}
+        </div>
 
-          return (
-            <Link key={item.path} to={item.path}>
-              <Button
-  variant={isActive ? "secondary" : "ghost"}
-  className={`w-full ${
-    collapsed ? "justify-center px-0" : "justify-start gap-2 px-3"
-  }`}
->
-  <Icon size={16} />
-  {!collapsed && item.label}
-</Button>
-            </Link>
-          );
-        })}
-      </nav>
+        {/* Nav */}
+        <nav className="flex-1 p-2 space-y-1">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            const Icon = item.icon;
 
-      {/* Footer */}
-      <div className="p-3 border-t">
-        {!collapsed && profile && (
-          <div className="mb-3 text-sm">
-            <div className="font-medium">{profile.full_name}</div>
-            <div className="text-muted-foreground text-xs">{profile.email}</div>
+            return (
+              <Link key={item.path} to={item.path}>
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={`w-full ${
+                    collapsed && !isMobile
+                      ? "justify-center px-0"
+                      : "justify-start gap-2 px-3"
+                  }`}
+                >
+                  <Icon size={16} />
+                  {(!collapsed || isMobile) && item.label}
+                </Button>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        {(!collapsed || isMobile) && (
+          <div className="p-3 border-t text-xs text-muted-foreground">
+            Gravium OS v1.0
           </div>
         )}
-
-        <Button variant="destructive" className={`w-full ${collapsed ? "justify-center px-0" : "justify-start gap-2"}`} onClick={signOut}>
-          <LogOut size={16} />
-          {!collapsed && "Sign Out"}
-        </Button>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
