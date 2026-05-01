@@ -158,7 +158,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
     const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
     return `
-      <div style="font-family: 'Montserrat', Arial, sans-serif; color: #010205; max-width: 700px; margin: 0 auto;">
+      <div style="font-family: 'Neue Montreal', sans-serif; color: #010205; max-width: 700px; margin: 0 auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 2px solid #010205; margin-bottom: 20px;">
           <div style="display: flex; align-items: center; gap: 12px;">
             <div style="width: 48px; height: 48px; border-radius: 12px; border: 1px solid #D8D8DB; display: flex; align-items: center; justify-content: center; font-weight: 600;">G</div>
@@ -218,7 +218,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
       <head>
         <title>Payslip - ${employee?.full_name || 'Employee'}</title>
         <style>
-          body { font-family: 'Montserrat', Arial, sans-serif; padding: 40px; color: #010205; }
+          body { font-family: 'Neue Montreal', sans-serif; padding: 40px; color: #010205; }
           @media print { body { padding: 0; } }
         </style>
       </head>
@@ -239,7 +239,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
       <head>
         <title>Payslip - ${employee?.full_name || 'Employee'}</title>
         <style>
-          body { font-family: 'Montserrat', Arial, sans-serif; padding: 40px; color: #010205; }
+          body { font-family: 'Neue Montreal', sans-serif; padding: 40px; color: #010205; }
         </style>
       </head>
       <body>

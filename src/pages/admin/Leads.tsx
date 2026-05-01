@@ -290,7 +290,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   return (
     <div>
       <label className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+        style={{ fontFamily: "'Neue Montreal', sans-serif" }}>
         {label}
       </label>
       {children}

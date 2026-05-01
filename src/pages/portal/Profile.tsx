@@ -356,10 +356,12 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="mb-8">
         <PHeading tag="h1" size="x-large" className="mb-1">
-          My Profile
+          Account
         </PHeading>
         <PText color="contrast-medium" style={{ fontFamily: FONT }}>
           Manage your personal information and preferences
+        <PText color="contrast-medium" >
+          Manage your account settings and personal information
         </PText>
       </div>
 

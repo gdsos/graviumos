@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useState, useEffect } from 'react';
 import { PIcon, PText } from '@porsche-design-system/components-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,11 +21,46 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const unreadCount = notifications.filter(n => !n.is_read && n.type !== 'announcement').length;
 
   const displayNotifications = notifications.filter(n => n.type !== 'announcement');
+=======
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { supabase } from "../../lib/supabase";
+import { Bell, Sun, Moon, Megaphone, LogOut, User } from "lucide-react";
+
+interface TopBarProps {
+  onMenuToggle: () => void;
+}
+
+export default function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
+  const navigate = useNavigate();
+  const { profile, signOut } = useAuth();
+  const isAdmin =
+    profile?.role === "admin" ||
+    profile?.role === "super_admin";
+  const { theme, toggleTheme } = useTheme();
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const accountRoute = isAdmin
+    ? "/admin/settings"
+    : "/portal/profile";
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
 
   useEffect(() => {
     if (!profile) return;
 
     const fetchData = async () => {
+<<<<<<< HEAD
       const { data: notifs } = await supabase
         .from('notifications')
         .select('*')
@@ -39,6 +75,25 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         .order('created_at', { ascending: false })
         .limit(10);
       setAnnouncements((anncs as Announcement[]) || []);
+=======
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", profile.id)
+        .neq("type", "announcement") // 👈 IMPORTANT
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      setNotifications(data || []);
+
+      const { data: ann } = await supabase
+        .from("announcements")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      setAnnouncements(ann || []);
+
     };
 
     fetchData();
@@ -51,6 +106,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     return () => { supabase.removeChannel(channel); };
   }, [profile]);
 
+<<<<<<< HEAD
   const markAllRead = async () => {
     if (!profile) return;
     await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile.id);
@@ -165,6 +221,139 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-canvas text-xs font-bold flex-shrink-0">
           {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
         </div>
+=======
+  return (
+    <header className="h-14 border-b bg-background flex items-center px-4 sm:px-6">
+      <div className="lg:hidden">
+        <button onClick={onMenuToggle}>
+          <img src="/Logo-Icon.png" className="h-6" />
+        </button>
+      </div>
+
+      {/* RIGHT: everything pushed */}
+      <div className="flex items-center gap-2 ml-auto">
+        {/* Announcement */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Megaphone size={18} />
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent className="w-80 p-2">
+            {announcements.length === 0 ? (
+              <div className="text-sm text-muted-foreground p-2">
+                No announcements
+              </div>
+            ) : (
+              announcements.map(a => (
+                <div key={a.id} className="p-2 rounded-md text-sm bg-muted">
+                  <div className="font-medium">{a.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {a.content}
+                  </div>
+                </div>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Notifications */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] flex items-center justify-center rounded-full">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent className="w-80 p-2">
+            {notifications.length === 0 ? (
+              <div className="text-sm text-muted-foreground p-2">
+                No notifications
+              </div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  className={`p-2 rounded-md text-sm ${n.is_read ? "opacity-60" : "bg-muted"
+                    }`}
+                >
+                  <div className="font-medium">{n.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {n.message}
+                  </div>
+                </div>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Theme */}
+        <Button variant="ghost" size="icon" onClick={toggleTheme}>
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </Button>
+
+        {/* Avatar */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="focus:outline-none">
+              <Avatar className="w-8 h-8 cursor-pointer">
+                <AvatarImage src={profile?.avatar_url || ""} />
+                <AvatarFallback>
+                  {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-64 p-2">
+
+            {/* USER HEADER */}
+            <div className="flex flex-col items-center gap-2 p-3 border-b">
+              <Avatar className="w-12 h-12">
+                <AvatarImage src={profile?.avatar_url || ""} />
+                <AvatarFallback>
+                  {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="text-center">
+                <div className="text-sm font-medium">
+                  {profile?.full_name || "User"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {profile?.email}
+                </div>
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+            <div className="p-1">
+              <DropdownMenuItem
+                onClick={() => navigate(accountRoute)}
+                className="cursor-pointer flex items-center gap-2"
+              >
+                <User size={16} />
+                Account
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={signOut}
+                className="text-red-600 cursor-pointer flex items-center gap-2"
+              >
+                <LogOut size={16} />
+                Sign Out
+              </DropdownMenuItem>
+            </div>
+
+          </DropdownMenuContent>
+        </DropdownMenu>
+
       </div>
     </header>
   );

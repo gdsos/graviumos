@@ -1,4 +1,28 @@
 @import "tailwindcss";
+<<<<<<< HEAD
+=======
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Regular.woff2') format('woff2');
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Medium.woff2') format('woff2');
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Bold.woff2') format('woff2');
+  font-weight: 700;
+}
 
 @layer base {
   * {
@@ -6,7 +30,11 @@
   }
 
   body {
+<<<<<<< HEAD
     font-family: 'Montserrat', 'Arial Narrow', Arial, sans-serif;
+=======
+    font-family: 'Neue Montreal', sans-serif;
+    @apply bg-background text-foreground;
   }
 
   html.dark {
