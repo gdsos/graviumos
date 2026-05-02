@@ -14,9 +14,10 @@ import {
   AvatarFallback
 } from "../../components/ui/avatar";
 import { useAuth } from "../../contexts/AuthContext";
+import { hasPermission } from "@/auth/permissions";
 import { useTheme } from "../../contexts/ThemeContext";
 import { supabase } from "../../lib/supabase";
-import { Bell, Sun, Moon, Megaphone, LogOut, User } from "lucide-react";
+import { Bell, Sun, Moon, Megaphone, LogOut, User, Settings } from "lucide-react";
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -28,12 +29,15 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const { theme, toggleTheme } = useTheme();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
-  
-  const accountRoute =
-  profile?.role === "super_admin"
+  const isAdmin = hasPermission(profile?.role, "settings.view");
+  const accountRoute = isAdmin
     ? "/admin/settings"
     : "/portal/profile";
   
+  const accountLabel = isAdmin
+    ? "Settings"
+    : "Account Settings";
+    
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   useEffect(() => {
@@ -203,23 +207,26 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
             </div>
 
             {/* ACTIONS */}
-            <div className="p-1">
-              <DropdownMenuItem
-                onClick={() => navigate(accountRoute)}
-                className="cursor-pointer flex items-center gap-2"
-              >
+            <DropdownMenuItem
+              onClick={() => navigate(accountRoute)}
+              className="cursor-pointer flex items-center gap-2"
+            >
+              {isAdmin ? (
+                <Settings size={16} />
+              ) : (
                 <User size={16} />
-                Account
-              </DropdownMenuItem>
+              )}
 
-              <DropdownMenuItem
-                onClick={signOut}
-                className="text-red-600 cursor-pointer flex items-center gap-2"
-              >
-                <LogOut size={16} />
-                Sign Out
-              </DropdownMenuItem>
-            </div>
+              {accountLabel}
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={signOut}
+              className="text-red-600 cursor-pointer flex items-center gap-2"
+            >
+              <LogOut size={16} />
+              Sign Out
+            </DropdownMenuItem>
 
           </DropdownMenuContent>
         </DropdownMenu>

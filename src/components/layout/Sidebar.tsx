@@ -10,7 +10,6 @@ import {
   DollarSign,
   FileText,
   Megaphone,
-  Settings,
   ReceiptIndianRupee,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -41,7 +40,6 @@ const adminNavItems: NavItem[] = [
   { label: "Payroll", icon: ReceiptIndianRupee, path: "/admin/payroll" },
   { label: "Reports", icon: FileText, path: "/admin/reports" },
   { label: "Announcements", icon: Megaphone, path: "/admin/announcements" },
-  { label: "Settings", icon: Settings, path: "/admin/settings" },
 ];
 
 const employeeNavItems: NavItem[] = [
