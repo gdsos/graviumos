@@ -11,6 +11,7 @@ import {
   FileText,
   Megaphone,
   Settings,
+  ReceiptIndianRupee,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -37,7 +38,7 @@ const adminNavItems: NavItem[] = [
   { label: "Tasks", icon: CheckSquare, path: "/admin/tasks" },
   { label: "People", icon: Users, path: "/admin/people" },
   { label: "Financials", icon: DollarSign, path: "/admin/financials" },
-  { label: "Payroll", icon: FileText, path: "/admin/payroll" },
+  { label: "Payroll", icon: ReceiptIndianRupee, path: "/admin/payroll" },
   { label: "Reports", icon: FileText, path: "/admin/reports" },
   { label: "Announcements", icon: Megaphone, path: "/admin/announcements" },
   { label: "Settings", icon: Settings, path: "/admin/settings" },
@@ -49,7 +50,7 @@ const employeeNavItems: NavItem[] = [
   { label: "Projects", icon: Folder, path: "/portal/projects" },
   { label: "Leads", icon: BarChart3, path: "/portal/leads", msOnly: true },
   { label: "Financials", icon: DollarSign, path: "/portal/financials", financeOnly: true },
-  { label: "Payroll", icon: FileText, path: "/portal/payroll", financeOnly: true },
+  { label: "Payroll", icon: ReceiptIndianRupee, path: "/portal/payroll", financeOnly: true },
   { label: "Whiteboard", icon: FileText, path: "/portal/whiteboard" },
 ];
 
