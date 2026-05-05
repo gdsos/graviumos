@@ -255,6 +255,7 @@ export default function Tasks() {
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, _setError] = useState('');
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
   // ── tab & filter state ──────────────────────────────────────────────────────
   const [activeTabIndex, setActiveTabIndex] = useState(0);
@@ -288,6 +289,17 @@ export default function Tasks() {
     : [];
 
   // ─── Fetch ────────────────────────────────────────────────────────────────
+
+  const fetchProjects = useCallback(async () => {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name')
+    .order('name');
+
+  if (!error && data) {
+    setProjects(data);
+  }
+}, []);
 
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase
@@ -356,9 +368,10 @@ export default function Tasks() {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
-    fetchProfiles();
-  }, [fetchTasks, fetchProfiles]);
+  fetchTasks();
+  fetchProfiles();
+  fetchProjects();
+}, [fetchTasks, fetchProfiles, fetchProjects]);
 
   // ─── Filtered tasks per tab ────────────────────────────────────────────────
 
@@ -587,11 +600,26 @@ export default function Tasks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks]);
 
+  useEffect(() => {
+  const fetchProjects = async () => {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setProjects(data);
+    }
+  };
+
+  fetchProjects();
+}, []);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   const activeDeptTasks = tabTasks(activeDept?.id);
   const grouped = groupByStatus(activeDeptTasks);
-
+  
   return (
     <div className="max-w-full">
       {/* Header */}
@@ -703,6 +731,7 @@ export default function Tasks() {
             />
           </FormField>
 
+
           <FormField label="Description">
             <textarea
               value={form.description}
@@ -744,7 +773,42 @@ export default function Tasks() {
               </select>
             </FormField>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Department">
+              {/* existing code */}
+            </FormField>
 
+            <FormField label="Assign To">
+              {/* existing code */}
+            </FormField>
+          </div>
+          
+        {projects.length > 0 && (
+          <FormField label="Project">
+            <select
+              value={form.project_id}
+              onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
+              className="form-input"
+            >
+              <option value="">— No Project —</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Deadline Date">
+              {/* existing */}
+            </FormField>
+
+            <FormField label="Status">
+              {/* existing */}
+            </FormField>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Deadline Date">
               <div className="relative">

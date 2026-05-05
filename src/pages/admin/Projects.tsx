@@ -11,6 +11,7 @@ import {
   formatINR,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import type { Task } from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,6 +117,8 @@ export default function Projects() {
   // List state
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskLoading, setTaskLoading] = useState(false);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -126,7 +129,7 @@ export default function Projects() {
 
   // Detail panel state
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [detailTab, setDetailTab] = useState<'overview' | 'expenses' | 'cash'>('overview');
+  const [detailTab, setDetailTab] = useState<'overview' | 'expenses' | 'cash' | 'tasks'>('overview');
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [cashReceived, setCashReceived] = useState<ProjectCashReceived[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -152,6 +155,32 @@ export default function Projects() {
     if (!error && data) setProjects(data as Project[]);
     setLoading(false);
   }, []);
+
+  const fetchTasks = useCallback(async (projectId: string) => {
+  if (!profile) return;
+
+  setTaskLoading(true);
+
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  // 👇 ROLE FILTERING
+  if (!isAdmin() && !isFinance()) {
+    if (profile.role === 'department_head') {
+      query = query.in('department_id', profile.department_ids || []);
+    } else {
+      query = query.eq('assigned_to', profile.id);
+    }
+  }
+
+  const { data } = await query;
+
+  setTasks((data as Task[]) || []);
+  setTaskLoading(false);
+}, [profile, isAdmin, isFinance]);
 
   const fetchProjectDetail = useCallback(async (projectId: string) => {
     setDetailLoading(true);
@@ -204,6 +233,7 @@ export default function Projects() {
     setExpenseForm(emptyExpenseForm);
     setCashForm(emptyCashForm);
     fetchProjectDetail(project.id);
+    fetchTasks(project.id);
   };
 
   const closeDetail = () => {
@@ -566,7 +596,7 @@ export default function Projects() {
 
             {/* Tab nav */}
             <div className="flex gap-1 bg-surface rounded-xl border border-contrast-low p-1">
-              {(['overview', 'expenses', 'cash'] as const).map(tab => (
+              {(['overview', 'expenses', 'cash', 'tasks'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => { setDetailTab(tab); setSubError(''); }}
@@ -795,6 +825,64 @@ export default function Projects() {
                     </div>
                   </div>
                 )}
+
+                {/* ── Tasks Tab ─────────────────────────────────── */}
+{detailTab === 'tasks' && (
+  <div className="flex flex-col gap-4">
+    <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
+      {taskLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <PText color="contrast-medium">Loading tasks…</PText>
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8">
+          <PIcon name="checklist" size="medium" color="contrast-low" />
+          <PText color="contrast-medium" className="mt-2" style={{ fontFamily: FONT }}>
+            No tasks assigned.
+          </PText>
+        </div>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-contrast-low">
+              {['Title', 'Status', 'Progress', 'Deadline'].map(h => (
+                <th key={h} className="px-4 py-3 text-left">
+                  <PText size="xx-small" color="contrast-medium" weight="semi-bold">
+                    {h}
+                  </PText>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map(task => (
+              <tr key={task.id} className="border-b border-contrast-low last:border-0">
+                <td className="px-4 py-2">
+                  <PText size="x-small" style={{ fontFamily: FONT }}>
+                    {task.title}
+                  </PText>
+                </td>
+                <td className="px-4 py-2">
+                  <PTag>{task.status}</PTag>
+                </td>
+                <td className="px-4 py-2">
+                  <PText size="x-small">{task.progress}%</PText>
+                </td>
+                <td className="px-4 py-2">
+                  <PText size="x-small">
+                    {task.deadline
+                      ? new Date(task.deadline).toLocaleDateString('en-IN')
+                      : '—'}
+                  </PText>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+)}
 
                 {/* ── Cash Received Tab ─────────────────────────────────── */}
                 {detailTab === 'cash' && (
