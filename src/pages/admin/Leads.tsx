@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PHeading, PText, PButton, PTag, PIcon, PModal, PInlineNotification } from '@porsche-design-system/components-react';
 import { supabase, type Lead, type Profile, LEAD_SOURCES } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Edit2, Trash2, ArrowRight, Settings } from 'lucide-react';
+import { Button } from '../../components/ui/button';
 
-const STATUS_COLORS: Record<string, Parameters<typeof PTag>[0]['color']> = {
-  Open: 'background-surface',
-  Qualified: 'notification-info-soft',
-  Converted: 'notification-success-soft',
-  Rejected: 'notification-error-soft',
-  Ghosted: 'notification-warning-soft',
+const STATUS_COLORS: Record<string, string> = {
+  Open: 'bg-slate-50 text-slate-700',
+  Qualified: 'bg-blue-50 text-blue-700',
+  Converted: 'bg-green-50 text-green-700',
+  Rejected: 'bg-red-50 text-red-700',
+  Ghosted: 'bg-amber-50 text-amber-700',
 };
 
 interface LeadWithProfile extends Lead {
@@ -139,20 +140,23 @@ export default function Leads() {
     <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">Leads</PHeading>
-          <PText color="contrast-medium">Manage your CRM pipeline</PText>
+          <h1 className="text-3xl font-bold mb-1">Leads</h1>
+          <span className="text-sm text-slate-600">Manage your CRM pipeline</span>
         </div>
-        <PButton icon="add" onClick={openCreate}>Add Lead</PButton>
+        <Button onClick={openCreate} className="flex items-center gap-2">
+          <Plus size={16} />
+          Add Lead
+        </Button>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium">Loading...</PText>
+          <span className="text-sm text-slate-600">Loading...</span>
         </div>
       ) : leads.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-xl border border-contrast-low">
-          <PIcon name="arrow-right" size="large" color="contrast-low" />
-          <PText color="contrast-medium" className="mt-3">No leads yet. Add your first lead.</PText>
+          <ArrowRight size={40} className="text-slate-300" />
+          <span className="text-sm text-slate-600 mt-3">No leads yet. Add your first lead.</span>
         </div>
       ) : (
         <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
@@ -162,7 +166,7 @@ export default function Leads() {
                 <tr className="border-b border-contrast-low">
                   {['Name', 'Contact', 'Source', 'Status', 'Assigned To', 'Date', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left">
-                      <PText size="xx-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide">{h}</PText>
+                      <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide">{h}</span>
                     </th>
                   ))}
                 </tr>
@@ -171,36 +175,36 @@ export default function Leads() {
                 {leads.map(lead => (
                   <tr key={lead.id} className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors">
                     <td className="px-4 py-3">
-                      <PText size="small" weight="semi-bold">{lead.name}</PText>
+                      <span className="text-sm font-semibold">{lead.name}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div>
-                        {lead.contact_email && <PText size="x-small" color="contrast-medium">{lead.contact_email}</PText>}
-                        {lead.contact_phone && <PText size="x-small" color="contrast-medium">{lead.contact_phone}</PText>}
+                        {lead.contact_email && <span className="text-xs text-slate-600 block">{lead.contact_email}</span>}
+                        {lead.contact_phone && <span className="text-xs text-slate-600 block">{lead.contact_phone}</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <PText size="x-small">{lead.lead_source === 'Other' && lead.lead_source_custom ? lead.lead_source_custom : lead.lead_source}</PText>
+                      <span className="text-xs">{lead.lead_source === 'Other' && lead.lead_source_custom ? lead.lead_source_custom : lead.lead_source}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <PTag color={STATUS_COLORS[lead.status] || 'background-surface'}>{lead.status}</PTag>
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${STATUS_COLORS[lead.status] || 'bg-slate-50 text-slate-700'}`}>{lead.status}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <PText size="x-small">{lead.assignee?.full_name || '—'}</PText>
+                      <span className="text-xs">{lead.assignee?.full_name || '—'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <PText size="x-small" color="contrast-medium">
+                      <span className="text-xs text-slate-600">
                         {new Date(lead.created_at).toLocaleDateString('en-IN')}
-                      </PText>
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button onClick={() => openEdit(lead)} className="p-1.5 rounded hover:bg-contrast-low transition-colors">
-                          <PIcon name="edit" size="x-small" />
+                          <Edit2 size={16} className="text-slate-600" />
                         </button>
                         {canDelete && (
-                          <button onClick={() => handleDelete(lead.id)} className="p-1.5 rounded hover:bg-error-soft transition-colors text-error">
-                            <PIcon name="delete" size="x-small" color="inherit" />
+                          <button onClick={() => handleDelete(lead.id)} className="p-1.5 rounded hover:bg-red-50 transition-colors text-red-600">
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>
@@ -214,74 +218,102 @@ export default function Leads() {
       )}
 
       {/* Lead Modal */}
-      <PModal open={showModal} onDismiss={() => setShowModal(false)} heading={editingLead ? 'Edit Lead' : 'Add Lead'} aria={{ 'aria-label': 'Lead form' }}>
-        <form onSubmit={handleSave} className="flex flex-col gap-4">
-          {error && <PInlineNotification heading="Error" description={error} state="error" dismissButton={false} />}
-
-          <div className="grid grid-cols-1 gap-4">
-            <FormField label="Name *">
-              <input type="text" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="form-input" />
-            </FormField>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Email">
-                <input type="email" value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))}
-                  className="form-input" />
-              </FormField>
-              <FormField label="Phone">
-                <input type="tel" value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
-                  className="form-input" />
-              </FormField>
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-bold">{editingLead ? 'Edit Lead' : 'Add Lead'}</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Lead Source">
-                <select value={form.lead_source} onChange={e => setForm(f => ({ ...f, lead_source: e.target.value }))} className="form-input">
-                  {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </FormField>
-              {form.lead_source === 'Other' && (
-                <FormField label="Custom Source">
-                  <input type="text" value={form.lead_source_custom} onChange={e => setForm(f => ({ ...f, lead_source_custom: e.target.value }))}
-                    className="form-input" placeholder="Specify source" />
-                </FormField>
+            <form onSubmit={handleSave} className="p-6 flex flex-col gap-4">
+              {error && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-sm font-semibold text-red-900">Error</p>
+                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                </div>
               )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Status">
-                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="form-input">
-                  {['Open', 'Qualified', 'Converted', 'Rejected', 'Ghosted'].map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </FormField>
-              <FormField label="Assign To (MS only)">
-                <select value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} className="form-input">
-                  <option value="">Unassigned</option>
-                  {msMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
-                </select>
-              </FormField>
-            </div>
-            <FormField label="Notes">
-              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                rows={3} className="form-input resize-none" />
-            </FormField>
-          </div>
 
-          <div className="flex gap-3 justify-end pt-2">
-            <PButton type="button" variant="secondary" onClick={() => setShowModal(false)}>Cancel</PButton>
-            <PButton type="submit">{editingLead ? 'Save Changes' : 'Create Lead'}</PButton>
-          </div>
-        </form>
-      </PModal>
+              <div className="grid grid-cols-1 gap-4">
+                <FormField label="Name *">
+                  <input type="text" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    className="form-input" />
+                </FormField>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Email">
+                    <input type="email" value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))}
+                      className="form-input" />
+                  </FormField>
+                  <FormField label="Phone">
+                    <input type="tel" value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
+                      className="form-input" />
+                  </FormField>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Lead Source">
+                    <select value={form.lead_source} onChange={e => setForm(f => ({ ...f, lead_source: e.target.value }))} className="form-input">
+                      {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </FormField>
+                  {form.lead_source === 'Other' && (
+                    <FormField label="Custom Source">
+                      <input type="text" value={form.lead_source_custom} onChange={e => setForm(f => ({ ...f, lead_source_custom: e.target.value }))}
+                        className="form-input" placeholder="Specify source" />
+                    </FormField>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Status">
+                    <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="form-input">
+                      {['Open', 'Qualified', 'Converted', 'Rejected', 'Ghosted'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Assign To (MS only)">
+                    <select value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} className="form-input">
+                      <option value="">Unassigned</option>
+                      {msMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+                <FormField label="Notes">
+                  <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                    rows={3} className="form-input resize-none" />
+                </FormField>
+              </div>
 
-      {/* Convert to Project modal */}
-      <PModal open={!!convertModal} onDismiss={() => setConvertModal(null)} heading="Lead Converted!" aria={{ 'aria-label': 'Convert lead' }}>
-        <div className="flex flex-col gap-4">
-          <PText>The lead has been marked as Converted. Would you like to create a project from this lead?</PText>
-          <div className="flex gap-3 justify-end">
-            <PButton variant="secondary" onClick={() => setConvertModal(null)}>Not Now</PButton>
-            <PButton icon="configurate" onClick={handleConvertToProject}>Create Project</PButton>
+              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+                <Button type="submit">
+                  {editingLead ? 'Save Changes' : 'Create Lead'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-      </PModal>
+      )}
+
+      {/* Convert to Project modal */}
+      {convertModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-bold">Lead Converted!</h2>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <p className="text-sm">The lead has been marked as Converted. Would you like to create a project from this lead?</p>
+              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
+                <button type="button" onClick={() => setConvertModal(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+                  Not Now
+                </button>
+                <Button onClick={handleConvertToProject} className="flex items-center gap-2">
+                  <Settings size={16} />
+                  Create Project
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

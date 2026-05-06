@@ -1,9 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 
-import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 import LoginPage from './pages/auth/LoginPage';
 import CreateAdminPage from './pages/auth/CreateAdminPage';
@@ -47,11 +46,8 @@ function EmployeeRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppWithTheme() {
-  const { theme } = useTheme();
-
   return (
-    <PorscheDesignSystemProvider theme={theme}>
-      <BrowserRouter>
+    <BrowserRouter>
         <Routes>
           <Route path="/" element={<Navigate to="/login/admin" replace />} />
           <Route path="/login/admin" element={<LoginPage portalType="admin" />} />
@@ -87,7 +83,6 @@ function AppWithTheme() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-    </PorscheDesignSystemProvider>
   );
 }
 

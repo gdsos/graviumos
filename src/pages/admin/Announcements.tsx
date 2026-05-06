@@ -1,21 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Announcement, type Department } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { Button } from '../../components/ui/button';
+import { Info, Bell, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface AnnouncementWithDept extends Announcement {
   department?: Department;
@@ -35,16 +22,11 @@ const emptyForm: NewAnnouncementForm = {
   target_department_id: '',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label
-        className="block text-xs font-medium text-contrast-high mb-1.5 uppercase tracking-wide"
-        style={{ fontFamily: FONT }}
-      >
-        {label}{required && <span className="text-notification-error ml-0.5">*</span>}
+      <label className="block text-xs font-medium text-slate-900 mb-1 uppercase tracking-wide">
+        {label}{required && <span className="text-red-600 ml-1">*</span>}
       </label>
       {children}
     </div>
@@ -67,14 +49,8 @@ function RelativeTime({ date }: { date: string }) {
   else if (diffDays < 7) label = `${diffDays} days ago`;
   else label = d.toLocaleDateString('en-IN');
 
-  return (
-    <span title={d.toLocaleString('en-IN')} style={{ fontFamily: FONT }}>
-      {label}
-    </span>
-  );
+  return <span title={d.toLocaleString('en-IN')} className="text-xs text-slate-500">{label}</span>;
 }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Announcements() {
   const { profile, departments, isAdmin } = useAuth();
@@ -83,21 +59,13 @@ export default function Announcements() {
   const [announcements, setAnnouncements] = useState<AnnouncementWithDept[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
-  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<NewAnnouncementForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState('');
-
-  // Notification state
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementWithDept | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchAnnouncements = useCallback(async () => {
     setLoading(true);
@@ -113,35 +81,29 @@ export default function Announcements() {
     }
 
     const list = (data as Announcement[]) || [];
-
-    // Enrich with department info
     const deptIds = [...new Set(list.map(a => a.target_department_id).filter(Boolean))];
     let deptMap: Record<string, Department> = {};
+
     if (deptIds.length > 0) {
       const { data: depts } = await supabase
         .from('departments')
         .select('*')
         .in('id', deptIds as string[]);
-      (depts || []).forEach((d: Department) => { deptMap[d.id] = d; });
+      (depts || []).forEach((dept: Department) => { deptMap[dept.id] = dept; });
     }
 
-    // Also use departments already loaded in context
     departments.forEach(d => { deptMap[d.id] = d; });
 
-    const enriched: AnnouncementWithDept[] = list.map(a => ({
+    setAnnouncements(list.map(a => ({
       ...a,
       department: a.target_department_id ? deptMap[a.target_department_id] : undefined,
-    }));
-
-    setAnnouncements(enriched);
+    })));
     setLoading(false);
   }, [departments]);
 
   useEffect(() => {
     fetchAnnouncements();
   }, [fetchAnnouncements]);
-
-  // ── Expand/collapse ───────────────────────────────────────────────────────
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -151,8 +113,6 @@ export default function Announcements() {
       return next;
     });
   };
-
-  // ── Create Announcement ───────────────────────────────────────────────────
 
   const openCreate = () => {
     setForm(emptyForm);
@@ -182,9 +142,7 @@ export default function Announcements() {
 
     const { error: insertErr } = await supabase
       .from('announcements')
-      .insert(payload)
-      .select('id')
-      .single();
+      .insert(payload);
 
     if (insertErr) {
       setModalError(insertErr.message);
@@ -192,20 +150,15 @@ export default function Announcements() {
       return;
     }
 
-    // ── Insert notification records ───────────────────────────────────────
-
     try {
       let targetUserIds: string[] = [];
-
       if (form.target_type === 'company') {
-        // All active users
         const { data: allProfiles } = await supabase
           .from('profiles')
           .select('id')
           .eq('is_active', true);
         targetUserIds = ((allProfiles || []) as { id: string }[]).map(p => p.id);
-      } else if (form.target_type === 'department' && form.target_department_id) {
-        // Users in the selected department
+      } else if (form.target_type === 'department') {
         const { data: deptProfiles } = await supabase
           .from('profiles')
           .select('id')
@@ -213,24 +166,21 @@ export default function Announcements() {
           .eq('is_active', true);
         targetUserIds = ((deptProfiles || []) as { id: string }[]).map(p => p.id);
       }
-
-      // Exclude the creator from notifications
       targetUserIds = targetUserIds.filter(id => id !== profile?.id);
-
       if (targetUserIds.length > 0) {
-        const notifications = targetUserIds.map(userId => ({
-          user_id: userId,
-          title: form.title.trim(),
-          message: form.content.trim().slice(0, 200),
-          type: 'announcement' as const,
-          is_read: false,
-          link: `/admin/announcements`,
-        }));
-
-        await supabase.from('notifications').insert(notifications);
+        await supabase.from('notifications').insert(
+          targetUserIds.map(userId => ({
+            user_id: userId,
+            title: form.title.trim(),
+            message: form.content.trim().slice(0, 200),
+            type: 'announcement',
+            is_read: false,
+            link: '/admin/announcements',
+          }))
+        );
       }
     } catch {
-      // Notifications are best-effort; don't block the flow
+      // Best-effort notifications.
     }
 
     setSaving(false);
@@ -238,8 +188,6 @@ export default function Announcements() {
     setNotification({ type: 'success', message: `Announcement "${form.title}" published successfully.` });
     fetchAnnouncements();
   };
-
-  // ── Delete ────────────────────────────────────────────────────────────────
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -258,154 +206,102 @@ export default function Announcements() {
       return;
     }
 
-    setNotification({ type: 'success', message: `Announcement deleted.` });
+    setNotification({ type: 'success', message: 'Announcement deleted.' });
     setAnnouncements(prev => prev.filter(a => a.id !== deleteTarget.id));
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
-    <div className="max-w-4xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
         <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">Announcements</PHeading>
-          <PText color="contrast-medium">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Announcements</h1>
+          <p className="text-sm text-slate-600 max-w-xl">
             {canManage
               ? 'Post and manage company-wide or department-specific announcements.'
               : 'Stay updated with the latest company news and notices.'}
-          </PText>
+          </p>
         </div>
         {canManage && (
-          <PButton icon="add" onClick={openCreate}>
+          <Button onClick={openCreate} className="h-11">
+            <Bell size={16} />
             New Announcement
-          </PButton>
+          </Button>
         )}
       </div>
 
-      {/* Notification banner */}
       {notification && (
-        <div className="mb-6">
-          <PInlineNotification
-            heading={notification.type === 'success' ? 'Success' : 'Error'}
-            description={notification.message}
-            state={notification.type === 'success' ? 'success' : 'error'}
-            dismissButton
-            onDismiss={() => setNotification(null)}
-          />
+        <div className={`mb-6 rounded-2xl border px-4 py-4 ${notification.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
+          <p className="text-sm font-semibold">{notification.type === 'success' ? 'Success' : 'Error'}</p>
+          <p className="text-sm mt-1">{notification.message}</p>
         </div>
       )}
 
-      {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium">Loading announcements…</PText>
+        <div className="grid place-items-center h-48 rounded-3xl border border-slate-200 bg-slate-50">
+          <p className="text-sm text-slate-600">Loading announcements…</p>
         </div>
       ) : announcements.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-xl border border-contrast-low">
-          <PIcon name="information" size="large" color="contrast-low" />
-          <PText color="contrast-medium" className="mt-3">No announcements yet.</PText>
+        <div className="grid place-items-center gap-4 h-48 rounded-3xl border border-slate-200 bg-slate-50 text-slate-600">
+          <Info size={28} className="text-slate-400" />
+          <p className="text-sm">No announcements yet.</p>
           {canManage && (
-            <PButton variant="tertiary" icon="add" onClick={openCreate} className="mt-3">
+            <Button onClick={openCreate} variant="outline" className="mt-3">
               Post the first announcement
-            </PButton>
+            </Button>
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="space-y-4">
           {announcements.map(announcement => {
             const isExpanded = expandedIds.has(announcement.id);
             const isLong = announcement.content.length > 200;
             const preview = isLong && !isExpanded
               ? announcement.content.slice(0, 200).trimEnd() + '…'
               : announcement.content;
-
             const isCompanyWide = announcement.target_type === 'company';
 
             return (
-              <div
-                key={announcement.id}
-                className="bg-surface rounded-xl border border-contrast-low overflow-hidden transition-shadow hover:shadow-sm"
-              >
-                {/* Card header */}
-                <div
-                  className="px-5 pt-5 pb-3 cursor-pointer select-none"
-                  onClick={() => isLong && toggleExpand(announcement.id)}
-                  role={isLong ? 'button' : undefined}
-                  tabIndex={isLong ? 0 : undefined}
-                  onKeyDown={e => { if (isLong && (e.key === 'Enter' || e.key === ' ')) toggleExpand(announcement.id); }}
-                  aria-expanded={isLong ? isExpanded : undefined}
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-notification-info-soft flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <PIcon name="information" size="x-small" color="notification-info" />
+              <div key={announcement.id} className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-col gap-4 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                        <Info size={18} />
                       </div>
                       <div className="min-w-0">
-                        <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }} className="leading-snug">
-                          {announcement.title}
-                        </PText>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <PTag
-                            color={isCompanyWide ? 'notification-info-soft' : 'notification-warning-soft'}
-                          >
-                            {isCompanyWide
-                              ? 'Company-wide'
-                              : announcement.department?.name ?? 'Department'}
-                          </PTag>
-                          <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                            <RelativeTime date={announcement.created_at} />
-                          </PText>
+                        <h2 className="text-base font-semibold text-slate-900 truncate">{announcement.title}</h2>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span className={`rounded-full px-2.5 py-1 ${isCompanyWide ? 'bg-sky-100 text-sky-900' : 'bg-amber-100 text-amber-900'}`}>
+                            {isCompanyWide ? 'Company-wide' : announcement.department?.name ?? 'Department'}
+                          </span>
+                          <RelativeTime date={announcement.created_at} />
                         </div>
                       </div>
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex items-center gap-2">
                       {isLong && (
                         <button
-                          onClick={e => { e.stopPropagation(); toggleExpand(announcement.id); }}
-                          className="p-1.5 rounded hover:bg-canvas transition-colors"
-                          title={isExpanded ? 'Collapse' : 'Expand'}
+                          onClick={() => toggleExpand(announcement.id)}
+                          className="rounded-full p-2 text-slate-600 hover:bg-slate-100 transition-colors"
+                          aria-label={isExpanded ? 'Collapse announcement' : 'Expand announcement'}
                         >
-                          <PIcon
-                            name={isExpanded ? 'arrow-head-up' : 'arrow-head-down'}
-                            size="x-small"
-                            color="contrast-medium"
-                          />
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                       )}
                       {canManage && (
                         <button
-                          onClick={e => { e.stopPropagation(); setDeleteTarget(announcement); }}
-                          className="p-1.5 rounded hover:bg-notification-error-soft transition-colors"
-                          title="Delete announcement"
+                          onClick={() => setDeleteTarget(announcement)}
+                          className="rounded-full p-2 text-red-600 hover:bg-red-100 transition-colors"
+                          aria-label="Delete announcement"
                         >
-                          <PIcon name="delete" size="x-small" color="notification-error" />
+                          <Trash2 size={16} />
                         </button>
                       )}
                     </div>
                   </div>
-                </div>
 
-                {/* Content body */}
-                <div className="px-5 pb-5">
-                  <div
-                    className="bg-canvas rounded-lg p-4 border border-contrast-low"
-                    style={{ fontFamily: FONT }}
-                  >
-                    <PText size="small" color="contrast-medium" style={{ fontFamily: FONT, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {preview}
-                    </PText>
-                    {isLong && (
-                      <button
-                        onClick={() => toggleExpand(announcement.id)}
-                        className="mt-2 text-xs font-medium text-primary hover:underline transition-colors"
-                        style={{ fontFamily: FONT }}
-                      >
-                        {isExpanded ? 'Show less' : 'Read more'}
-                      </button>
-                    )}
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700 whitespace-pre-wrap">
+                    {preview}
                   </div>
                 </div>
               </div>
@@ -414,168 +310,132 @@ export default function Announcements() {
         </div>
       )}
 
-      {/* ── Create Announcement Modal ────────────────────────────────────────── */}
-      <PModal
-        open={showModal}
-        onDismiss={() => !saving && setShowModal(false)}
-        heading="New Announcement"
-        aria={{ 'aria-label': 'Create announcement' }}
-      >
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
-          {modalError && (
-            <PInlineNotification
-              heading="Please fix the following"
-              description={modalError}
-              state="error"
-              dismissButton={false}
-            />
-          )}
-
-          {/* Title */}
-          <FormField label="Title" required>
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              className="form-input"
-              placeholder="e.g. Office closed on Monday"
-              maxLength={200}
-            />
-          </FormField>
-
-          {/* Content */}
-          <FormField label="Content" required>
-            <textarea
-              required
-              value={form.content}
-              onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-              rows={5}
-              className="form-input resize-none"
-              placeholder="Write the full announcement here…"
-            />
-          </FormField>
-
-          {/* Target type */}
-          <FormField label="Audience">
-            <div className="flex flex-col gap-2.5 pt-1">
-              <label
-                className="flex items-center gap-2.5 cursor-pointer group"
-                style={{ fontFamily: FONT }}
-              >
-                <input
-                  type="radio"
-                  name="target_type"
-                  value="company"
-                  checked={form.target_type === 'company'}
-                  onChange={() => setForm(f => ({ ...f, target_type: 'company', target_department_id: '' }))}
-                  className="w-4 h-4 accent-primary"
-                />
-                <span className="text-sm text-contrast-high group-hover:text-primary transition-colors">
-                  Company-wide — visible to all employees
-                </span>
-              </label>
-              <label
-                className="flex items-center gap-2.5 cursor-pointer group"
-                style={{ fontFamily: FONT }}
-              >
-                <input
-                  type="radio"
-                  name="target_type"
-                  value="department"
-                  checked={form.target_type === 'department'}
-                  onChange={() => setForm(f => ({ ...f, target_type: 'department' }))}
-                  className="w-4 h-4 accent-primary"
-                />
-                <span className="text-sm text-contrast-high group-hover:text-primary transition-colors">
-                  Department-specific — only visible to selected department
-                </span>
-              </label>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden">
+            <div className="border-b border-slate-200 px-6 py-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">New Announcement</h2>
+                <p className="text-sm text-slate-600">Create a new message for your organization.</p>
+              </div>
+              <button onClick={() => !saving && setShowModal(false)} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 transition-colors">
+                <ChevronUp size={18} className="rotate-45" />
+              </button>
             </div>
-          </FormField>
-
-          {/* Department picker */}
-          {form.target_type === 'department' && (
-            <FormField label="Select Department" required>
-              <select
-                required
-                value={form.target_department_id}
-                onChange={e => setForm(f => ({ ...f, target_department_id: e.target.value }))}
-                className="form-input"
-              >
-                <option value="">Choose a department…</option>
-                {departments.map(dept => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} ({dept.code})
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          )}
-
-          {/* Info about notifications */}
-          <PInlineNotification
-            heading="Notifications will be sent"
-            description={
-              form.target_type === 'company'
-                ? 'All active employees will receive an in-app notification.'
-                : form.target_department_id
-                  ? `All active members of the selected department will be notified.`
-                  : 'Members of the selected department will be notified.'
-            }
-            state="info"
-            dismissButton={false}
-          />
-
-          {/* Actions */}
-          <div className="flex gap-3 justify-end pt-2">
-            <PButton
-              type="button"
-              variant="secondary"
-              onClick={() => setShowModal(false)}
-              disabled={saving}
-            >
-              Cancel
-            </PButton>
-            <PButton type="submit" loading={saving} icon="bell">
-              Publish
-            </PButton>
-          </div>
-        </form>
-      </PModal>
-
-      {/* ── Delete Confirmation Modal ────────────────────────────────────────── */}
-      <PModal
-        open={!!deleteTarget}
-        onDismiss={() => !deleting && setDeleteTarget(null)}
-        heading="Delete Announcement"
-        aria={{ 'aria-label': 'Delete announcement confirmation' }}
-      >
-        <div className="flex flex-col gap-4">
-          <PInlineNotification
-            heading="This cannot be undone"
-            description={`Are you sure you want to delete "${deleteTarget?.title}"? This will permanently remove it for all users.`}
-            state="warning"
-            dismissButton={false}
-          />
-          <div className="flex gap-3 justify-end">
-            <PButton
-              variant="secondary"
-              onClick={() => setDeleteTarget(null)}
-              disabled={deleting}
-            >
-              Cancel
-            </PButton>
-            <PButton
-              icon="delete"
-              loading={deleting}
-              onClick={handleDelete}
-            >
-              Delete
-            </PButton>
+            <form onSubmit={handleCreate} className="space-y-4 p-6">
+              {modalError && (
+                <div className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                  {modalError}
+                </div>
+              )}
+              <FormField label="Title" required>
+                <input
+                  type="text"
+                  required
+                  value={form.title}
+                  onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none"
+                  placeholder="e.g. Office closed on Monday"
+                />
+              </FormField>
+              <FormField label="Content" required>
+                <textarea
+                  required
+                  value={form.content}
+                  onChange={e => setForm(prev => ({ ...prev, content: e.target.value }))}
+                  rows={5}
+                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none resize-none"
+                  placeholder="Write the full announcement here…"
+                />
+              </FormField>
+              <FormField label="Audience">
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 rounded-3xl border border-slate-200 px-4 py-3 cursor-pointer text-sm text-slate-900 hover:border-slate-900 transition-colors">
+                    <input
+                      type="radio"
+                      name="target_type"
+                      value="company"
+                      checked={form.target_type === 'company'}
+                      onChange={() => setForm(prev => ({ ...prev, target_type: 'company', target_department_id: '' }))}
+                      className="h-4 w-4 accent-slate-900"
+                    />
+                    <span>Company-wide — visible to all active employees</span>
+                  </label>
+                  <label className="flex items-center gap-3 rounded-3xl border border-slate-200 px-4 py-3 cursor-pointer text-sm text-slate-900 hover:border-slate-900 transition-colors">
+                    <input
+                      type="radio"
+                      name="target_type"
+                      value="department"
+                      checked={form.target_type === 'department'}
+                      onChange={() => setForm(prev => ({ ...prev, target_type: 'department' }))}
+                      className="h-4 w-4 accent-slate-900"
+                    />
+                    <span>Department-specific — visible only to selected department</span>
+                  </label>
+                </div>
+              </FormField>
+              {form.target_type === 'department' && (
+                <FormField label="Select department" required>
+                  <select
+                    required
+                    value={form.target_department_id}
+                    onChange={e => setForm(prev => ({ ...prev, target_department_id: e.target.value }))}
+                    className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none"
+                  >
+                    <option value="">Choose a department…</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name} ({dept.code})</option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                {form.target_type === 'company'
+                  ? 'All active employees will receive an in-app notification.'
+                  : form.target_department_id
+                    ? 'All active members of the selected department will be notified.'
+                    : 'Members of the selected department will be notified.'}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2 border-t border-slate-200">
+                <Button type="button" variant="outline" onClick={() => setShowModal(false)} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  <Bell size={16} />
+                  {saving ? 'Publishing...' : 'Publish'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-      </PModal>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-900">
+                <Info size={20} />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-slate-900">Delete Announcement</h2>
+                <p className="text-sm text-slate-600 mt-1">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Are you sure you want to delete “{deleteTarget.title}”? This will remove it for all users.
+            </div>
+            <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-end">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,20 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PInlineNotification,
-  PModal,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   supabase,
   type ApprovalRequest,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -27,7 +19,7 @@ interface ProfileFormState {
   twitter: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function FormField({
   label,
@@ -63,13 +55,13 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
         {label}
       </PText>
       <PText size="small" style={{ fontFamily: FONT }}>
-        {value || '—'}
+        {value || 'â€”'}
       </PText>
     </div>
   );
 }
 
-// ─── KPI Progress Bar ─────────────────────────────────────────────────────────
+// â”€â”€â”€ KPI Progress Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function KpiBar({ score }: { score: number }) {
   const pct = Math.min(Math.max((score / 10) * 100, 0), 100);
@@ -101,7 +93,7 @@ function KpiBar({ score }: { score: number }) {
   );
 }
 
-// ─── Avatar component ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Avatar component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function Avatar({ url, name }: { url: string; name: string }) {
   const initials = name
@@ -137,7 +129,7 @@ function Avatar({ url, name }: { url: string; name: string }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function ProfilePage() {
   const { profile, userDepartments, refreshProfile } = useAuth();
@@ -185,7 +177,7 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  // ─── Init form from profile ─────────────────────────────────────────────
+  // â”€â”€â”€ Init form from profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     if (!profile) return;
@@ -200,7 +192,7 @@ export default function ProfilePage() {
     setFormDirty(false);
   }, [profile]);
 
-  // ─── Fetch task count ───────────────────────────────────────────────────
+  // â”€â”€â”€ Fetch task count â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     if (!profile) return;
@@ -213,7 +205,7 @@ export default function ProfilePage() {
     })();
   }, [profile]);
 
-  // ─── Fetch pending name change request ──────────────────────────────────
+  // â”€â”€â”€ Fetch pending name change request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const fetchNameRequest = useCallback(async () => {
     if (!profile) return;
@@ -233,7 +225,7 @@ export default function ProfilePage() {
     fetchNameRequest();
   }, [fetchNameRequest]);
 
-  // ─── Handle profile save ────────────────────────────────────────────────
+  // â”€â”€â”€ Handle profile save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,7 +260,7 @@ export default function ProfilePage() {
     }
   };
 
-  // ─── Handle name change request ──────────────────────────────────────────
+  // â”€â”€â”€ Handle name change request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleRequestNameChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -325,13 +317,13 @@ export default function ProfilePage() {
     setFormDirty(true);
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   if (!profile) {
     return (
       <div className="flex items-center justify-center h-48">
         <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-          Loading profile…
+          Loading profileâ€¦
         </PText>
       </div>
     );
@@ -343,7 +335,7 @@ export default function ProfilePage() {
       month: 'long',
       year: 'numeric',
     })
-    : '—';
+    : 'â€”';
 
   const roleLabel: Record<string, string> = {
     super_admin: 'Super Admin',
@@ -368,7 +360,7 @@ export default function ProfilePage() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {/* ── Identity Card ──────────────────────────────────────────────── */}
+        {/* â”€â”€ Identity Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <div className="flex flex-col sm:flex-row gap-5 items-start">
             {/* Avatar */}
@@ -402,7 +394,7 @@ export default function ProfilePage() {
                 {userDepartments.length > 0 ? (
                   userDepartments.map(dept => (
                     <PTag key={dept.id} color="notification-info-soft">
-                      {dept.code} · {dept.name}
+                      {dept.code} Â· {dept.name}
                     </PTag>
                   ))
                 ) : (
@@ -414,7 +406,7 @@ export default function ProfilePage() {
 
               {/* Key info row */}
               <div className="flex flex-wrap gap-6">
-                <ReadonlyField label="Employee Code" value={profile.employee_code || '—'} />
+                <ReadonlyField label="Employee Code" value={profile.employee_code || 'â€”'} />
                 <ReadonlyField label="Joined" value={joinDate} />
                 <ReadonlyField label="Email" value={profile.email} />
                 {taskCount !== null && (
@@ -430,7 +422,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Name Change Section ──────────────────────────────────────────── */}
+        {/* â”€â”€ Name Change Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
@@ -450,7 +442,7 @@ export default function ProfilePage() {
                     Name Change Pending
                   </PText>
                   <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                    Requested: {String((nameRequest.payload as Record<string, string>)?.new_name || '—')}
+                    Requested: {String((nameRequest.payload as Record<string, string>)?.new_name || 'â€”')}
                   </PText>
                 </div>
               </div>
@@ -491,7 +483,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Editable Profile Fields ──────────────────────────────────────── */}
+        {/* â”€â”€ Editable Profile Fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <form onSubmit={handleSave} className="bg-surface rounded-2xl border border-contrast-low p-6">
           <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
             Personal Details
@@ -686,19 +678,19 @@ export default function ProfilePage() {
           </div>
         </form>
 
-        {/* ── Account info (readonly) ──────────────────────────────────────── */}
+        {/* â”€â”€ Account info (readonly) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
             Account Information
           </PHeading>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
             <ReadonlyField label="Email" value={profile.email} />
-            <ReadonlyField label="Employee Code" value={profile.employee_code || '—'} />
+            <ReadonlyField label="Employee Code" value={profile.employee_code || 'â€”'} />
             <ReadonlyField label="Role" value={roleLabel[profile.role] || profile.role} />
             <ReadonlyField label="Joined" value={joinDate} />
             <ReadonlyField
               label="Departments"
-              value={userDepartments.map(d => d.code).join(', ') || '—'}
+              value={userDepartments.map(d => d.code).join(', ') || 'â€”'}
             />
             <ReadonlyField
               label="Account Status"
@@ -708,7 +700,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Name Change Modal ──────────────────────────────────────────────── */}
+      {/* â”€â”€ Name Change Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <PModal
         open={showNameModal}
         onDismiss={() => !nameRequestLoading && setShowNameModal(false)}
@@ -785,3 +777,6 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+
+

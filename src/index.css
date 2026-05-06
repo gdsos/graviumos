@@ -1,7 +1,4 @@
 @import "tailwindcss";
-@import "shadcn/tailwind.css";
-@import "tw-animate-css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -30,7 +27,6 @@
   }
 
   body {
-    font-family: 'Montserrat', 'Arial Narrow', Arial, sans-serif;
     font-family: 'Neue Montreal', sans-serif;
     background-color: var(--background, #ffffff);
     color: var(--foreground, #000000);

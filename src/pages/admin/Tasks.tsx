@@ -1,17 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-  PTabs,
-  PTabsItem,
-} from '@porsche-design-system/components-react';
 import { supabase, type Task, type Subtask, type Profile, type Department } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { Button } from '../../components/ui/button';
+import { User, Calendar, Check, Trash2, Plus, X, List } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,9 +11,7 @@ type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 interface TaskWithDetails extends Task {
   assignee?: Profile;
   subtasks: Subtask[];
-  /** effective status after applying overdue logic */
   effectiveStatus: TaskStatus;
-  /** days overdue when completed late */
   overdueByDays?: number;
 }
 
@@ -38,11 +27,11 @@ const DEPT_NAMES = [
 
 const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing', 'Overdue', 'Completed'];
 
-const STATUS_TAG_VARIANT: Record<TaskStatus, Parameters<typeof PTag>[0]['variant']> = {
-  'Not Started': 'secondary',
-  Ongoing: 'info',
-  Overdue: 'error',
-  Completed: 'success',
+const STATUS_COLORS: Record<TaskStatus, string> = {
+  'Not Started': 'bg-slate-100 text-slate-900',
+  Ongoing: 'bg-blue-100 text-blue-900',
+  Overdue: 'bg-red-100 text-red-900',
+  Completed: 'bg-green-100 text-green-900',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -81,10 +70,7 @@ function isOverdue(deadline: string | null): boolean {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label
-        className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
-      >
+      <label className="block text-xs font-medium text-slate-900 mb-1.5">
         {label}
       </label>
       {children}
@@ -92,14 +78,10 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-interface ProgressBarProps {
-  value: number;
-}
-
-function ProgressBar({ value }: ProgressBarProps) {
-  const color = value === 100 ? '#2e7d32' : value >= 75 ? '#0288d1' : '#ed6c02';
+function ProgressBar({ value }: { value: number }) {
+  const color = value === 100 ? '#16a34a' : value >= 75 ? '#0284c7' : '#f97316';
   return (
-    <div className="w-full bg-contrast-low/30 rounded-full h-1.5 overflow-hidden">
+    <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
       <div
         className="h-full rounded-full transition-all"
         style={{
@@ -111,14 +93,7 @@ function ProgressBar({ value }: ProgressBarProps) {
   );
 }
 
-// ─── Task Card ────────────────────────────────────────────────────────────────
-
-interface TaskCardProps {
-  task: TaskWithDetails;
-  onClick: () => void;
-}
-
-function TaskCard({ task, onClick }: TaskCardProps) {
+function TaskCard({ task, onClick }: { task: TaskWithDetails; onClick: () => void }) {
   const hasSubtasks = task.subtasks.length > 0;
   const progress = hasSubtasks ? calcProgress(task.subtasks) : 0;
   const deadlineOverdue = task.status !== 'Completed' && isOverdue(task.deadline);
@@ -127,93 +102,68 @@ function TaskCard({ task, onClick }: TaskCardProps) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left bg-canvas rounded-xl border-2 border-contrast-low hover:border-primary focus:outline-none focus:border-primary transition-colors p-4 flex flex-col gap-3"
+      className="w-full text-left bg-white rounded-xl border-2 border-slate-200 hover:border-slate-900 focus:outline-none focus:border-slate-900 transition-colors p-4 flex flex-col gap-3"
     >
-      {/* Title */}
-      <PText size="small" weight="semi-bold" className="line-clamp-2">
-        {task.title}
-      </PText>
+      <p className="font-medium text-sm line-clamp-2">{task.title}</p>
 
-      {/* Status tag + overdue badge */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <PTag variant={STATUS_TAG_VARIANT[task.effectiveStatus]} compact>
+        <span className={`text-xs font-semibold px-2 py-1 rounded ${STATUS_COLORS[task.effectiveStatus]}`}>
           {task.effectiveStatus === 'Completed' && task.overdueByDays
             ? `Completed (Overdue by ${task.overdueByDays}d)`
             : task.effectiveStatus}
-        </PTag>
+        </span>
       </div>
 
-      {/* Assignee */}
       <div className="flex items-center gap-1.5">
-        <PIcon name="user" size="x-small" color="contrast-medium" />
-        <PText size="x-small" color="contrast-medium">
+        <User size={14} className="text-slate-600" />
+        <p className="text-xs text-slate-600">
           {task.assignee?.full_name || task.assignee?.email || 'Unassigned'}
-        </PText>
+        </p>
       </div>
 
-      {/* Deadline */}
       <div className="flex items-center gap-1.5">
-        <PIcon name="calendar" size="x-small" color={deadlineOverdue ? 'notification-error' : 'contrast-medium'} />
-        <PText
-          size="x-small"
-          color={deadlineOverdue ? 'notification-error' : 'contrast-medium'}
-        >
+        <Calendar size={14} className={deadlineOverdue ? 'text-red-600' : 'text-slate-600'} />
+        <p className="text-xs" style={{ color: deadlineOverdue ? '#dc2626' : '#475569' }}>
           {formatDeadline(task.deadline)}
-        </PText>
+        </p>
         {deadlineOverdue && (
-          <PTag variant="error" compact>Overdue</PTag>
+          <span className="text-xs font-semibold px-2 py-1 rounded bg-red-100 text-red-900">Overdue</span>
         )}
       </div>
 
-      {/* Completed on */}
       {task.effectiveStatus === 'Completed' && task.completed_at && (
         <div className="flex items-center gap-1.5">
-          <PIcon name="check" size="x-small" color="notification-success" />
-          <PText size="x-small" color="notification-success">
-            Completed on {formatDeadline(task.completed_at)}
-          </PText>
+          <Check size={14} className="text-green-600" />
+          <p className="text-xs text-green-700">Completed on {formatDeadline(task.completed_at)}</p>
         </div>
       )}
 
-      {/* Progress bar (only when subtasks exist) */}
       {hasSubtasks && (
         <div className="flex flex-col gap-1">
           <ProgressBar value={progress} />
-          <PText size="xx-small" color="contrast-medium">
+          <p className="text-xs text-slate-600">
             {task.subtasks.filter(s => s.is_completed).length}/{task.subtasks.length} subtasks · {progress}%
-          </PText>
+          </p>
         </div>
       )}
     </button>
   );
 }
 
-// ─── Kanban Column ────────────────────────────────────────────────────────────
-
-interface KanbanColumnProps {
-  status: TaskStatus;
-  tasks: TaskWithDetails[];
-  onCardClick: (task: TaskWithDetails) => void;
-}
-
-function KanbanColumn({ status, tasks, onCardClick }: KanbanColumnProps) {
+function KanbanColumn({ status, tasks, onCardClick }: { status: TaskStatus; tasks: TaskWithDetails[]; onCardClick: (task: TaskWithDetails) => void }) {
   return (
     <div className="flex flex-col gap-3 min-w-[240px] flex-1">
-      {/* Column header */}
-      <div className="flex items-center justify-between pb-2 border-b-2 border-contrast-low">
-        <PText size="x-small" weight="semi-bold" color="contrast-high" className="uppercase tracking-wider">
-          {status}
-        </PText>
-        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-contrast-low/40 text-xs font-semibold text-contrast-high">
+      <div className="flex items-center justify-between pb-2 border-b-2 border-slate-200">
+        <p className="text-xs font-semibold text-slate-900 uppercase tracking-wider">{status}</p>
+        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 text-xs font-semibold text-slate-900">
           {tasks.length}
         </span>
       </div>
 
-      {/* Cards */}
       <div className="flex flex-col gap-2.5">
         {tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-contrast-low/50">
-            <PText size="x-small" color="contrast-low">No tasks</PText>
+          <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-slate-300">
+            <p className="text-xs text-slate-400">No tasks</p>
           </div>
         ) : (
           tasks.map(task => (
@@ -250,18 +200,15 @@ const EMPTY_FORM: TaskFormState = {
 export default function Tasks() {
   const { profile, departments, isAdmin, isDeptHead } = useAuth();
 
-  // ── data state ──────────────────────────────────────────────────────────────
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, _setError] = useState('');
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
-  // ── tab & filter state ──────────────────────────────────────────────────────
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [filterAssignee, setFilterAssignee] = useState('');
 
-  // ── task modal state ─────────────────────────────────────────────────────────
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithDetails | null>(null);
   const [form, setForm] = useState<TaskFormState>(EMPTY_FORM);
@@ -269,37 +216,28 @@ export default function Tasks() {
   const [saving, setSaving] = useState(false);
   const deadlineDateRef = useRef<HTMLInputElement>(null);
 
-  // ── detail modal state ───────────────────────────────────────────────────────
   const [detailTask, setDetailTask] = useState<TaskWithDetails | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [addingSubtask, setAddingSubtask] = useState(false);
 
-  // ── derived ──────────────────────────────────────────────────────────────────
   const canManage = isAdmin() || isDeptHead();
-
   const activeDeptName = DEPT_NAMES[activeTabIndex];
-  const activeDept: Department | undefined = departments.find(
-    d => d.name === activeDeptName
-  );
-
-  // Members of the active department (for filter dropdown & form)
+  const activeDept: Department | undefined = departments.find(d => d.name === activeDeptName);
   const deptMembers = activeDept
     ? allProfiles.filter(p => p.department_ids?.includes(activeDept.id) && p.is_active)
     : [];
 
-  // ─── Fetch ────────────────────────────────────────────────────────────────
-
   const fetchProjects = useCallback(async () => {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id, name')
-    .order('name');
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name')
+      .order('name');
 
-  if (!error && data) {
-    setProjects(data);
-  }
-}, []);
+    if (!error && data) {
+      setProjects(data);
+    }
+  }, []);
 
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase
@@ -321,7 +259,6 @@ export default function Tasks() {
       return;
     }
 
-    // Fetch all subtasks in one query
     const taskIds = tasksData.map((t: Task) => t.id);
     let subtaskMap: Record<string, Subtask[]> = {};
     if (taskIds.length > 0) {
@@ -337,7 +274,6 @@ export default function Tasks() {
       }
     }
 
-    // Fetch assignee profiles
     const assigneeIds = [...new Set(tasksData.map((t: Task) => t.assigned_to).filter(Boolean) as string[])];
     let assigneeMap: Record<string, Profile> = {};
     if (assigneeIds.length > 0) {
@@ -368,12 +304,10 @@ export default function Tasks() {
   }, []);
 
   useEffect(() => {
-  fetchTasks();
-  fetchProfiles();
-  fetchProjects();
-}, [fetchTasks, fetchProfiles, fetchProjects]);
-
-  // ─── Filtered tasks per tab ────────────────────────────────────────────────
+    fetchTasks();
+    fetchProfiles();
+    fetchProjects();
+  }, [fetchTasks, fetchProfiles, fetchProjects]);
 
   const tabTasks = (deptId?: string): TaskWithDetails[] => {
     if (!deptId) return [];
@@ -395,11 +329,8 @@ export default function Tasks() {
     return groups;
   };
 
-  // ─── Task CRUD ─────────────────────────────────────────────────────────────
-
   const openCreate = () => {
     setEditingTask(null);
-    // For dept heads, default to their own department and lock it
     const isOnlyDeptHead = !isAdmin() && isDeptHead();
     const defaultDeptId = isOnlyDeptHead
       ? (profile?.department_ids?.[0] || activeDept?.id || '')
@@ -481,8 +412,6 @@ export default function Tasks() {
     fetchTasks();
   };
 
-  // ─── Subtask operations ────────────────────────────────────────────────────
-
   const recalculateKpi = async (userId: string) => {
     const { data: userTasks } = await supabase
       .from('tasks')
@@ -493,7 +422,7 @@ export default function Tasks() {
 
     const completed = userTasks.filter(t => t.status === 'Completed').length;
     const total = userTasks.length;
-    const newScore = Math.round((completed / total) * 10 * 10) / 10; // 0-10, one decimal
+    const newScore = Math.round((completed / total) * 10 * 10) / 10;
 
     await supabase
       .from('profiles')
@@ -505,13 +434,11 @@ export default function Tasks() {
     const newVal = !subtask.is_completed;
     await supabase.from('subtasks').update({ is_completed: newVal }).eq('id', subtask.id);
 
-    // Recalculate progress and potentially update status on the task
     const updatedSubtasks = (detailTask?.subtasks || []).map(s =>
       s.id === subtask.id ? { ...s, is_completed: newVal } : s
     );
     const newProgress = calcProgress(updatedSubtasks);
 
-    // Determine new status
     let newStatus: TaskStatus = detailTask!.status;
     if (newProgress === 100) newStatus = 'Completed';
     else if (newProgress > 0 && newStatus === 'Not Started') newStatus = 'Ongoing';
@@ -532,7 +459,6 @@ export default function Tasks() {
       recalculateKpi(detailTask.assigned_to);
     }
 
-    // Update local detail task state
     setDetailTask(prev => {
       if (!prev) return prev;
       const newSubtasks = prev.subtasks.map(s =>
@@ -583,475 +509,440 @@ export default function Tasks() {
     fetchTasks();
   };
 
-  // ─── Open detail modal ─────────────────────────────────────────────────────
-
   const openDetail = (task: TaskWithDetails) => {
     setDetailTask(task);
     setNewSubtaskTitle('');
     setShowDetailModal(true);
   };
 
-  // Sync detail task when tasks list updates
   useEffect(() => {
     if (detailTask && showDetailModal) {
       const refreshed = tasks.find(t => t.id === detailTask.id);
       if (refreshed) setDetailTask(refreshed);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks]);
-
-  useEffect(() => {
-  const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name')
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setProjects(data);
-    }
-  };
-
-  fetchProjects();
-}, []);
-
-  // ─── Render ────────────────────────────────────────────────────────────────
+  }, [tasks, detailTask, showDetailModal]);
 
   const activeDeptTasks = tabTasks(activeDept?.id);
   const grouped = groupByStatus(activeDeptTasks);
-  
+
   return (
     <div className="max-w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">Tasks</PHeading>
-          <PText color="contrast-medium">Manage department tasks across your organisation</PText>
+          <h1 className="text-3xl font-bold mb-1">Tasks</h1>
+          <p className="text-slate-600">Manage department tasks across your organisation</p>
         </div>
         {canManage && (
-          <PButton icon="add" onClick={openCreate}>Add Task</PButton>
+          <Button onClick={openCreate} className="flex items-center gap-2">
+            <Plus size={16} /> Add Task
+          </Button>
         )}
       </div>
 
       {error && (
-        <PInlineNotification heading="Error" description={error} state="error" dismissButton={false} className="mb-4" />
+        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
+          <p className="text-sm font-medium text-red-900">Error</p>
+          <p className="text-sm text-red-800 mt-1">{error}</p>
+        </div>
       )}
 
       {/* Department Tabs */}
-      <PTabs
-        activeTabIndex={activeTabIndex}
-        onUpdate={e => { setActiveTabIndex(e.detail.activeTabIndex); setFilterAssignee(''); }}
-        size="medium"
-        weight="semi-bold"
-      >
-        {DEPT_NAMES.map((deptName, idx) => {
-          const dept = departments.find(d => d.name === deptName);
-          const deptTaskCount = dept ? tasks.filter(t => t.department_id === dept.id).length : 0;
+      <div className="border-b border-slate-200 mb-6">
+        <div className="flex gap-6">
+          {DEPT_NAMES.map((deptName, idx) => {
+            const dept = departments.find(d => d.name === deptName);
+            const deptTaskCount = dept ? tasks.filter(t => t.department_id === dept.id).length : 0;
 
-          return (
-            <PTabsItem key={deptName} label={`${deptName}${deptTaskCount > 0 ? ` (${deptTaskCount})` : ''}`}>
-              {/* Filter bar */}
-              {idx === activeTabIndex && (
-                <div className="mt-5 mb-5">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <PText size="x-small" color="contrast-medium" weight="semi-bold">
-                      Filter by assignee:
-                    </PText>
-                    <select
-                      value={filterAssignee}
-                      onChange={e => setFilterAssignee(e.target.value)}
-                      className="form-input w-auto min-w-[180px]"
+            return (
+              <button
+                key={deptName}
+                onClick={() => { setActiveTabIndex(idx); setFilterAssignee(''); }}
+                className={`py-3 px-1 font-medium text-sm transition-colors border-b-2 ${
+                  idx === activeTabIndex
+                    ? 'border-slate-900 text-slate-900'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {deptName}{deptTaskCount > 0 ? ` (${deptTaskCount})` : ''}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Content for active tab */}
+      {DEPT_NAMES[activeTabIndex] && (
+        <div>
+          {/* Filter bar */}
+          <div className="mb-5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-xs font-semibold text-slate-900">
+                Filter by assignee:
+              </p>
+              <select
+                value={filterAssignee}
+                onChange={e => setFilterAssignee(e.target.value)}
+                className="px-3 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+              >
+                <option value="">All Members</option>
+                {deptMembers.map(m => (
+                  <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
+                ))}
+              </select>
+              {filterAssignee && (
+                <button
+                  type="button"
+                  onClick={() => setFilterAssignee('')}
+                  className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                  <X size={14} />
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Kanban board */}
+          {loading ? (
+            <div className="flex items-center justify-center h-48">
+              <p className="text-slate-600">Loading tasks...</p>
+            </div>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {STATUSES.map(status => (
+                <KanbanColumn
+                  key={status}
+                  status={status}
+                  tasks={grouped[status]}
+                  onCardClick={openDetail}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add / Edit Task Modal */}
+      {showTaskModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-bold">
+                {editingTask ? 'Edit Task' : 'Add Task'}
+              </h2>
+            </div>
+
+            <form onSubmit={handleSaveTask} className="flex flex-col gap-4 p-6">
+              {formError && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-sm font-medium text-red-900">Error</p>
+                  <p className="text-sm text-red-800 mt-1">{formError}</p>
+                </div>
+              )}
+
+              <FormField label="Title *">
+                <input
+                  type="text"
+                  required
+                  value={form.title}
+                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+                  placeholder="Task title"
+                />
+              </FormField>
+
+              <FormField label="Description">
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors resize-none"
+                  placeholder="Optional description"
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Department">
+                  <select
+                    value={form.department_id}
+                    onChange={e => setForm(f => ({ ...f, department_id: e.target.value, assigned_to: '' }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    disabled={!isAdmin() && isDeptHead()}
+                  >
+                    <option value="">— Select —</option>
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField label="Assign To">
+                  <select
+                    value={form.assigned_to}
+                    onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                  >
+                    <option value="">Unassigned</option>
+                    {(form.department_id
+                      ? allProfiles.filter(p => p.department_ids?.includes(form.department_id) && p.is_active)
+                      : allProfiles.filter(p => p.is_active)
+                    ).map(p => (
+                      <option key={p.id} value={p.id}>{p.full_name || p.email}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+
+              {projects.length > 0 && (
+                <FormField label="Project">
+                  <select
+                    value={form.project_id}
+                    onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                  >
+                    <option value="">— No Project —</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Deadline Date">
+                  <div className="relative">
+                    <input
+                      ref={deadlineDateRef}
+                      type="date"
+                      value={form.deadline_date}
+                      onChange={e => setForm(f => ({ ...f, deadline_date: e.target.value }))}
+                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors pr-9"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                      onClick={() => deadlineDateRef.current?.showPicker()}
+                      tabIndex={-1}
+                      aria-label="Pick date"
                     >
-                      <option value="">All Members</option>
-                      {deptMembers.map(m => (
-                        <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
-                      ))}
-                    </select>
-                    {filterAssignee && (
-                      <button
-                        type="button"
-                        onClick={() => setFilterAssignee('')}
-                        className="flex items-center gap-1 text-xs text-contrast-medium hover:text-primary transition-colors"
-                      >
-                        <PIcon name="close" size="x-small" color="inherit" />
-                        Clear
-                      </button>
+                      <Calendar size={14} className="text-slate-600" />
+                    </button>
+                  </div>
+                </FormField>
+
+                <FormField label="Status">
+                  <select
+                    value={form.status}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value as TaskStatus }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                  >
+                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </FormField>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowTaskModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? 'Saving...' : (editingTask ? 'Save Changes' : 'Create Task')}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Task Detail Modal */}
+      {detailTask && showDetailModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold">{detailTask.title}</h2>
+              <button
+                type="button"
+                onClick={() => setShowDetailModal(false)}
+                className="p-1 hover:bg-slate-100 rounded transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-5">
+              {/* Status tag */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`text-xs font-semibold px-3 py-1 rounded ${STATUS_COLORS[detailTask.effectiveStatus]}`}>
+                  {detailTask.effectiveStatus === 'Completed' && detailTask.overdueByDays
+                    ? `Completed (Overdue by ${detailTask.overdueByDays} days)`
+                    : detailTask.effectiveStatus}
+                </span>
+              </div>
+
+              {/* Meta grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Assigned To</p>
+                  <div className="flex items-center gap-2">
+                    <User size={14} className="text-slate-700" />
+                    <p className="text-sm">{detailTask.assignee?.full_name || detailTask.assignee?.email || 'Unassigned'}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Department</p>
+                  <p className="text-sm">
+                    {departments.find(d => d.id === detailTask.department_id)?.name || '—'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Deadline</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm" style={{ color: detailTask.status !== 'Completed' && isOverdue(detailTask.deadline) ? '#dc2626' : '#1e293b' }}>
+                      {formatDeadline(detailTask.deadline)}
+                    </p>
+                    {detailTask.status !== 'Completed' && isOverdue(detailTask.deadline) && (
+                      <span className="text-xs font-semibold px-2 py-1 rounded bg-red-100 text-red-900">Overdue</span>
                     )}
+                  </div>
+                </div>
+                {detailTask.completed_at && (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Completed At</p>
+                    <p className="text-sm">{formatDeadline(detailTask.completed_at)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {detailTask.description && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Description</p>
+                  <div className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2.5">
+                    <p className="text-sm text-slate-800">{detailTask.description}</p>
                   </div>
                 </div>
               )}
 
-              {/* Kanban board */}
-              {loading ? (
-                <div className="flex items-center justify-center h-48">
-                  <PText color="contrast-medium">Loading tasks...</PText>
+              {/* Progress */}
+              {detailTask.subtasks.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Progress</p>
+                    <p className="text-xs font-semibold">
+                      {calcProgress(detailTask.subtasks)}%
+                    </p>
+                  </div>
+                  <ProgressBar value={calcProgress(detailTask.subtasks)} />
+                  <p className="text-xs text-slate-600">
+                    {detailTask.subtasks.filter(s => s.is_completed).length} of {detailTask.subtasks.length} subtasks completed
+                  </p>
                 </div>
-              ) : (
-                <div className="flex gap-4 overflow-x-auto pb-4">
-                  {STATUSES.map(status => (
-                    <KanbanColumn
-                      key={status}
-                      status={status}
-                      tasks={grouped[status]}
-                      onCardClick={openDetail}
-                    />
+              )}
+
+              <div className="border-t border-slate-200" />
+
+              {/* Subtasks section */}
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-semibold">Subtasks</p>
+
+                {detailTask.subtasks.length === 0 && (
+                  <div className="flex items-center gap-2 py-3">
+                    <List size={14} className="text-slate-400" />
+                    <p className="text-xs text-slate-400">No subtasks yet</p>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  {detailTask.subtasks.map(sub => (
+                    <div
+                      key={sub.id}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sub.is_completed}
+                        onChange={() => handleToggleSubtask(detailTask.id, sub)}
+                        className="w-4 h-4 rounded accent-slate-900 flex-shrink-0 cursor-pointer"
+                      />
+                      <p
+                        className={`flex-1 text-sm ${sub.is_completed ? 'line-through text-slate-600' : 'text-slate-900'}`}
+                      >
+                        {sub.title}
+                      </p>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubtask(sub.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 transition-all"
+                          aria-label="Delete subtask"
+                        >
+                          <Trash2 size={14} className="text-red-600" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
-              )}
-            </PTabsItem>
-          );
-        })}
-      </PTabs>
 
-      {/* ── Add / Edit Task Modal ──────────────────────────────────────────── */}
-      <PModal
-        open={showTaskModal}
-        onDismiss={() => setShowTaskModal(false)}
-        aria={{ 'aria-label': editingTask ? 'Edit task' : 'Add task' }}
-        style={{ '--p-modal-width': 'clamp(320px, 50vw, 680px)' } as React.CSSProperties}
-      >
-        <PHeading slot="header" size="large" tag="h2">
-          {editingTask ? 'Edit Task' : 'Add Task'}
-        </PHeading>
-
-        <form onSubmit={handleSaveTask} className="flex flex-col gap-4">
-          <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
-          {formError && (
-            <PInlineNotification heading="Error" description={formError} state="error" dismissButton={false} />
-          )}
-
-          <FormField label="Title *">
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              className="form-input"
-              placeholder="Task title"
-            />
-          </FormField>
-
-
-          <FormField label="Description">
-            <textarea
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              rows={3}
-              className="form-input resize-none"
-              placeholder="Optional description"
-            />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Department">
-              <select
-                value={form.department_id}
-                onChange={e => setForm(f => ({ ...f, department_id: e.target.value, assigned_to: '' }))}
-                className="form-input"
-                disabled={!isAdmin() && isDeptHead()}
-              >
-                <option value="">— Select —</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField label="Assign To">
-              <select
-                value={form.assigned_to}
-                onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
-                className="form-input"
-              >
-                <option value="">Unassigned</option>
-                {(form.department_id
-                  ? allProfiles.filter(p => p.department_ids?.includes(form.department_id) && p.is_active)
-                  : allProfiles.filter(p => p.is_active)
-                ).map(p => (
-                  <option key={p.id} value={p.id}>{p.full_name || p.email}</option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Department">
-              {/* existing code */}
-            </FormField>
-
-            <FormField label="Assign To">
-              {/* existing code */}
-            </FormField>
-          </div>
-          
-        {projects.length > 0 && (
-          <FormField label="Project">
-            <select
-              value={form.project_id}
-              onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
-              className="form-input"
-            >
-              <option value="">— No Project —</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </FormField>
-        )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Deadline Date">
-              {/* existing */}
-            </FormField>
-
-            <FormField label="Status">
-              {/* existing */}
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Deadline Date">
-              <div className="relative">
-                <input
-                  ref={deadlineDateRef}
-                  type="date"
-                  value={form.deadline_date}
-                  onChange={e => setForm(f => ({ ...f, deadline_date: e.target.value }))}
-                  className="form-input pr-9"
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  onClick={() => deadlineDateRef.current?.showPicker()}
-                  tabIndex={-1}
-                  aria-label="Pick date"
-                >
-                  <PIcon name="calendar" size="x-small" color="contrast-medium" />
-                </button>
+                {/* Add subtask input */}
+                {canManage && (
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      value={newSubtaskTitle}
+                      onChange={e => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
+                      placeholder="Add a subtask…"
+                      className="flex-1 px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!newSubtaskTitle.trim() || addingSubtask}
+                      onClick={handleAddSubtask}
+                    >
+                      {addingSubtask ? 'Adding...' : 'Add'}
+                    </Button>
+                  </div>
+                )}
               </div>
-            </FormField>
 
-            <FormField label="Status">
-              <select
-                value={form.status}
-                onChange={e => setForm(f => ({ ...f, status: e.target.value as TaskStatus }))}
-                className="form-input"
-              >
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </FormField>
-          </div>
-
-          <div className="flex gap-3 justify-end pt-2" slot="footer">
-            <PButton type="button" variant="secondary" onClick={() => setShowTaskModal(false)}>
-              Cancel
-            </PButton>
-            <PButton type="submit" loading={saving}>
-              {editingTask ? 'Save Changes' : 'Create Task'}
-            </PButton>
-          </div>
-        </form>
-      </PModal>
-
-      {/* ── Task Detail Modal ──────────────────────────────────────────────── */}
-      {detailTask && (
-        <PModal
-          open={showDetailModal}
-          onDismiss={() => setShowDetailModal(false)}
-          aria={{ 'aria-label': 'Task detail' }}
-          style={{ '--p-modal-width': 'clamp(320px, 55vw, 720px)' } as React.CSSProperties}
-        >
-          <PHeading slot="header" size="large" tag="h2" className="pr-4">
-            {detailTask.title}
-          </PHeading>
-
-          <div className="flex flex-col gap-5">
-            {/* Status + Tags row */}
-            <div className="flex flex-wrap items-center gap-2">
-              <PTag variant={STATUS_TAG_VARIANT[detailTask.effectiveStatus]}>
-                {detailTask.effectiveStatus === 'Completed' && detailTask.overdueByDays
-                  ? `Completed (Overdue by ${detailTask.overdueByDays} days)`
-                  : detailTask.effectiveStatus}
-              </PTag>
-              {detailTask.effectiveStatus === 'Completed' && detailTask.overdueByDays && (
-                <span
-                  className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: 'var(--p-color-notification-warning-soft)', color: 'var(--p-color-notification-warning)' }}
-                >
-                  Overdue by {detailTask.overdueByDays} {detailTask.overdueByDays === 1 ? 'day' : 'days'}
-                </span>
-              )}
-            </div>
-
-            {/* Meta grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider">Assigned To</PText>
-                <div className="flex items-center gap-2">
-                  <PIcon name="user" size="x-small" color="contrast-high" />
-                  <PText size="small">{detailTask.assignee?.full_name || detailTask.assignee?.email || 'Unassigned'}</PText>
+              {/* Footer actions */}
+              <div className="border-t border-slate-200 pt-4 flex items-center justify-between">
+                <div>
+                  {canManage && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => handleDeleteTask(detailTask.id)}
+                    >
+                      <Trash2 size={16} /> Delete
+                    </Button>
+                  )}
                 </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider">Department</PText>
-                <PText size="small">
-                  {departments.find(d => d.id === detailTask.department_id)?.name || '—'}
-                </PText>
-              </div>
-              <div className="flex flex-col gap-1">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider">Deadline</PText>
-                <div className="flex items-center gap-1.5">
-                  <PText
-                    size="small"
-                    color={detailTask.status !== 'Completed' && isOverdue(detailTask.deadline) ? 'notification-error' : 'primary'}
-                  >
-                    {formatDeadline(detailTask.deadline)}
-                  </PText>
-                  {detailTask.status !== 'Completed' && isOverdue(detailTask.deadline) && (
-                    <PTag variant="error" compact>Overdue</PTag>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setShowDetailModal(false)}>
+                    Close
+                  </Button>
+                  {canManage && (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setShowDetailModal(false);
+                        openEdit(detailTask);
+                      }}
+                    >
+                      Edit Task
+                    </Button>
                   )}
                 </div>
               </div>
-              {detailTask.completed_at && (
-                <div className="flex flex-col gap-1">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider">Completed At</PText>
-                  <PText size="small">{formatDeadline(detailTask.completed_at)}</PText>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            {detailTask.description && (
-              <div className="flex flex-col gap-1.5">
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider">Description</PText>
-                <div className="bg-canvas rounded-lg border border-contrast-low px-3 py-2.5">
-                  <PText size="small" color="contrast-high">{detailTask.description}</PText>
-                </div>
-              </div>
-            )}
-
-            {/* Progress */}
-            {detailTask.subtasks.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider">Progress</PText>
-                  <PText size="x-small" weight="semi-bold">
-                    {calcProgress(detailTask.subtasks)}%
-                  </PText>
-                </div>
-                <ProgressBar value={calcProgress(detailTask.subtasks)} />
-                <PText size="x-small" color="contrast-medium">
-                  {detailTask.subtasks.filter(s => s.is_completed).length} of {detailTask.subtasks.length} subtasks completed
-                </PText>
-              </div>
-            )}
-
-            {/* Divider */}
-            <div className="border-t border-contrast-low" />
-
-            {/* Subtasks section */}
-            <div className="flex flex-col gap-3">
-              <PText size="small" weight="semi-bold">Subtasks</PText>
-
-              {detailTask.subtasks.length === 0 && (
-                <div className="flex items-center gap-2 py-3">
-                  <PIcon name="list" size="x-small" color="contrast-low" />
-                  <PText size="x-small" color="contrast-low">No subtasks yet</PText>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-1.5">
-                {detailTask.subtasks.map(sub => (
-                  <div
-                    key={sub.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-canvas border border-contrast-low hover:border-contrast-medium transition-colors group"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={sub.is_completed}
-                      onChange={() => handleToggleSubtask(detailTask.id, sub)}
-                      className="w-4 h-4 rounded accent-primary flex-shrink-0 cursor-pointer"
-                    />
-                    <PText
-                      size="small"
-                      color={sub.is_completed ? 'contrast-medium' : 'primary'}
-                      className={`flex-1 ${sub.is_completed ? 'line-through' : ''}`}
-                    >
-                      {sub.title}
-                    </PText>
-                    {canManage && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSubtask(sub.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-error-soft transition-all"
-                        aria-label="Delete subtask"
-                      >
-                        <PIcon name="delete" size="x-small" color="notification-error" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Add subtask input (admin/dept head only) */}
-              {canManage && (
-                <div className="flex gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={newSubtaskTitle}
-                    onChange={e => setNewSubtaskTitle(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
-                    placeholder="Add a subtask…"
-                    className="form-input flex-1"
-                  />
-                  <PButton
-                    type="button"
-                    icon="add"
-                    variant="secondary"
-                    loading={addingSubtask}
-                    onClick={handleAddSubtask}
-                    disabled={!newSubtaskTitle.trim()}
-                  >
-                    Add
-                  </PButton>
-                </div>
-              )}
             </div>
           </div>
-
-          {/* Footer actions */}
-          <div slot="footer" className="flex items-center justify-between gap-3">
-            <div>
-              {canManage && (
-                <PButton
-                  type="button"
-                  variant="secondary"
-                  icon="delete"
-                  onClick={() => handleDeleteTask(detailTask.id)}
-                >
-                  Delete
-                </PButton>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <PButton type="button" variant="secondary" onClick={() => setShowDetailModal(false)}>
-                Close
-              </PButton>
-              {canManage && (
-                <PButton
-                  type="button"
-                  icon="edit"
-                  onClick={() => {
-                    setShowDetailModal(false);
-                    openEdit(detailTask);
-                  }}
-                >
-                  Edit Task
-                </PButton>
-              )}
-            </div>
-          </div>
-        </PModal>
+        </div>
       )}
     </div>
   );

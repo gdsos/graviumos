@@ -1,11 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading, PText, PButton, PTag, PIcon, PModal, PSwitch, PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon, PSwitch } from '@/components/ui/porsche';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ProfileWithDepts extends Profile {
   departmentNames: string[];
@@ -53,7 +51,7 @@ const EMPTY_FORM: EmployeeForm = {
   professional_tax_enabled: false,
 };
 
-// ─── Employee Code Generation ─────────────────────────────────────────────────
+// â”€â”€â”€ Employee Code Generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function generateEmployeeCode(deptCode: string): Promise<string> {
   const year = new Date().getFullYear();
@@ -77,7 +75,7 @@ async function generateEmployeeCode(deptCode: string): Promise<string> {
   return `GDS${year}${deptCode}${nextNumber}`;
 }
 
-// ─── FormField helper ─────────────────────────────────────────────────────────
+// â”€â”€â”€ FormField helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -93,7 +91,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function People() {
   const { profile: _currentUserProfile, departments, isAdmin, suppressAuthChanges } = useAuth();
@@ -120,7 +118,7 @@ export default function People() {
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ─── Fetch ──────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -149,7 +147,7 @@ export default function People() {
     if (departments.length > 0) fetchEmployees();
   }, [fetchEmployees, departments]);
 
-  // ─── Department head check ───────────────────────────────────────────────────
+  // â”€â”€â”€ Department head check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const checkDeptHeadConflict = useCallback(
     (newRole: string, selectedDeptIds: string[], excludeId?: string): string => {
@@ -172,7 +170,7 @@ export default function People() {
     [employees, departments]
   );
 
-  // ─── Employee code preview ───────────────────────────────────────────────────
+  // â”€â”€â”€ Employee code preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     if (editingEmployee) { setPreviewCode(''); return; }
@@ -199,7 +197,7 @@ export default function People() {
     fetchPreview();
   }, [form.department_ids, departments, editingEmployee]);
 
-  // ─── Dept head warning ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Dept head warning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     const warning = checkDeptHeadConflict(
@@ -210,7 +208,7 @@ export default function People() {
     setDeptHeadWarning(warning);
   }, [form.role, form.department_ids, editingEmployee, checkDeptHeadConflict]);
 
-  // ─── Modal helpers ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Modal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const openCreate = () => {
     setEditingEmployee(null);
@@ -242,7 +240,7 @@ export default function People() {
     setShowModal(true);
   };
 
-  // ─── Toggle dept selection ───────────────────────────────────────────────────
+  // â”€â”€â”€ Toggle dept selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const toggleDept = (deptId: string) => {
     setForm(f => {
@@ -256,7 +254,7 @@ export default function People() {
     });
   };
 
-  // ─── Save (create or update) ─────────────────────────────────────────────────
+  // â”€â”€â”€ Save (create or update) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,7 +263,7 @@ export default function People() {
 
     try {
       if (editingEmployee) {
-        // ── UPDATE existing employee ──
+        // â”€â”€ UPDATE existing employee â”€â”€
         const updates: Partial<Profile> = {
           full_name: form.full_name,
           role: form.role,
@@ -287,7 +285,7 @@ export default function People() {
 
         if (updateErr) throw new Error(updateErr.message);
       } else {
-        // ── CREATE new employee ──
+        // â”€â”€ CREATE new employee â”€â”€
         if (!form.email || !form.password) {
           throw new Error('Email and password are required.');
         }
@@ -318,7 +316,7 @@ export default function People() {
         });
 
         if (signUpErr) throw new Error(signUpErr.message);
-        if (!signUpData.user) throw new Error('User creation failed — no user returned.');
+        if (!signUpData.user) throw new Error('User creation failed â€” no user returned.');
 
         // Re-enable auth state change listener now that signUp is done
         unsuppress();
@@ -358,7 +356,7 @@ export default function People() {
     }
   };
 
-  // ─── Toggle active ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Toggle active â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const toggleActive = async (emp: Profile) => {
     const { error: toggleErr } = await supabase
@@ -373,7 +371,7 @@ export default function People() {
     }
   };
 
-  // ─── Delete ───────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Delete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -395,14 +393,14 @@ export default function People() {
     await fetchEmployees();
   };
 
-  // ─── Filtered list ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Filtered list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const filtered =
     filterDeptId === 'all'
       ? employees
       : employees.filter(emp => emp.department_ids?.includes(filterDeptId));
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -462,7 +460,7 @@ export default function People() {
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium">Loading employees…</PText>
+          <PText color="contrast-medium">Loading employeesâ€¦</PText>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-xl border border-contrast-low">
@@ -502,7 +500,7 @@ export default function People() {
                       {/* Code */}
                       <td className="px-4 py-3">
                         <PText size="x-small" color="contrast-medium">
-                          {emp.employee_code ?? '—'}
+                          {emp.employee_code ?? 'â€”'}
                         </PText>
                       </td>
 
@@ -515,7 +513,7 @@ export default function People() {
                             </PText>
                           </div>
                           <PText size="small" weight="semi-bold">
-                            {emp.full_name || '—'}
+                            {emp.full_name || 'â€”'}
                           </PText>
                         </div>
                       </td>
@@ -610,20 +608,20 @@ export default function People() {
                       </td>
                     </tr>
 
-                    {/* Expanded row — profile details */}
+                    {/* Expanded row â€” profile details */}
                     {expandedId === emp.id && (
                       <tr key={`${emp.id}-detail`} className="bg-canvas border-b border-contrast-low">
                         <td colSpan={7} className="px-6 py-5">
                           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-                            <DetailItem label="Employee Code" value={emp.employee_code ?? '—'} />
-                            <DetailItem label="Phone" value={emp.phone || '—'} />
-                            <DetailItem label="Address" value={emp.address || '—'} />
+                            <DetailItem label="Employee Code" value={emp.employee_code ?? 'â€”'} />
+                            <DetailItem label="Phone" value={emp.phone || 'â€”'} />
+                            <DetailItem label="Address" value={emp.address || 'â€”'} />
                             <DetailItem
                               label="Base Salary"
                               value={
                                 emp.base_salary != null
-                                  ? `₹${emp.base_salary.toLocaleString('en-IN')}`
-                                  : '—'
+                                  ? `â‚¹${emp.base_salary.toLocaleString('en-IN')}`
+                                  : 'â€”'
                               }
                             />
                             <DetailItem label="KPI Score" value={String(emp.kpi_score ?? 0)} />
@@ -639,7 +637,7 @@ export default function People() {
                               value={
                                 emp.created_at
                                   ? new Date(emp.created_at).toLocaleDateString('en-IN')
-                                  : '—'
+                                  : 'â€”'
                               }
                             />
                           </div>
@@ -654,7 +652,7 @@ export default function People() {
         </div>
       )}
 
-      {/* ── Add / Edit Modal ── */}
+      {/* â”€â”€ Add / Edit Modal â”€â”€ */}
       <PModal
         open={showModal}
         onDismiss={() => { setShowModal(false); setError(''); }}
@@ -755,7 +753,7 @@ export default function People() {
                 placeholder="+91 98765 43210"
               />
             </FormField>
-            <FormField label="Base Salary (₹)">
+            <FormField label="Base Salary (â‚¹)">
               <input
                 type="number"
                 min="0"
@@ -800,7 +798,7 @@ export default function People() {
                         : 'bg-surface border-contrast-low text-contrast-medium hover:border-contrast-medium'
                     }`}
                   >
-                    {dept.code} — {dept.name}
+                    {dept.code} â€” {dept.name}
                   </button>
                 );
               })}
@@ -812,7 +810,7 @@ export default function People() {
                 <PText size="x-small" color="contrast-medium">
                   Employee code:{' '}
                   <span className="font-mono font-semibold text-contrast-high">
-                    {generatingCode ? 'Generating…' : previewCode || '—'}
+                    {generatingCode ? 'Generatingâ€¦' : previewCode || 'â€”'}
                   </span>
                 </PText>
               </div>
@@ -868,7 +866,7 @@ export default function People() {
         </form>
       </PModal>
 
-      {/* ── Delete Confirm Modal ── */}
+      {/* â”€â”€ Delete Confirm Modal â”€â”€ */}
       <PModal
         open={!!deleteTarget}
         onDismiss={() => setDeleteTarget(null)}
@@ -905,7 +903,7 @@ export default function People() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
@@ -940,3 +938,6 @@ function SwitchField({
     </div>
   );
 }
+
+
+

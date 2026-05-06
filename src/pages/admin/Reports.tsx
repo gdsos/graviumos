@@ -1,15 +1,9 @@
-import { useState } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PIcon,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState } from 'react';
 import { supabase, formatINR } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type ReportKey = 'leads' | 'projects' | 'financials' | 'payroll';
 
@@ -27,7 +21,7 @@ const defaultReportState: ReportState = {
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
-// ─── CSV Helper ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ CSV Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function objectsToCSV(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return '';
@@ -58,7 +52,7 @@ function downloadCSV(csv: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Reports() {
   const { isAdmin, isFinance } = useAuth();
@@ -81,12 +75,12 @@ export default function Reports() {
     setStates(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   };
 
-  // ── Date range end-of-day ─────────────────────────────────────────────────
+  // â”€â”€ Date range end-of-day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const rangeEnd = endDate ? `${endDate}T23:59:59` : undefined;
   const rangeStart = startDate ? `${startDate}T00:00:00` : undefined;
 
-  // ── Leads Export ──────────────────────────────────────────────────────────
+  // â”€â”€ Leads Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const exportLeads = async () => {
     setReportState('leads', { loading: true, success: '', error: '' });
@@ -134,7 +128,7 @@ export default function Reports() {
     }
   };
 
-  // ── Projects Export ───────────────────────────────────────────────────────
+  // â”€â”€ Projects Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const exportProjects = async () => {
     setReportState('projects', { loading: true, success: '', error: '' });
@@ -175,7 +169,7 @@ export default function Reports() {
     }
   };
 
-  // ── Financials Export ─────────────────────────────────────────────────────
+  // â”€â”€ Financials Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const exportFinancials = async () => {
     setReportState('financials', { loading: true, success: '', error: '' });
@@ -251,7 +245,7 @@ export default function Reports() {
     }
   };
 
-  // ── Payroll Export ────────────────────────────────────────────────────────
+  // â”€â”€ Payroll Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const exportPayroll = async () => {
     setReportState('payroll', { loading: true, success: '', error: '' });
@@ -330,7 +324,7 @@ export default function Reports() {
     }
   };
 
-  // ─── Report Cards Config ──────────────────────────────────────────────────
+  // â”€â”€â”€ Report Cards Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const reportCards: {
     key: ReportKey;
@@ -379,7 +373,7 @@ export default function Reports() {
     },
   ];
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="max-w-5xl mx-auto" style={{ fontFamily: FONT }}>
@@ -423,7 +417,7 @@ export default function Reports() {
           </div>
           {startDate && endDate && (
             <PText size="x-small" color="contrast-medium" className="pb-2">
-              {new Date(startDate).toLocaleDateString('en-IN')} — {new Date(endDate).toLocaleDateString('en-IN')}
+              {new Date(startDate).toLocaleDateString('en-IN')} â€” {new Date(endDate).toLocaleDateString('en-IN')}
             </PText>
           )}
         </div>
@@ -539,3 +533,6 @@ export default function Reports() {
     </div>
   );
 }
+
+
+

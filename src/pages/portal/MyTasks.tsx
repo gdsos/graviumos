@@ -1,17 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
@@ -56,7 +48,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -76,7 +68,7 @@ const STATUS_COLUMN_BG: Record<TaskStatus, string> = {
   Completed: 'bg-success-soft/30',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function calcEffectiveStatus(task: Task): TaskStatus {
   if (task.status === 'Completed') return 'Completed';
@@ -98,7 +90,7 @@ function calcProgress(subtasks: Subtask[]): number {
 }
 
 function formatDeadline(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
@@ -107,7 +99,7 @@ function isOverdue(deadline: string | null): boolean {
   return new Date(deadline) < new Date();
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ProgressBar({ value }: { value: number }) {
   const color = value === 100 ? '#2e7d32' : value >= 75 ? '#0288d1' : '#ed6c02';
@@ -187,7 +179,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
         <ProgressBar value={progress} />
         <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
           {hasSubtasks
-            ? `${task.subtasks.filter(s => s.is_completed).length}/${task.subtasks.length} subtasks · ${progress}%`
+            ? `${task.subtasks.filter(s => s.is_completed).length}/${task.subtasks.length} subtasks Â· ${progress}%`
             : `${progress}%`}
         </PText>
       </div>
@@ -195,7 +187,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
   );
 }
 
-// ─── Kanban Column ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Kanban Column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface KanbanColumnProps {
   status: TaskStatus;
@@ -238,7 +230,7 @@ function KanbanColumn({ status, tasks, onCardClick }: KanbanColumnProps) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function MyTasks() {
   const { profile, departments, isDeptHead, isAdmin } = useAuth();
@@ -270,7 +262,7 @@ export default function MyTasks() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [addingSubtask, setAddingSubtask] = useState(false);
 
-  // ─── Fetch profiles ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Fetch profiles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase
       .from('profiles')
@@ -279,7 +271,7 @@ export default function MyTasks() {
     setAllProfiles((data as Profile[]) || []);
   }, []);
 
-  // ─── Fetch tasks ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Fetch tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const fetchTasks = useCallback(async () => {
     if (!profile) return;
@@ -356,7 +348,7 @@ export default function MyTasks() {
     fetchProfiles();
   }, [fetchTasks, fetchProfiles]);
 
-  // ─── Create task ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Create task â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const openCreateModal = () => {
     if (profile?.department_ids?.[0]) {
@@ -408,7 +400,7 @@ export default function MyTasks() {
     fetchTasks();
   };
 
-  // ─── Subtask operations ────────────────────────────────────────────────────
+  // â”€â”€â”€ Subtask operations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleToggleSubtask = async (subtask: Subtask) => {
     if (!detailTask) return;
@@ -486,7 +478,7 @@ export default function MyTasks() {
     fetchTasks();
   };
 
-  // ─── Open detail ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Open detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const openDetail = (task: TaskWithDetails) => {
     setDetailTask(task);
@@ -516,7 +508,7 @@ export default function MyTasks() {
   }, [tasks]);
 
 
-  // ─── Save status / progress ───────────────────────────────────────────────
+  // â”€â”€â”€ Save status / progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const recalculateKpi = async (userId: string) => {
     const { data: userTasks } = await supabase
@@ -572,14 +564,14 @@ export default function MyTasks() {
     }
   };
 
-  // ─── Filter tasks by tab for department heads ────────────────────────────
+  // â”€â”€â”€ Filter tasks by tab for department heads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const isDeptHeadOnly = isDeptHead() && !isAdmin();
   const filteredTasks = isDeptHeadOnly && activeTab === 'assigned'
     ? tasks.filter(t => t.assigned_to === profile?.id)
     : tasks;
 
-  // ─── Grouped tasks ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Grouped tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const grouped = filteredTasks.reduce<Record<TaskStatus, TaskWithDetails[]>>(
     (acc, t) => {
@@ -591,7 +583,7 @@ export default function MyTasks() {
 
   const totalTasks = filteredTasks.length;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="max-w-full" style={{ fontFamily: FONT }}>
@@ -658,7 +650,7 @@ export default function MyTasks() {
       {loading ? (
         <div className="flex items-center justify-center h-48">
           <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-            Loading your tasks…
+            Loading your tasksâ€¦
           </PText>
         </div>
       ) : (
@@ -674,7 +666,7 @@ export default function MyTasks() {
         </div>
       )}
 
-      {/* ── Task Detail Modal ─────────────────────────────────────────────── */}
+      {/* â”€â”€ Task Detail Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {detailTask && (
         <PModal
           open={showDetailModal}
@@ -773,7 +765,7 @@ export default function MyTasks() {
                     : updateProgress
                 }
               />
-              {/* Manual progress slider — only when no subtasks */}
+              {/* Manual progress slider â€” only when no subtasks */}
               {detailTask.subtasks.length === 0 && (
                 <div className="flex flex-col gap-1.5 mt-1">
                   <label
@@ -856,7 +848,7 @@ export default function MyTasks() {
                 <div className="flex items-center gap-2 py-2">
                   <PIcon name="list" size="x-small" color="contrast-low" />
                   <PText size="x-small" color="contrast-low" style={{ fontFamily: FONT }}>
-                    No subtasks — use the progress slider above
+                    No subtasks â€” use the progress slider above
                   </PText>
                 </div>
               ) : (
@@ -911,7 +903,7 @@ export default function MyTasks() {
         </PModal>
       )}
 
-      {/* ── Create Task Modal (for dept heads) ────────────────────────────── */}
+      {/* â”€â”€ Create Task Modal (for dept heads) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isDeptHead() && !isAdmin() && (
         <PModal
           open={showCreateModal}
@@ -958,7 +950,7 @@ export default function MyTasks() {
                   className="form-input"
                   disabled={true}
                 >
-                  <option value="">— Select —</option>
+                  <option value="">â€” Select â€”</option>
                   {departments.map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
@@ -1029,7 +1021,7 @@ export default function MyTasks() {
         </PModal>
       )}
 
-      {/* ── Task Detail Modal (for dept heads to manage tasks) ─────────────── */}
+      {/* â”€â”€ Task Detail Modal (for dept heads to manage tasks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isDeptHead() && !isAdmin() && detailTask && (
         <PModal
           open={showDetailModal}
@@ -1218,3 +1210,6 @@ export default function MyTasks() {
     </div>
   );
 }
+
+
+

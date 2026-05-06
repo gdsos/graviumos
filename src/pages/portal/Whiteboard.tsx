@@ -1,13 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PIcon,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PText, PIcon, PHeading } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 const DEBOUNCE_MS = 500;
@@ -19,7 +15,7 @@ interface WhiteboardNote {
   updated_at: string;
 }
 
-// ─── Toolbar actions ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Toolbar actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type FormatAction = 'bold' | 'italic' | 'h1' | 'h2' | 'ul';
 
@@ -64,7 +60,7 @@ function applyFormat(text: string, selStart: number, selEnd: number, action: For
   }
 }
 
-// ─── Toolbar Button ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Toolbar Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ToolbarBtnProps {
   label: string;
@@ -86,7 +82,7 @@ function ToolbarBtn({ label, title, onClick }: ToolbarBtnProps) {
   );
 }
 
-// ─── Save status indicator ────────────────────────────────────────────────────
+// â”€â”€â”€ Save status indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -94,7 +90,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
   if (status === 'idle') return null;
 
   const configs: Record<Exclude<SaveStatus, 'idle'>, { icon: Parameters<typeof PIcon>[0]['name']; color: Parameters<typeof PIcon>[0]['color']; label: string }> = {
-    saving: { icon: 'refresh', color: 'contrast-medium', label: 'Saving…' },
+    saving: { icon: 'refresh', color: 'contrast-medium', label: 'Savingâ€¦' },
     saved: { icon: 'check', color: 'notification-success', label: 'Saved' },
     error: { icon: 'error', color: 'notification-error', label: 'Save failed' },
   };
@@ -111,7 +107,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
   );
 }
 
-// ─── Preview renderer (simple markdown to HTML) ───────────────────────────────
+// â”€â”€â”€ Preview renderer (simple markdown to HTML) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function renderMarkdown(text: string): string {
   return text
@@ -131,7 +127,7 @@ function renderMarkdown(text: string): string {
     .replace(/\n/g, '<br />');
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Whiteboard() {
   const { profile } = useAuth();
@@ -146,7 +142,7 @@ export default function Whiteboard() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Load note on mount ───────────────────────────────────────────────────
+  // â”€â”€â”€ Load note on mount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     if (!profile) return;
@@ -168,13 +164,13 @@ export default function Whiteboard() {
     })();
   }, [profile]);
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   function countWords(text: string): number {
     return text.trim() ? text.trim().split(/\s+/).length : 0;
   }
 
-  // ─── Debounced auto-save ─────────────────────────────────────────────────
+  // â”€â”€â”€ Debounced auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const saveNote = useCallback(
     async (text: string) => {
@@ -219,7 +215,7 @@ export default function Whiteboard() {
     }, DEBOUNCE_MS);
   };
 
-  // ─── Format toolbar ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Format toolbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleFormat = (action: FormatAction) => {
     const textarea = textareaRef.current;
@@ -244,7 +240,7 @@ export default function Whiteboard() {
     }, 0);
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="max-w-5xl mx-auto" style={{ fontFamily: FONT }}>
@@ -255,7 +251,7 @@ export default function Whiteboard() {
             My Whiteboard
           </PHeading>
           <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-            Private workspace — only you can see this
+            Private workspace â€” only you can see this
           </PText>
         </div>
         <div className="flex items-center gap-4">
@@ -291,7 +287,7 @@ export default function Whiteboard() {
             <ToolbarBtn label="H1" title="Heading 1" onClick={() => handleFormat('h1')} />
             <ToolbarBtn label="H2" title="Heading 2" onClick={() => handleFormat('h2')} />
             <div className="w-px h-6 bg-contrast-low mx-1" />
-            <ToolbarBtn label="·—" title="Bullet list" onClick={() => handleFormat('ul')} />
+            <ToolbarBtn label="Â·â€”" title="Bullet list" onClick={() => handleFormat('ul')} />
             <div className="ml-auto flex items-center gap-2">
               <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
                 Markdown formatting
@@ -305,7 +301,7 @@ export default function Whiteboard() {
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-              Loading your notes…
+              Loading your notesâ€¦
             </PText>
           </div>
         ) : showPreview ? (
@@ -315,7 +311,7 @@ export default function Whiteboard() {
             dangerouslySetInnerHTML={{
               __html: content
                 ? renderMarkdown(content)
-                : '<span style="color:var(--p-color-contrast-low);font-style:italic">Nothing here yet — switch to Edit mode and start writing.</span>',
+                : '<span style="color:var(--p-color-contrast-low);font-style:italic">Nothing here yet â€” switch to Edit mode and start writing.</span>',
             }}
           />
         ) : (
@@ -323,7 +319,7 @@ export default function Whiteboard() {
             ref={textareaRef}
             value={content}
             onChange={handleChange}
-            placeholder={`Start writing your notes here…\n\nYou can use Markdown:\n• **bold**, _italic_\n• # Heading 1, ## Heading 2\n• - bullet list items\n\nAuto-saves every 500ms.`}
+            placeholder={`Start writing your notes hereâ€¦\n\nYou can use Markdown:\nâ€¢ **bold**, _italic_\nâ€¢ # Heading 1, ## Heading 2\nâ€¢ - bullet list items\n\nAuto-saves every 500ms.`}
             className="w-full min-h-[480px] p-6 bg-transparent resize-none focus:outline-none text-primary placeholder:text-contrast-low leading-relaxed"
             style={{ fontFamily: FONT, fontSize: '0.95rem', lineHeight: '1.75' }}
             spellCheck
@@ -333,12 +329,12 @@ export default function Whiteboard() {
         {/* Footer bar */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-contrast-low bg-canvas">
           <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
-            {wordCount} word{wordCount !== 1 ? 's' : ''} · {content.length} characters
+            {wordCount} word{wordCount !== 1 ? 's' : ''} Â· {content.length} characters
           </PText>
           <div className="flex items-center gap-2">
             <PIcon name="lock" size="x-small" color="contrast-low" />
             <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
-              Private — auto-saves to your account
+              Private â€” auto-saves to your account
             </PText>
           </div>
         </div>
@@ -355,3 +351,6 @@ export default function Whiteboard() {
     </div>
   );
 }
+
+
+

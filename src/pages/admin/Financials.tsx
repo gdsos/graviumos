@@ -1,14 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PInlineNotification,
-  PTabs,
-  PTabsItem,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
   type Project,
@@ -31,22 +21,24 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { Lock } from 'lucide-react';
+import { PButton, PHeading, PInlineNotification, PTag, PText, PIcon, PTabs, PTabsItem } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 const PIE_COLORS = ['#010205', '#6B6D70', '#AFB0B3', '#D8D8DB'];
 const PIE_COLORS_DARK = ['#FBFCFF', '#AFB0B3', '#6B6D70', '#535457'];
 
-const STATUS_COLORS: Record<string, Parameters<typeof PTag>[0]['color']> = {
-  Active: 'notification-success-soft',
-  Completed: 'notification-info-soft',
-  'On Hold': 'notification-warning-soft',
-  Cancelled: 'notification-error-soft',
+const STATUS_COLORS: Record<string, string> = {
+  Active: 'bg-green-50 text-green-700',
+  Completed: 'bg-blue-50 text-blue-700',
+  'On Hold': 'bg-amber-50 text-amber-700',
+  Cancelled: 'bg-red-50 text-red-700',
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function KpiCard({
   label,
@@ -58,7 +50,7 @@ function KpiCard({
   label: string;
   value: string;
   sub?: string;
-  icon: string;
+  icon: React.ReactNode;
   accent?: 'success' | 'warning' | 'error' | 'info' | 'default';
 }) {
   const accentMap: Record<string, string> = {
@@ -72,31 +64,20 @@ function KpiCard({
 
   return (
     <div className="bg-surface rounded-xl border border-contrast-low p-5 flex items-start gap-4">
-      <div
-        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${iconClass}`}
-      >
-        <PIcon
-          name={icon as Parameters<typeof PIcon>[0]['name']}
-          size="small"
-          color="inherit"
-        />
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${iconClass}`}>
+        {icon}
       </div>
       <div className="min-w-0">
-        <PText
-          size="xx-small"
-          color="contrast-medium"
-          className="uppercase tracking-wide"
-          style={{ fontFamily: FONT }}
-        >
+        <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide block" style={{ fontFamily: FONT }}>
           {label}
-        </PText>
-        <PHeading tag="h3" size="medium" className="mt-1" style={{ fontFamily: FONT }}>
+        </span>
+        <h3 className="text-xl font-bold mt-1" style={{ fontFamily: FONT }}>
           {value}
-        </PHeading>
+        </h3>
         {sub && (
-          <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+          <span className="text-xs text-slate-600 block" style={{ fontFamily: FONT }}>
             {sub}
-          </PText>
+          </span>
         )}
       </div>
     </div>
@@ -105,30 +86,18 @@ function KpiCard({
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <PText
-      size="x-small"
-      weight="semi-bold"
-      className="uppercase tracking-wide mb-3"
-      color="contrast-medium"
-      style={{ fontFamily: FONT }}
-    >
+    <span className="text-xs font-semibold uppercase tracking-wide mb-3 text-slate-600 block" style={{ fontFamily: FONT }}>
       {children}
-    </PText>
+    </span>
   );
 }
 
 function TableHeaderCell({ children }: { children: React.ReactNode }) {
   return (
     <th className="px-4 py-3 text-left">
-      <PText
-        size="xx-small"
-        color="contrast-medium"
-        weight="semi-bold"
-        className="uppercase tracking-wide"
-        style={{ fontFamily: FONT }}
-      >
+      <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide" style={{ fontFamily: FONT }}>
         {children}
-      </PText>
+      </span>
     </th>
   );
 }
@@ -148,46 +117,40 @@ function AllocationRow({
     <div className="flex items-center justify-between py-3 border-b border-contrast-low last:border-0">
       <div className="flex items-center gap-3">
         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: color }} />
-        <PText size="small" style={{ fontFamily: FONT }}>
+        <span className="text-sm" style={{ fontFamily: FONT }}>
           {label}
-        </PText>
-        <PTag color="background-surface">
+        </span>
+        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-slate-50 text-slate-700">
           {pct}%
-        </PTag>
+        </span>
       </div>
-      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
+      <span className="text-sm font-semibold" style={{ fontFamily: FONT }}>
         {formatINR(amount)}
-      </PText>
+      </span>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Financials() {
   const { isAdmin, isFinance } = useAuth();
   const { theme } = useTheme();
 
-  // ── Access gate ────────────────────────────────────────────────────────────
+  // â”€â”€ Access gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (!isAdmin() && !isFinance()) {
     return (
       <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <div className="w-16 h-16 rounded-full bg-error-soft flex items-center justify-center">
-            <PIcon name="lock" size="large" color="notification-error" />
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+            <Lock size={32} className="text-red-600" />
           </div>
-          <PHeading tag="h2" size="large" style={{ fontFamily: FONT }}>
-            Access Restricted
-          </PHeading>
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-            This section is only accessible to Finance department members and Administrators.
-          </PText>
-          <PInlineNotification
-            heading="Insufficient Permissions"
-            description="You do not have the required role to view financial data. Contact your administrator for access."
-            state="error"
-            dismissButton={false}
-          />
+          <h2 className="text-2xl font-bold">Access Restricted</h2>
+          <span className="text-sm text-slate-600">This section is only accessible to Finance department members and Administrators.</span>
+          <div className="p-4 rounded-lg bg-red-50 border border-red-200 mt-4 w-full max-w-md">
+            <p className="text-sm font-semibold text-red-900">Insufficient Permissions</p>
+            <p className="text-sm text-red-700 mt-1">You do not have the required role to view financial data. Contact your administrator for access.</p>
+          </div>
         </div>
       </div>
     );
@@ -196,7 +159,7 @@ export default function Financials() {
   return <FinancialsInner theme={theme} />;
 }
 
-// ─── Inner component (only rendered when authorised) ──────────────────────────
+// â”€â”€â”€ Inner component (only rendered when authorised) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
   // Data
@@ -213,7 +176,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
   const [projectCash, setProjectCash] = useState<ProjectCashReceived[]>([]);
   const [projectDetailLoading, setProjectDetailLoading] = useState(false);
 
-  // ── Chart colours ─────────────────────────────────────────────────────────
+  // â”€â”€ Chart colours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chartTextColor = theme === 'dark' ? '#FBFCFF' : '#010205';
   const chartGridColor = theme === 'dark' ? '#333' : '#EEEFF2';
   const chartTooltipBg = theme === 'dark' ? '#212225' : '#ffffff';
@@ -222,7 +185,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     : ['#010205', '#6B6D70', '#D8D8DB'];
   const pieColors = theme === 'dark' ? PIE_COLORS_DARK : PIE_COLORS;
 
-  // ── Fetch all data ─────────────────────────────────────────────────────────
+  // â”€â”€ Fetch all data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -249,7 +212,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     fetchAll();
   }, [fetchAll]);
 
-  // ── Fetch project-specific detail when selection changes ───────────────────
+  // â”€â”€ Fetch project-specific detail when selection changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!selectedProjectId) {
       setProjectExpenses([]);
@@ -277,14 +240,14 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     })();
   }, [selectedProjectId]);
 
-  // ── Auto-select first project when list loads ──────────────────────────────
+  // â”€â”€ Auto-select first project when list loads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
     }
   }, [projects, selectedProjectId]);
 
-  // ── Global Calculations ────────────────────────────────────────────────────
+  // â”€â”€ Global Calculations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const totalRevenue = projects.reduce((s, p) => s + (p.revenue ?? 0), 0);
   const totalActualCogs = allExpenses.reduce((s, e) => s + (e.amount ?? 0), 0);
@@ -311,27 +274,27 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     { label: 'Owner Pay', pct: profitFirstOwnerPayPct, amount: pfOwnerPay, color: pieColors[3] },
   ];
 
-  // ── Bar chart data: Revenue vs COGS vs Profit per project ─────────────────
+  // â”€â”€ Bar chart data: Revenue vs COGS vs Profit per project â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const barChartData = projects.map(p => {
     const projectCogs = allExpenses
       .filter(e => e.project_id === p.id)
       .reduce((s, e) => s + (e.amount ?? 0), 0);
     const rev = p.revenue ?? 0;
     return {
-      name: p.name.length > 14 ? p.name.substring(0, 12) + '…' : p.name,
+      name: p.name.length > 14 ? p.name.substring(0, 12) + 'â€¦' : p.name,
       Revenue: rev,
       COGS: projectCogs,
       Profit: rev - projectCogs,
     };
   });
 
-  // ── Pie chart data ─────────────────────────────────────────────────────────
+  // â”€â”€ Pie chart data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const pieData = profitFirstAllocations.map(a => ({
     name: a.label,
     value: a.pct,
   }));
 
-  // ── Project-wise calculations ──────────────────────────────────────────────
+  // â”€â”€ Project-wise calculations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
 
   const calcProjectFinancials = () => {
@@ -369,10 +332,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
 
   const projFinancials = calcProjectFinancials();
 
-  // ── Chart tooltip formatter ────────────────────────────────────────────────
+  // â”€â”€ Chart tooltip formatter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const currencyFormatter = (v: number) => formatINR(v);
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   if (loading) {
     return (
@@ -380,7 +343,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         <div className="flex items-center justify-center h-64 gap-3">
           <PIcon name="chart" size="medium" color="contrast-medium" />
           <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-            Loading financial data…
+            Loading financial dataâ€¦
           </PText>
         </div>
       </div>
@@ -389,7 +352,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
 
   return (
     <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* ── Page Header ────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Page Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1" style={{ fontFamily: FONT }}>
@@ -404,7 +367,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         </PButton>
       </div>
 
-      {/* ── Error Banner ───────────────────────────────────────────────────── */}
+      {/* â”€â”€ Error Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {error && (
         <div className="mb-6">
           <PInlineNotification
@@ -417,14 +380,14 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         </div>
       )}
 
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <PTabs activeTabIndex={0}>
-        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {/* TAB 1: Global Financial View                                       */}
-        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <PTabsItem label="Global Overview">
           <div className="flex flex-col gap-8 pt-6">
-            {/* ── KPI Cards ────────────────────────────────────────────────── */}
+            {/* â”€â”€ KPI Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div>
               <SectionHeading>Key Performance Indicators</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -445,21 +408,21 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                 <KpiCard
                   label="Total Profit"
                   value={formatINR(totalProfit)}
-                  sub="Revenue − Actual COGS"
+                  sub="Revenue âˆ’ Actual COGS"
                   icon="increase"
                   accent={totalProfit >= 0 ? 'success' : 'error'}
                 />
                 <KpiCard
                   label="Remaining Opex"
                   value={formatINR(remainingOpex)}
-                  sub={`Allocated ${formatINR(allocatedOpex)} − Used ${formatINR(usedOpex)}`}
+                  sub={`Allocated ${formatINR(allocatedOpex)} âˆ’ Used ${formatINR(usedOpex)}`}
                   icon="door"
                   accent={remainingOpex >= 0 ? 'success' : 'error'}
                 />
               </div>
             </div>
 
-            {/* ── Opex Summary ─────────────────────────────────────────────── */}
+            {/* â”€â”€ Opex Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
               <SectionHeading>Operating Expense Tracker</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -517,7 +480,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               )}
             </div>
 
-            {/* ── Profit First Allocations ──────────────────────────────────── */}
+            {/* â”€â”€ Profit First Allocations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {/* Table */}
               <div className="bg-surface rounded-xl border border-contrast-low p-5">
@@ -614,9 +577,9 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </div>
             </div>
 
-            {/* ── Bar Chart: Revenue vs COGS vs Profit per project ─────────── */}
+            {/* â”€â”€ Bar Chart: Revenue vs COGS vs Profit per project â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
-              <SectionHeading>Revenue vs COGS vs Profit — Per Project</SectionHeading>
+              <SectionHeading>Revenue vs COGS vs Profit â€” Per Project</SectionHeading>
               {projects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-2">
                   <PIcon name="chart" size="large" color="contrast-low" />
@@ -643,7 +606,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                       tick={{ fill: chartTextColor, fontSize: 11, fontFamily: FONT }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={v => `â‚¹${(v / 1000).toFixed(0)}k`}
                     />
                     <Tooltip
                       formatter={(v: unknown, name: unknown) => [currencyFormatter(v as number), name as string]}
@@ -679,7 +642,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               )}
             </div>
 
-            {/* ── Projects Summary Table ────────────────────────────────────── */}
+            {/* â”€â”€ Projects Summary Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
               <div className="px-5 py-4 border-b border-contrast-low">
                 <SectionHeading>All Projects Summary</SectionHeading>
@@ -825,12 +788,12 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
           </div>
         </PTabsItem>
 
-        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {/* TAB 2: Project-wise Financial View                                */}
-        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         <PTabsItem label="Project Breakdown">
           <div className="flex flex-col gap-6 pt-6">
-            {/* ── Project Selector ─────────────────────────────────────────── */}
+            {/* â”€â”€ Project Selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
@@ -860,7 +823,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                     >
                       {projects.map(p => (
                         <option key={p.id} value={p.id}>
-                          {p.name} — {p.client}
+                          {p.name} â€” {p.client}
                         </option>
                       ))}
                     </select>
@@ -874,12 +837,12 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </div>
             </div>
 
-            {/* ── Project Detail ────────────────────────────────────────────── */}
+            {/* â”€â”€ Project Detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {selectedProject && !projectDetailLoading && projFinancials && (
               <>
                 {/* Financial KPIs */}
                 <div>
-                  <SectionHeading>Financial Summary — {selectedProject.name}</SectionHeading>
+                  <SectionHeading>Financial Summary â€” {selectedProject.name}</SectionHeading>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div className="bg-surface rounded-xl border border-contrast-low p-4 flex flex-col gap-1">
                       <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
@@ -913,7 +876,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                         {formatINR(projFinancials.netProfit)}
                       </PText>
                       <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                        Revenue − Actual COGS
+                        Revenue âˆ’ Actual COGS
                       </PText>
                     </div>
                     <div
@@ -968,7 +931,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                         {formatINR(projFinancials.outstanding)}
                       </PText>
                       <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                        Revenue − Cash Received
+                        Revenue âˆ’ Cash Received
                       </PText>
                     </div>
                   </div>
@@ -1037,7 +1000,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                                 </td>
                                 <td className="px-4 py-3">
                                   <PText size="x-small" style={{ fontFamily: FONT }}>
-                                    {entry.description || '—'}
+                                    {entry.description || 'â€”'}
                                   </PText>
                                 </td>
                                 <td className="px-4 py-3">
@@ -1104,7 +1067,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                             const pctOfRevenue =
                               projFinancials.revenue > 0
                                 ? ((exp.amount / projFinancials.revenue) * 100).toFixed(1)
-                                : '—';
+                                : 'â€”';
                             return (
                               <tr
                                 key={exp.id}
@@ -1150,7 +1113,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                               <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
                                 {projFinancials.revenue > 0
                                   ? `${((projFinancials.actualCogs / projFinancials.revenue) * 100).toFixed(1)}%`
-                                  : '—'}
+                                  : 'â€”'}
                               </PText>
                             </td>
                           </tr>
@@ -1162,17 +1125,17 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </>
             )}
 
-            {/* ── Loading state for project detail ─────────────────────────── */}
+            {/* â”€â”€ Loading state for project detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {projectDetailLoading && (
               <div className="flex items-center justify-center h-48 gap-3">
                 <PIcon name="chart" size="medium" color="contrast-medium" />
                 <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-                  Loading project data…
+                  Loading project dataâ€¦
                 </PText>
               </div>
             )}
 
-            {/* ── Empty state ───────────────────────────────────────────────── */}
+            {/* â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {!selectedProject && !projectDetailLoading && projects.length === 0 && (
               <div className="flex flex-col items-center justify-center h-64 gap-3 bg-surface rounded-xl border border-contrast-low">
                 <PIcon name="highway" size="large" color="contrast-low" />
@@ -1187,3 +1150,6 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     </div>
   );
 }
+
+
+

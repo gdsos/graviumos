@@ -1,13 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
   type Project,
@@ -19,8 +10,9 @@ import {
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminProjects from '../admin/Projects';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 type StatusFilter = 'All' | Project['status'];
@@ -31,7 +23,7 @@ interface TaskWithDetails extends Task {
   overdueByDays?: number;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -51,7 +43,7 @@ const TASK_STATUS_VARIANT: Record<TaskStatus, Parameters<typeof PTag>[0]['varian
   Completed: 'success',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function calcEffectiveStatus(task: Task): TaskStatus {
   if (task.status === 'Completed') return 'Completed';
@@ -73,7 +65,7 @@ function calcSubtaskProgress(subtasks: Subtask[]): number {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
@@ -92,7 +84,7 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
-// ─── Main Export ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function PortalProjects() {
   const { isFinance, isDeptHead } = useAuth();
@@ -105,7 +97,7 @@ export default function PortalProjects() {
   return <PortalProjectsView />;
 }
 
-// ─── Employee Portal Projects View ────────────────────────────────────────────
+// â”€â”€â”€ Employee Portal Projects View â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PortalProjectsView() {
   const { userDepartments, isFinance, isAdmin } = useAuth();
@@ -251,7 +243,7 @@ function PortalProjectsView() {
           <PHeading tag="h1" size="x-large" className="mb-1">Projects</PHeading>
           <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Browse all company projects
-            {!showFinancials && ' — financial details visible to Finance team only'}
+            {!showFinancials && ' â€” financial details visible to Finance team only'}
           </PText>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -279,7 +271,7 @@ function PortalProjectsView() {
 
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading projects…</PText>
+          <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading projectsâ€¦</PText>
         </div>
       ) : filteredProjects.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-2xl border border-contrast-low gap-3">
@@ -375,7 +367,7 @@ function PortalProjectsView() {
                 <div className="flex items-center gap-1.5">
                   <PIcon name="calendar" size="x-small" color="contrast-medium" />
                   <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                    {formatDate(selectedProject.start_date)} — {formatDate(selectedProject.end_date)}
+                    {formatDate(selectedProject.start_date)} â€” {formatDate(selectedProject.end_date)}
                   </PText>
                 </div>
               )}
@@ -409,7 +401,7 @@ function PortalProjectsView() {
 
             {detailLoading ? (
               <div className="flex items-center justify-center h-32">
-                <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading…</PText>
+                <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loadingâ€¦</PText>
               </div>
             ) : (
               <>
@@ -473,7 +465,7 @@ function PortalProjectsView() {
                           { label: 'Revenue', value: formatINR(f.revenue) },
                           { label: 'Estimated COGS', value: formatINR(f.estimatedCogs) },
                           { label: 'Actual COGS', value: formatINR(f.actualCogs), sub: 'Sum of logged expenses' },
-                          { label: 'Net Profit', value: formatINR(f.netProfit), highlight: true, sub: 'Revenue − Actual COGS' },
+                          { label: 'Net Profit', value: formatINR(f.netProfit), highlight: true, sub: 'Revenue âˆ’ Actual COGS' },
                         ].map(card => (
                           <div key={card.label} className={`rounded-xl border p-4 flex flex-col gap-1 ${card.highlight ? 'border-primary bg-surface' : 'border-contrast-low bg-canvas'}`}>
                             <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{card.label}</PText>
@@ -620,3 +612,6 @@ function PortalProjectsView() {
     </div>
   );
 }
+
+
+
