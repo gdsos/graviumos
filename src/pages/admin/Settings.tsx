@@ -3,11 +3,11 @@ import { supabase, type OrgSettings } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { PButton, PHeading, PInlineNotification, PText, PSwitch } from '@/components/ui/porsche';
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function SectionHeading({ title, description }: { title: string; description?: string }) {
   return (
@@ -51,7 +51,7 @@ function SettingRow({
         {readOnly ? (
           <div className="flex items-center gap-1">
             <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
-              {value ?? 'â€”'}
+              {value ?? '—'}
             </PText>
             {suffix && (
               <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{suffix}</PText>
@@ -102,7 +102,7 @@ function NumberInput({
   );
 }
 
-// â”€â”€â”€ Default form state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Default form state ———————————————————————————————————————————————————————
 
 interface SettingsForm {
   org_name: string;
@@ -142,7 +142,7 @@ function settingsToForm(s: OrgSettings): SettingsForm {
   };
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Settings() {
   const { isAdmin } = useAuth();
@@ -158,7 +158,7 @@ export default function Settings() {
   const [editMode, setEditMode] = useState(false);
   const canEdit = isSuperAdmin && editMode;
 
-  // â”€â”€ Fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // —— Fetch —————————————————————————————————————————————————————————————————
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -180,7 +180,7 @@ export default function Settings() {
     fetchSettings();
   }, [fetchSettings]);
 
-  // â”€â”€ Derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // —— Derived values ————————————————————————————————————————————————————————
 
   const profitFirstTotal =
     parseFloat(form.profit_first_profit_pct || '0') +
@@ -190,7 +190,7 @@ export default function Settings() {
 
   const profitFirstWarning = Math.abs(profitFirstTotal - 100) > 0.01;
 
-  // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // —— Save ——————————————————————————————————————————————————————————————————
 
   const handleSave = async () => {
     setSaving(true);
@@ -236,7 +236,7 @@ export default function Settings() {
     fetchSettings();
   };
 
-  // â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // —— Reset —————————————————————————————————————————————————————————————————
 
   const handleReset = () => {
     if (settings) {
@@ -270,7 +270,7 @@ export default function Settings() {
     }
   };
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-3xl mx-auto" style={{ fontFamily: FONT }}>
@@ -307,7 +307,7 @@ export default function Settings() {
 
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium">Loading settingsâ€¦</PText>
+          <PText color="contrast-medium">Loading settings…</PText>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
@@ -332,7 +332,7 @@ export default function Settings() {
             />
           )}
 
-          {/* â”€â”€ Organization Details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* —— Organization Details ——————————————————————————————————————— */}
           <div className="bg-surface rounded-xl border border-contrast-low p-5">
             <SectionHeading
               title="Organization Details"
@@ -342,7 +342,7 @@ export default function Settings() {
               label="Organization Name"
               description="Displayed across the platform and in reports."
               readOnly={!canEdit}
-              value={form.org_name || 'â€”'}
+              value={form.org_name || '—'}
             >
               <input
                 type="text"
@@ -356,7 +356,7 @@ export default function Settings() {
               label="Admin Key"
               description="Required when creating new admin accounts. Keep this secure."
               readOnly={!canEdit}
-              value={canEdit ? form.admin_key : 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢'}
+              value={canEdit ? form.admin_key : '••••••••'}
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export default function Settings() {
             </SettingRow>
           </div>
 
-          {/* â”€â”€ Financial Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* —— Financial Settings ————————————————————————————————————————— */}
           <div className="bg-surface rounded-xl border border-contrast-low p-5">
             <SectionHeading
               title="Financial Settings"
@@ -450,7 +450,7 @@ export default function Settings() {
             </SettingRow>
           </div>
 
-          {/* â”€â”€ Profit First Allocation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* —— Profit First Allocation ———————————————————————————————————— */}
           <div className="bg-surface rounded-xl border border-contrast-low p-5">
             <SectionHeading
               title="Profit First Allocation"
@@ -593,7 +593,7 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* —— Actions ———————————————————————————————————————————————————— */}
           {canEdit && (
             <div className="flex items-center justify-between bg-surface rounded-xl border border-contrast-low p-4">
               <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>

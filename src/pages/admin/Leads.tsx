@@ -6,11 +6,11 @@ import { Plus, Edit2, Trash2, ArrowRight, Settings } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 
 const STATUS_COLORS: Record<string, string> = {
-  Open: 'bg-slate-50 text-slate-700',
-  Qualified: 'bg-blue-50 text-blue-700',
-  Converted: 'bg-green-50 text-green-700',
-  Rejected: 'bg-red-50 text-red-700',
-  Ghosted: 'bg-amber-50 text-amber-700',
+  Open: 'bg-blue-200 text-blue-900',
+  Qualified: 'bg-slate-300 text-slate-900',
+  Converted: 'bg-green-200 text-green-900',
+  Rejected: 'bg-red-200 text-red-900',
+  Ghosted: 'bg-amber-200 text-amber-900',
 };
 
 interface LeadWithProfile extends Lead {
@@ -154,67 +154,190 @@ export default function Leads() {
           <span className="text-sm text-slate-600">Loading...</span>
         </div>
       ) : leads.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-xl border border-contrast-low">
+        <div className="flex flex-col items-center justify-center h-48 bg-white rounded-xl border border-slate-200">
           <ArrowRight size={40} className="text-slate-300" />
-          <span className="text-sm text-slate-600 mt-3">No leads yet. Add your first lead.</span>
+          <span className="text-sm text-slate-600 mt-3">
+            No leads yet. Add your first lead.
+          </span>
         </div>
       ) : (
-        <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-contrast-low">
-                  {['Name', 'Contact', 'Source', 'Status', 'Assigned To', 'Date', 'Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left">
-                      <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide">{h}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+        <>
+          {/* ✅ MOBILE CARDS */}
+              <div className="md:hidden space-y-3">
                 {leads.map(lead => (
-                  <tr key={lead.id} className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-semibold">{lead.name}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        {lead.contact_email && <span className="text-xs text-slate-600 block">{lead.contact_email}</span>}
-                        {lead.contact_phone && <span className="text-xs text-slate-600 block">{lead.contact_phone}</span>}
+                  <div
+                    key={lead.id}
+                    className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">
+                          {lead.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {new Date(lead.created_at).toLocaleDateString('en-IN')}
+                        </p>
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs">{lead.lead_source === 'Other' && lead.lead_source_custom ? lead.lead_source_custom : lead.lead_source}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${STATUS_COLORS[lead.status] || 'bg-slate-50 text-slate-700'}`}>{lead.status}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs">{lead.assignee?.full_name || '—'}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-slate-600">
-                        {new Date(lead.created_at).toLocaleDateString('en-IN')}
+
+                      <span
+                        className={`ml-2 shrink-0 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${STATUS_COLORS[lead.status] || 'bg-slate-200 text-slate-800'
+                          }`}
+                      >
+                        {lead.status}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEdit(lead)} className="p-1.5 rounded hover:bg-contrast-low transition-colors">
+                    </div>
+
+                    {/* Contact (compact row instead of stacked) */}
+                    {(lead.contact_phone || lead.contact_email) && (
+                      <div className="mt-3 flex flex-col text-xs text-slate-600"> 
+                        {lead.contact_phone && (
+                          <span>☎ {lead.contact_phone}</span>
+                        )}
+                        {lead.contact_email && (
+                          <span className="truncate">
+                            ✉ {lead.contact_email}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Meta + Actions (balanced row) */}
+                    <div className="mt-4 flex items-end justify-between">
+                      {/* Meta */}
+                      <div className="text-xs space-y-1">
+                        <div>
+                          <span className="text-slate-400">Source: </span>
+                          <span className="font-medium text-slate-700">
+                            {lead.lead_source === 'Other' && lead.lead_source_custom
+                              ? lead.lead_source_custom
+                              : lead.lead_source}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400">Assigned: </span>
+                          <span className="font-medium text-slate-700">
+                            {lead.assignee?.full_name || '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions (tight + aligned) */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEdit(lead)}
+                          className="p-2 rounded-md hover:bg-slate-100 transition"
+                        >
                           <Edit2 size={16} className="text-slate-600" />
                         </button>
+
                         {canDelete && (
-                          <button onClick={() => handleDelete(lead.id)} className="p-1.5 rounded hover:bg-red-50 transition-colors text-red-600">
+                          <button
+                            onClick={() => handleDelete(lead.id)}
+                            className="p-2 rounded-md hover:bg-red-50 text-red-600 transition"
+                          >
                             <Trash2 size={16} />
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+          {/* ✅ DESKTOP TABLE (UNCHANGED STRUCTURE) */}
+          <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    {['Name', 'Contact', 'Source', 'Status', 'Assigned To', 'Date', 'Actions'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left">
+                        <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide">
+                          {h}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {leads.map(lead => (
+                    <tr
+                      key={lead.id}
+                      className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-semibold">{lead.name}</span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div>
+                          {lead.contact_email && (
+                            <span className="text-xs text-slate-600 block">
+                              ✉  {lead.contact_email}
+                            </span>
+                          )}
+                          {lead.contact_phone && (
+                            <span className="text-xs text-slate-600 block">
+                              ☎  {lead.contact_phone}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className="text-xs">
+                          {lead.lead_source === 'Other' && lead.lead_source_custom
+                            ? lead.lead_source_custom
+                            : lead.lead_source}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wider ${STATUS_COLORS[lead.status] || 'bg-slate-50 text-slate-700'}`}>
+                          {lead.status}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className="text-xs">
+                          {lead.assignee?.full_name || '—'}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-slate-600">
+                          {new Date(lead.created_at).toLocaleDateString('en-IN')}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openEdit(lead)}
+                            className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                          >
+                            <Edit2 size={16} className="text-slate-600" />
+                          </button>
+
+                          {canDelete && (
+                            <button
+                              onClick={() => handleDelete(lead.id)}
+                              className="p-1.5 rounded hover:bg-red-50 transition-colors text-red-600"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Lead Modal */}

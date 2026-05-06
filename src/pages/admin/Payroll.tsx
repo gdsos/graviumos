@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Types ————————————————————————————————————————————————————————————————————
 
 type AttendanceStatus = Attendance['status'];
 
@@ -46,7 +46,7 @@ interface OverrideForm {
   status: AttendanceStatus;
 }
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -67,7 +67,7 @@ const STATUS_COLORS: Record<Payroll['status'], Parameters<typeof PTag>[0]['color
   Paid: 'notification-success-soft',
 };
 
-// â”€â”€â”€ Calculation helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Calculation helper ———————————————————————————————————————————————————————
 
 function calculatePayroll(emp: Profile) {
   const base = emp.base_salary ?? 0;
@@ -81,7 +81,7 @@ function calculatePayroll(emp: Profile) {
   return { base, kpiIncentive, tds, pf, esi, profTax, net };
 }
 
-// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -113,7 +113,7 @@ function TableHead({ cols }: { cols: string[] }) {
   );
 }
 
-// â”€â”€â”€ Payslip Print Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Payslip Print Modal ——————————————————————————————————————————————————————
 
 interface PayslipProps {
   open: boolean;
@@ -144,9 +144,9 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
 
   const generatePayslipHtml = () => {
     const empName = employee?.full_name || 'Employee';
-    const empCode = employee?.employee_code || 'â€”';
-    const empDept = employee?.departmentNames?.join(', ') || 'â€”';
-    const empEmail = employee?.email || 'â€”';
+    const empCode = employee?.employee_code || '—';
+    const empDept = employee?.departmentNames?.join(', ') || '—';
+    const empEmail = employee?.email || '—';
     const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
     return `
@@ -189,7 +189,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
           ${calc.pf > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>PF (12%)</span><span>- ${fmt(calc.pf)}</span></div>` : ''}
           ${calc.esi > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>ESI (0.75%)</span><span>- ${fmt(calc.esi)}</span></div>` : ''}
           ${calc.profTax > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>Professional Tax</span><span>- ${fmt(calc.profTax)}</span></div>` : ''}
-          ${totalDeductions === 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span style="color: #6B6D70;">No deductions applicable</span><span>â€”</span></div>` : ''}
+          ${totalDeductions === 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span style="color: #6B6D70;">No deductions applicable</span><span>—</span></div>` : ''}
           <div style="display: flex; justify-content: space-between; padding: 10px 16px; background: #EEEFF2; font-weight: 600;"><span>Total Deductions</span><span>- ${fmt(totalDeductions)}</span></div>
         </div>
 
@@ -298,15 +298,15 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
         <div className="grid grid-cols-2 gap-4 bg-surface rounded-lg border border-contrast-low p-4">
           <div>
             <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Employee Name</PText>
-            <PText size="small" weight="semi-bold">{employee.full_name || 'â€”'}</PText>
+            <PText size="small" weight="semi-bold">{employee.full_name || '—'}</PText>
           </div>
           <div>
             <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Employee Code</PText>
-            <PText size="small" weight="semi-bold" className="font-mono">{employee.employee_code || 'â€”'}</PText>
+            <PText size="small" weight="semi-bold" className="font-mono">{employee.employee_code || '—'}</PText>
           </div>
           <div>
             <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Department</PText>
-            <PText size="small">{employee.departmentNames.join(', ') || 'â€”'}</PText>
+            <PText size="small">{employee.departmentNames.join(', ') || '—'}</PText>
           </div>
           <div>
             <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Email</PText>
@@ -380,7 +380,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
             {totalDeductions === 0 && (
               <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
                 <PText size="small" color="contrast-medium">No deductions applicable</PText>
-                <PText size="small">â€”</PText>
+                <PText size="small">—</PText>
               </div>
             )}
             <div className="flex justify-between px-4 py-2.5 bg-canvas">
@@ -417,7 +417,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
   );
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function PayrollPage() {
   const { profile: currentProfile, departments, isAdmin, isFinance } = useAuth();
@@ -469,11 +469,11 @@ export default function PayrollPage() {
   const [overrideSaving, setOverrideSaving] = useState(false);
   const [overrideError, setOverrideError] = useState('');
 
-  // â”€â”€â”€ Access guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Access guard ——————————————————————————————————————————————————————————
 
   const hasAccess = isAdmin() || isFinance();
 
-  // â”€â”€â”€ Fetch employees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch employees ———————————————————————————————————————————————————————
 
   const fetchEmployees = useCallback(async () => {
     setLoadingEmployees(true);
@@ -498,7 +498,7 @@ export default function PayrollPage() {
     setLoadingEmployees(false);
   }, [departments]);
 
-  // â”€â”€â”€ Fetch payroll for selected period â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch payroll for selected period —————————————————————————————————————
 
   const fetchPayroll = useCallback(async () => {
     setLoadingPayroll(true);
@@ -512,7 +512,7 @@ export default function PayrollPage() {
     setLoadingPayroll(false);
   }, [selectedMonth, selectedYear]);
 
-  // â”€â”€â”€ Fetch attendance for selected period â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch attendance for selected period ——————————————————————————————————
 
   const fetchAttendance = useCallback(async () => {
     setLoadingAttendance(true);
@@ -540,7 +540,7 @@ export default function PayrollPage() {
     fetchAttendance();
   }, [fetchPayroll, fetchAttendance]);
 
-  // â”€â”€â”€ Attendance summaries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Attendance summaries ——————————————————————————————————————————————————
 
   const attendanceSummaries: AttendanceSummary[] = employees
     .filter(emp => filterDeptId === 'all' || emp.department_ids?.includes(filterDeptId))
@@ -557,7 +557,7 @@ export default function PayrollPage() {
       };
     });
 
-  // â”€â”€â”€ Payroll rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Payroll rows ——————————————————————————————————————————————————————————
 
   const payrollRows: PayrollRow[] = employees
     .filter(emp => filterDeptId === 'all' || emp.department_ids?.includes(filterDeptId))
@@ -570,7 +570,7 @@ export default function PayrollPage() {
       };
     });
 
-  // â”€â”€â”€ Process payroll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Process payroll ————————————————————————————————————————————————————————
 
   const handleProcess = async (emp: EmployeeWithDepts) => {
     setProcessing(p => ({ ...p, [emp.id]: true }));
@@ -616,7 +616,7 @@ export default function PayrollPage() {
     setProcessing(p => ({ ...p, [emp.id]: false }));
   };
 
-  // â”€â”€â”€ Mark as paid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Mark as paid ————————————————————————————————————————————————————————————
 
   const handleMarkPaid = async (record: Payroll) => {
     setProcessing(p => ({ ...p, [record.employee_id]: true }));
@@ -636,7 +636,7 @@ export default function PayrollPage() {
     setProcessing(p => ({ ...p, [record.employee_id]: false }));
   };
 
-  // â”€â”€â”€ Open edit modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Open edit modal —————————————————————————————————————————————————————————
 
   const openEdit = (record: Payroll) => {
     setEditRecord(record);
@@ -690,7 +690,7 @@ export default function PayrollPage() {
     setEditSaving(false);
   };
 
-  // â”€â”€â”€ Generate payslip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Generate payslip ————————————————————————————————————————————————————————
 
   const handleGeneratePayslip = async (emp: EmployeeWithDepts, record: Payroll | null) => {
     setPayslipEmployee(emp);
@@ -704,7 +704,7 @@ export default function PayrollPage() {
     }
   };
 
-  // â”€â”€â”€ Attendance override â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Attendance override ——————————————————————————————————————————————————————
 
   const openOverride = (emp: EmployeeWithDepts) => {
     const today = new Date();
@@ -757,12 +757,12 @@ export default function PayrollPage() {
     setOverrideSaving(false);
   };
 
-  // â”€â”€â”€ Access denied â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Access denied ————————————————————————————————————————————————————————————
 
   if (!currentProfile) {
     return (
       <div className="flex items-center justify-center h-64">
-        <PText color="contrast-medium">Loadingâ€¦</PText>
+        <PText color="contrast-medium">Loading…</PText>
       </div>
     );
   }
@@ -780,13 +780,13 @@ export default function PayrollPage() {
     );
   }
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Render ———————————————————————————————————————————————————————————————————
 
   const isLoading = loadingEmployees || loadingPayroll || loadingAttendance;
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* —— Header —— */}
       <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">Payroll</PHeading>
@@ -815,7 +815,7 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* â”€â”€ Department filter tabs â”€â”€ */}
+      {/* —— Department filter tabs —— */}
       <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => setFilterDeptId('all')}
@@ -842,7 +842,7 @@ export default function PayrollPage() {
         ))}
       </div>
 
-      {/* â”€â”€ Global notifications â”€â”€ */}
+      {/* —— Global notifications —— */}
       {error && (
         <div className="mb-4">
           <PInlineNotification
@@ -868,14 +868,14 @@ export default function PayrollPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <PText color="contrast-medium">Loading payroll dataâ€¦</PText>
+          <PText color="contrast-medium">Loading payroll data…</PText>
         </div>
       ) : (
         <>
-          {/* â”€â”€ Attendance Overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* —— Attendance Overview ——————————————————————————————————————————— */}
           <section className="mb-10">
             <PHeading tag="h2" size="medium" className="mb-4">
-              Attendance Overview â€” {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+              Attendance Overview — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
             </PHeading>
 
             {attendanceSummaries.length === 0 ? (
@@ -904,9 +904,9 @@ export default function PayrollPage() {
                                 </PText>
                               </div>
                               <div>
-                                <PText size="small" weight="semi-bold">{summary.employee.full_name || 'â€”'}</PText>
+                                <PText size="small" weight="semi-bold">{summary.employee.full_name || '—'}</PText>
                                 <PText size="xx-small" color="contrast-medium" className="font-mono">
-                                  {summary.employee.employee_code || 'â€”'}
+                                  {summary.employee.employee_code || '—'}
                                 </PText>
                               </div>
                             </div>
@@ -919,7 +919,7 @@ export default function PayrollPage() {
                                       {n}
                                     </span>
                                   ))
-                                : <PText size="x-small" color="contrast-low">â€”</PText>}
+                                : <PText size="x-small" color="contrast-low">—</PText>}
                             </div>
                           </td>
                           <td className="px-4 py-3">
@@ -956,10 +956,10 @@ export default function PayrollPage() {
             )}
           </section>
 
-          {/* â”€â”€ Salary Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* —— Salary Table —————————————————————————————————————————————————— */}
           <section>
             <PHeading tag="h2" size="medium" className="mb-4">
-              Salary Table â€” {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+              Salary Table — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
             </PHeading>
 
             {payrollRows.length === 0 ? (
@@ -1015,9 +1015,9 @@ export default function PayrollPage() {
                                   </PText>
                                 </div>
                                 <div>
-                                  <PText size="small" weight="semi-bold">{employee.full_name || 'â€”'}</PText>
+                                  <PText size="small" weight="semi-bold">{employee.full_name || '—'}</PText>
                                   <PText size="xx-small" color="contrast-medium" className="font-mono">
-                                    {employee.employee_code || 'â€”'}
+                                    {employee.employee_code || '—'}
                                   </PText>
                                 </div>
                               </div>
@@ -1038,28 +1038,28 @@ export default function PayrollPage() {
                             {/* TDS */}
                             <td className="px-4 py-3">
                               <PText size="small" color={displayCalc.tds > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.tds > 0 ? `- ${formatINR(displayCalc.tds)}` : 'â€”'}
+                                {displayCalc.tds > 0 ? `- ${formatINR(displayCalc.tds)}` : '—'}
                               </PText>
                             </td>
 
                             {/* PF */}
                             <td className="px-4 py-3">
                               <PText size="small" color={displayCalc.pf > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.pf > 0 ? `- ${formatINR(displayCalc.pf)}` : 'â€”'}
+                                {displayCalc.pf > 0 ? `- ${formatINR(displayCalc.pf)}` : '—'}
                               </PText>
                             </td>
 
                             {/* ESI */}
                             <td className="px-4 py-3">
                               <PText size="small" color={displayCalc.esi > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.esi > 0 ? `- ${formatINR(displayCalc.esi)}` : 'â€”'}
+                                {displayCalc.esi > 0 ? `- ${formatINR(displayCalc.esi)}` : '—'}
                               </PText>
                             </td>
 
                             {/* Prof Tax */}
                             <td className="px-4 py-3">
                               <PText size="small" color={displayCalc.profTax > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.profTax > 0 ? `- ${formatINR(displayCalc.profTax)}` : 'â€”'}
+                                {displayCalc.profTax > 0 ? `- ${formatINR(displayCalc.profTax)}` : '—'}
                               </PText>
                             </td>
 
@@ -1073,7 +1073,7 @@ export default function PayrollPage() {
                               {record ? (
                                 <PTag color={STATUS_COLORS[record.status]}>{record.status}</PTag>
                               ) : (
-                                <PTag color="background-surface">â€”</PTag>
+                                <PTag color="background-surface">—</PTag>
                               )}
                             </td>
 
@@ -1092,7 +1092,7 @@ export default function PayrollPage() {
                                   </PButton>
                                 )}
 
-                                {/* Mark as Paid button â€” only if record exists and is Processed */}
+                                {/* Mark as Paid button — only if record exists and is Processed */}
                                 {record && record.status === 'Processed' && (
                                   <PButton
                                     variant="primary"
@@ -1104,7 +1104,7 @@ export default function PayrollPage() {
                                   </PButton>
                                 )}
 
-                                {/* Edit button â€” only if record exists */}
+                                {/* Edit button — only if record exists */}
                                 {record && (
                                   <button
                                     onClick={() => openEdit(record)}
@@ -1137,7 +1137,7 @@ export default function PayrollPage() {
         </>
       )}
 
-      {/* â”€â”€ Edit Payroll Modal â”€â”€ */}
+      {/* —— Edit Payroll Modal —— */}
       <PModal
         open={!!editRecord}
         onDismiss={() => setEditRecord(null)}
@@ -1156,7 +1156,7 @@ export default function PayrollPage() {
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Base Salary (â‚¹)">
+            <FormField label="Base Salary (₹)">
               <input
                 type="number"
                 min="0"
@@ -1166,7 +1166,7 @@ export default function PayrollPage() {
                 className="form-input"
               />
             </FormField>
-            <FormField label="KPI Incentive (â‚¹)">
+            <FormField label="KPI Incentive (₹)">
               <input
                 type="number"
                 min="0"
@@ -1176,7 +1176,7 @@ export default function PayrollPage() {
                 className="form-input"
               />
             </FormField>
-            <FormField label="TDS Deduction (â‚¹)">
+            <FormField label="TDS Deduction (₹)">
               <input
                 type="number"
                 min="0"
@@ -1186,7 +1186,7 @@ export default function PayrollPage() {
                 className="form-input"
               />
             </FormField>
-            <FormField label="PF Deduction (â‚¹)">
+            <FormField label="PF Deduction (₹)">
               <input
                 type="number"
                 min="0"
@@ -1196,7 +1196,7 @@ export default function PayrollPage() {
                 className="form-input"
               />
             </FormField>
-            <FormField label="ESI Deduction (â‚¹)">
+            <FormField label="ESI Deduction (₹)">
               <input
                 type="number"
                 min="0"
@@ -1206,7 +1206,7 @@ export default function PayrollPage() {
                 className="form-input"
               />
             </FormField>
-            <FormField label="Professional Tax (â‚¹)">
+            <FormField label="Professional Tax (₹)">
               <input
                 type="number"
                 min="0"
@@ -1261,7 +1261,7 @@ export default function PayrollPage() {
         </form>
       </PModal>
 
-      {/* â”€â”€ Attendance Override Modal â”€â”€ */}
+      {/* —— Attendance Override Modal —— */}
       <PModal
         open={showOverride}
         onDismiss={() => setShowOverride(false)}
@@ -1286,10 +1286,10 @@ export default function PayrollPage() {
               className="form-input"
               required
             >
-              <option value="">Select employeeâ€¦</option>
+              <option value="">Select employee…</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>
-                  {emp.full_name || emp.email} ({emp.employee_code || 'â€”'})
+                  {emp.full_name || emp.email} ({emp.employee_code || '—'})
                 </option>
               ))}
             </select>
@@ -1337,7 +1337,7 @@ export default function PayrollPage() {
         </form>
       </PModal>
 
-      {/* â”€â”€ Payslip Modal â”€â”€ */}
+      {/* —— Payslip Modal —— */}
       <PayslipModal
         open={!!payslipEmployee}
         onDismiss={() => { setPayslipEmployee(null); setPayslipRecord(null); }}

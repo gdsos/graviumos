@@ -380,60 +380,195 @@ export default function Projects() {
               <p className="text-slate-600">No projects yet</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b-2 border-slate-200">
-                    <th className="text-left px-4 py-3 font-semibold text-slate-900">Name</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-900">Client</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-900">Status</th>
-                    {canEditFinancials && <th className="text-right px-4 py-3 font-semibold text-slate-900">Revenue</th>}
-                    {canEditFinancials && <th className="text-right px-4 py-3 font-semibold text-slate-900">Est. Profit</th>}
-                    <th className="text-center px-4 py-3 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projects.map(proj => {
-                    const stats = calcFinancials(proj);
-                    return (
-                      <tr
-                        key={proj.id}
-                        onClick={() => openDetail(proj)}
-                        className="border-b border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
-                      >
-                        <td className="px-4 py-3 font-medium text-slate-900">{proj.name}</td>
-                        <td className="px-4 py-3 text-slate-600">{proj.client}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded ${STATUS_COLORS[proj.status]}`}>
-                            {proj.status}
-                          </span>
-                        </td>
-                        {canEditFinancials && <td className="px-4 py-3 text-right text-slate-600">{formatINR(stats.revenue)}</td>}
-                        {canEditFinancials && <td className="px-4 py-3 text-right text-slate-600">{formatINR(stats.netProfit)}</td>}
-                        <td className="px-4 py-3 text-center flex items-center justify-center gap-2">
-                          {canManage && (
-                            <>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openEdit(proj); }}
-                                className="p-1 hover:bg-blue-100 rounded transition-colors"
-                              >
-                                <Edit2 size={14} className="text-blue-600" />
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: 'project', id: proj.id }); }}
-                                className="p-1 hover:bg-red-100 rounded transition-colors"
-                              >
-                                <Trash2 size={14} className="text-red-600" />
-                              </button>
-                            </>
+            <>
+              {/* MOBILE VIEW */}
+              <div className="flex flex-col gap-4 md:hidden">
+                {projects.map(proj => {
+                  const stats = calcFinancials(proj);
+
+                  return (
+                    <div
+                      key={proj.id}
+                      onClick={() => openDetail(proj)}
+                      className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm active:scale-[0.99] transition"
+                    >
+                      {/* Top */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-semibold text-slate-900 truncate">
+                            {proj.name}
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">
+                            {proj.client}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide shrink-0 ${STATUS_COLORS[proj.status]}`}
+                        >
+                          {proj.status}
+                        </span>
+                      </div>
+
+                      {/* Financials */}
+                      {canEditFinancials && (
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">
+                              Revenue
+                            </p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {formatINR(stats.revenue)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">
+                              Profit
+                            </p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {formatINR(stats.netProfit)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex justify-end gap-2 mt-4">
+                        {canManage && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEdit(proj);
+                              }}
+                              className="p-2 rounded-md hover:bg-blue-50 transition"
+                            >
+                              <Edit2 size={16} className="text-blue-600" />
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({ type: 'project', id: proj.id });
+                              }}
+                              className="p-2 rounded-md hover:bg-red-50 transition"
+                            >
+                              <Trash2 size={16} className="text-red-600" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DESKTOP VIEW */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-slate-200">
+                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                        Name
+                      </th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                        Client
+                      </th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                        Status
+                      </th>
+
+                      {canEditFinancials && (
+                        <th className="text-right px-4 py-3 font-semibold text-slate-900">
+                          Revenue
+                        </th>
+                      )}
+
+                      {canEditFinancials && (
+                        <th className="text-right px-4 py-3 font-semibold text-slate-900">
+                          Est. Profit
+                        </th>
+                      )}
+
+                      <th className="text-center px-4 py-3 font-semibold text-slate-900">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {projects.map(proj => {
+                      const stats = calcFinancials(proj);
+
+                      return (
+                        <tr
+                          key={proj.id}
+                          onClick={() => openDetail(proj)}
+                          className="border-b border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                        >
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            {proj.name}
+                          </td>
+
+                          <td className="px-4 py-3 text-slate-600">
+                            {proj.client}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <span
+                              className={`text-xs font-semibold px-2 py-1 rounded uppercase tracking-wide ${STATUS_COLORS[proj.status]}`}
+                            >
+                              {proj.status}
+                            </span>
+                          </td>
+
+                          {canEditFinancials && (
+                            <td className="px-4 py-3 text-right text-slate-600">
+                              {formatINR(stats.revenue)}
+                            </td>
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+
+                          {canEditFinancials && (
+                            <td className="px-4 py-3 text-right text-slate-600">
+                              {formatINR(stats.netProfit)}
+                            </td>
+                          )}
+
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-2">
+                              {canManage && (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEdit(proj);
+                                    }}
+                                    className="p-1 hover:bg-blue-100 rounded"
+                                  >
+                                    <Edit2 size={14} className="text-blue-600" />
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteTarget({ type: 'project', id: proj.id });
+                                    }}
+                                    className="p-1 hover:bg-red-100 rounded"
+                                  >
+                                    <Trash2 size={14} className="text-red-600" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 

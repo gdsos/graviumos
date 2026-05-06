@@ -9,7 +9,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { PButton, PHeading, PInlineNotification, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Constants ——————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -30,14 +30,14 @@ const NOTIF_TYPE_ICON: Record<string, Parameters<typeof PIcon>[0]['name']> = {
   project: 'configurate',
 };
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 function formatTime(iso: string | null): string {
-  if (!iso) return 'â€”';
+  if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
@@ -58,7 +58,7 @@ function calcEffectiveStatus(task: Task): TaskStatus {
   return task.status;
 }
 
-// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function KpiScoreCircle({ score }: { score: number }) {
   const pct = Math.min(Math.max(score / 10, 0), 1);
@@ -146,7 +146,7 @@ function TaskSummaryCard({
   );
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Overview() {
   const { profile, userDepartments } = useAuth();
@@ -177,7 +177,7 @@ export default function Overview() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifsLoading, setNotifsLoading] = useState(true);
 
-  // â”€â”€â”€ Geolocation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Geolocation —————————————————————————————————————————————————————————
 
   const resolveLocation = useCallback((): Promise<string> => {
     return new Promise(resolve => {
@@ -206,7 +206,7 @@ export default function Overview() {
     resolveLocation().then(loc => setLocationStamp(loc));
   }, [resolveLocation]);
 
-  // â”€â”€â”€ Fetch today's attendance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch today's attendance ————————————————————————————————————————————
 
   const fetchAttendance = useCallback(async () => {
     if (!profile) return;
@@ -225,7 +225,7 @@ export default function Overview() {
     fetchAttendance();
   }, [fetchAttendance]);
 
-  // â”€â”€â”€ Attendance actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Attendance actions ——————————————————————————————————————————————————
 
   const handleCheckIn = async () => {
     if (!profile) return;
@@ -268,7 +268,7 @@ export default function Overview() {
     }
   };
 
-  // â”€â”€â”€ Fetch tasks summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch tasks summary ——————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -296,7 +296,7 @@ export default function Overview() {
     })();
   }, [profile]);
 
-  // â”€â”€â”€ Fetch announcements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch announcements ——————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -325,7 +325,7 @@ export default function Overview() {
     })();
   }, [profile]);
 
-  // â”€â”€â”€ Fetch notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch notifications ——————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -342,20 +342,20 @@ export default function Overview() {
     })();
   }, [profile]);
 
-  // â”€â”€â”€ Mark notification as read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Mark notification as read —————————————————————————————————————————
 
   const markRead = async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
-  // â”€â”€â”€ Attendance state derived â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Attendance state derived ——————————————————————————————————————————
 
   const isCheckedIn = !!(attendance?.check_in);
   const isCheckedOut = !!(attendance?.check_out);
   const attendanceComplete = isCheckedIn && isCheckedOut;
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
@@ -364,7 +364,7 @@ export default function Overview() {
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
-            {profile?.full_name?.split(' ')[0] || 'there'} ðŸ‘‹
+            {profile?.full_name?.split(' ')[0] || 'there'} 👋
           </PHeading>
           <PText color="contrast-medium" style={{ fontFamily: FONT }}>
             Here's your personal workspace overview
@@ -374,13 +374,13 @@ export default function Overview() {
         <div className="flex flex-wrap gap-2">
           {userDepartments.map(dept => (
             <PTag key={dept.id} color="background-surface">
-              {dept.code} Â· {dept.name}
+              {dept.code} · {dept.name}
             </PTag>
           ))}
         </div>
       </div>
 
-      {/* â”€â”€ Row 1: KPI + Attendance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* —— Row 1: KPI + Attendance ———————————————————————————————————————— */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-5">
         {/* KPI Score Card */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col items-center gap-4">
@@ -390,10 +390,10 @@ export default function Overview() {
           <KpiScoreCircle score={profile?.kpi_score ?? 0} />
           <PText size="x-small" color="contrast-medium" className="text-center" style={{ fontFamily: FONT }}>
             {(profile?.kpi_score ?? 0) >= 8
-              ? 'Excellent performance â€” keep it up!'
+              ? 'Excellent performance — keep it up!'
               : (profile?.kpi_score ?? 0) >= 6
-              ? 'Good work â€” a little more to excel'
-              : 'Room for improvement â€” reach out for support'}
+              ? 'Good work — a little more to excel'
+              : 'Room for improvement — reach out for support'}
           </PText>
         </div>
 
@@ -420,7 +420,7 @@ export default function Overview() {
           {attendanceLoading ? (
             <div className="flex items-center gap-2 py-4">
               <PIcon name="clock" size="small" color="contrast-low" />
-              <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading attendanceâ€¦</PText>
+              <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading attendance…</PText>
             </div>
           ) : (
             <>
@@ -442,7 +442,7 @@ export default function Overview() {
                       color={isCheckedIn ? 'notification-success' : 'contrast-medium'}
                       style={{ fontFamily: FONT }}
                     >
-                      {isCheckedIn ? formatTime(attendance!.check_in) : 'â€”'}
+                      {isCheckedIn ? formatTime(attendance!.check_in) : '—'}
                     </PText>
                   </div>
                 </div>
@@ -462,7 +462,7 @@ export default function Overview() {
                       color={isCheckedOut ? 'notification-info' : 'contrast-medium'}
                       style={{ fontFamily: FONT }}
                     >
-                      {isCheckedOut ? formatTime(attendance!.check_out) : 'â€”'}
+                      {isCheckedOut ? formatTime(attendance!.check_out) : '—'}
                     </PText>
                   </div>
                 </div>
@@ -472,7 +472,7 @@ export default function Overview() {
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-canvas border border-contrast-low">
                 <PIcon name="geo-localization" size="x-small" color="contrast-medium" />
                 <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                  {locationLoading ? 'Getting locationâ€¦' : (locationStamp || attendance?.location_stamp || 'Location not available')}
+                  {locationLoading ? 'Getting location…' : (locationStamp || attendance?.location_stamp || 'Location not available')}
                 </PText>
               </div>
 
@@ -509,14 +509,14 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* â”€â”€ Row 2: Task Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* —— Row 2: Task Summary ————————————————————————————————————————————— */}
       <div className="bg-surface rounded-2xl border border-contrast-low p-6 mb-5">
         <div className="flex items-center justify-between mb-4">
           <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
             My Tasks
           </PHeading>
           <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-            Total: {tasksLoading ? 'â€¦' : Object.values(taskCounts).reduce((a, b) => a + b, 0)}
+            Total: {tasksLoading ? '…' : Object.values(taskCounts).reduce((a, b) => a + b, 0)}
           </PText>
         </div>
 
@@ -535,7 +535,7 @@ export default function Overview() {
         )}
       </div>
 
-      {/* â”€â”€ Row 3: Announcements + Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* —— Row 3: Announcements + Notifications ——————————————————————————— */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Announcements */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4">
@@ -578,7 +578,7 @@ export default function Overview() {
                     </PTag>
                   </div>
                   <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                    {ann.content.length > 120 ? ann.content.slice(0, 120) + 'â€¦' : ann.content}
+                    {ann.content.length > 120 ? ann.content.slice(0, 120) + '…' : ann.content}
                   </PText>
                   <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
                     {formatRelativeDate(ann.created_at)}
@@ -636,7 +636,7 @@ export default function Overview() {
                       {notif.title}
                     </PText>
                     <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                      {notif.message.length > 80 ? notif.message.slice(0, 80) + 'â€¦' : notif.message}
+                      {notif.message.length > 80 ? notif.message.slice(0, 80) + '…' : notif.message}
                     </PText>
                   </div>
                   <div className="flex-shrink-0 flex flex-col items-end gap-1">

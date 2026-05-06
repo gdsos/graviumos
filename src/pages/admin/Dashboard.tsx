@@ -59,11 +59,11 @@ export default function Dashboard() {
       // Lead funnel
       const statuses = ['Open', 'Qualified', 'Converted', 'Rejected', 'Ghosted'];
       const colors = [
-        'var(--p-color-notification-info)',
-        'var(--p-color-contrast-medium)',
-        'var(--p-color-notification-success)',
-        'var(--p-color-notification-error)',
-        'var(--p-color-notification-warning)',
+        '#3B82F6', // Open - Blue
+        '#6B7280', // Qualified - Gray
+        '#10B981', // Converted - Green
+        '#EF4444', // Rejected - Red
+        '#F59E0B', // Ghosted - Amber
       ];
       setLeadFunnel(statuses.map((s, i) => ({
         name: s,
@@ -77,8 +77,9 @@ export default function Dashboard() {
     fetch();
   }, []);
 
-  const chartColor = theme === 'dark' ? '#FBFCFF' : '#010205';
-  const gridColor = theme === 'dark' ? '#333' : '#eee';
+  const chartColor = theme === 'dark' ? '#ffffff' : '#25dc3a';
+  const textColor = theme === 'dark' ? '#000000' : '#0800f5';
+  const gridColor = theme === 'dark' ? '#000000' : '#ff1515';
 
   const kpiCards = [
     { label: 'Total Leads', value: kpi.totalLeads.toString(), icon: ArrowRight, color: 'bg-info-soft text-info' },
@@ -95,7 +96,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         {kpiCards.map(card => {
           const IconComponent = card.icon;
           return (
@@ -120,8 +121,8 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={monthlyRevenue} margin={{ top: 0, right: 0, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-              <XAxis dataKey="month" tick={{ fill: chartColor, fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+              <XAxis dataKey="month" tick={{ fill: textColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: textColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
               <Tooltip
                 formatter={(v: unknown) => [formatINR(v as number), 'Revenue']}
                 contentStyle={{ background: theme === 'dark' ? '#212225' : '#fff', border: '1px solid #D8D8DB', borderRadius: '8px' }}
