@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { PButton, PText, PHeading, PInlineNotification, PIcon } from '@porsche-design-system/components-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
+import { Button } from '../../components/ui/button';
+import { Lock } from 'lucide-react';
 
 export default function CreateAdminPage() {
   const [fullName, setFullName] = useState('');
@@ -83,45 +84,37 @@ export default function CreateAdminPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-canvas p-8">
+    <div className="min-h-screen flex items-center justify-center bg-white p-8">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-2 mb-10 justify-center">
-          <img src="/GRAVIUM.png" alt="GRAVIUM" style={{ height: '36px' }} className="dark:invert" />
-          <span className="font-bold text-2xl text-primary" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>OS</span>
+          <img src="/GRAVIUM.png" alt="GRAVIUM" style={{ height: '36px' }} />
+          <span className="font-bold text-2xl text-slate-900">OS</span>
         </div>
 
-        <PHeading tag="h1" size="x-large" className="mb-2">
+        <h1 className="text-3xl font-bold mb-2">
           Create Admin Account
-        </PHeading>
-        <PText color="contrast-medium" className="mb-8">
+        </h1>
+        <p className="text-slate-600 mb-8">
           Set up your Super Admin account for GRAVIUM OS
-        </PText>
+        </p>
 
         {success && (
-          <div className="mb-6">
-            <PInlineNotification
-              heading="Admin account created!"
-              description="Redirecting to login..."
-              state="success"
-              dismissButton={false}
-            />
+          <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200">
+            <p className="text-sm font-medium text-green-900">Admin account created!</p>
+            <p className="text-sm text-green-800 mt-1">Redirecting to login...</p>
           </div>
         )}
 
         {error && (
-          <div className="mb-6">
-            <PInlineNotification
-              heading="Error"
-              description={error}
-              state="error"
-              dismissButton={false}
-            />
+          <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm font-medium text-red-900">Error</p>
+            <p className="text-sm text-red-800 mt-1">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleCreate} className="flex flex-col gap-5">
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+            <label className="block text-sm font-medium text-slate-900 mb-1.5">
               Full Name
             </label>
             <input
@@ -130,12 +123,11 @@ export default function CreateAdminPage() {
               onChange={e => setFullName(e.target.value)}
               required
               placeholder="John Doe"
-              className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+              className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+            <label className="block text-sm font-medium text-slate-900 mb-1.5">
               Email address
             </label>
             <input
@@ -144,12 +136,11 @@ export default function CreateAdminPage() {
               onChange={e => setEmail(e.target.value)}
               required
               placeholder="admin@gravium.com"
-              className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+              className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+            <label className="block text-sm font-medium text-slate-900 mb-1.5">
               Password
             </label>
             <div className="relative">
@@ -159,13 +150,12 @@ export default function CreateAdminPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="Min. 8 characters"
-                className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors pr-12"
-                style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+                className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors pr-12"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-contrast-medium hover:text-primary transition-colors text-sm"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-900 transition-colors text-sm"
                 tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -174,7 +164,7 @@ export default function CreateAdminPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+            <label className="block text-sm font-medium text-slate-900 mb-1.5">
               Confirm Password
             </label>
             <input
@@ -183,12 +173,11 @@ export default function CreateAdminPage() {
               onChange={e => setConfirmPassword(e.target.value)}
               required
               placeholder="Repeat password"
-              className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors"
-              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+              className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary mb-1.5" style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}>
+            <label className="block text-sm font-medium text-slate-900 mb-1.5">
               Admin Key
             </label>
             <div className="relative">
@@ -198,32 +187,33 @@ export default function CreateAdminPage() {
                 onChange={e => setAdminKey(e.target.value)}
                 required
                 placeholder="Enter the admin key"
-                className="w-full px-4 py-3 rounded-lg border-2 border-contrast-low bg-canvas text-primary placeholder:text-contrast-medium focus:outline-none focus:border-primary transition-colors pr-12"
-                style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+                className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors pr-12"
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <PIcon name="key" size="small" color="contrast-medium" />
+                <Lock size={18} className="text-slate-600" />
               </div>
             </div>
-            <PText size="x-small" color="contrast-medium" className="mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Contact the Super Admin to obtain the admin key.
-            </PText>
+            </p>
           </div>
 
-          <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true">Submit</button>
-
-          <PButton type="submit" loading={loading} className="mt-2">
-            Create Admin Account
-          </PButton>
+          <Button 
+            type="submit" 
+            disabled={loading}
+            className="mt-2 w-full"
+          >
+            {loading ? 'Creating...' : 'Create Admin Account'}
+          </Button>
         </form>
 
         <div className="mt-6 text-center">
-          <PText color="contrast-medium" size="x-small">
+          <p className="text-xs text-slate-600">
             Already have an account?{' '}
-            <Link to="/login/admin" className="text-primary underline font-medium">
+            <Link to="/login/admin" className="text-slate-900 underline font-medium hover:text-slate-700">
               Sign in
             </Link>
-          </PText>
+          </p>
         </div>
       </div>
     </div>

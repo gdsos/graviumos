@@ -1,12 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
   type Announcement,
@@ -15,8 +7,9 @@ import {
   type Attendance,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ——————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -37,7 +30,7 @@ const NOTIF_TYPE_ICON: Record<string, Parameters<typeof PIcon>[0]['name']> = {
   project: 'configurate',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -65,7 +58,7 @@ function calcEffectiveStatus(task: Task): TaskStatus {
   return task.status;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function KpiScoreCircle({ score }: { score: number }) {
   const pct = Math.min(Math.max(score / 10, 0), 1);
@@ -153,7 +146,7 @@ function TaskSummaryCard({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Overview() {
   const { profile, userDepartments } = useAuth();
@@ -184,7 +177,7 @@ export default function Overview() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifsLoading, setNotifsLoading] = useState(true);
 
-  // ─── Geolocation ─────────────────────────────────────────────────────────
+  // ——— Geolocation —————————————————————————————————————————————————————————
 
   const resolveLocation = useCallback((): Promise<string> => {
     return new Promise(resolve => {
@@ -213,7 +206,7 @@ export default function Overview() {
     resolveLocation().then(loc => setLocationStamp(loc));
   }, [resolveLocation]);
 
-  // ─── Fetch today's attendance ────────────────────────────────────────────
+  // ——— Fetch today's attendance ————————————————————————————————————————————
 
   const fetchAttendance = useCallback(async () => {
     if (!profile) return;
@@ -232,7 +225,7 @@ export default function Overview() {
     fetchAttendance();
   }, [fetchAttendance]);
 
-  // ─── Attendance actions ──────────────────────────────────────────────────
+  // ——— Attendance actions ——————————————————————————————————————————————————
 
   const handleCheckIn = async () => {
     if (!profile) return;
@@ -275,7 +268,7 @@ export default function Overview() {
     }
   };
 
-  // ─── Fetch tasks summary ──────────────────────────────────────────────────
+  // ——— Fetch tasks summary ——————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -303,7 +296,7 @@ export default function Overview() {
     })();
   }, [profile]);
 
-  // ─── Fetch announcements ──────────────────────────────────────────────────
+  // ——— Fetch announcements ——————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -332,7 +325,7 @@ export default function Overview() {
     })();
   }, [profile]);
 
-  // ─── Fetch notifications ──────────────────────────────────────────────────
+  // ——— Fetch notifications ——————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -349,20 +342,20 @@ export default function Overview() {
     })();
   }, [profile]);
 
-  // ─── Mark notification as read ─────────────────────────────────────────
+  // ——— Mark notification as read —————————————————————————————————————————
 
   const markRead = async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
-  // ─── Attendance state derived ──────────────────────────────────────────
+  // ——— Attendance state derived ——————————————————————————————————————————
 
   const isCheckedIn = !!(attendance?.check_in);
   const isCheckedOut = !!(attendance?.check_out);
   const attendanceComplete = isCheckedIn && isCheckedOut;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
@@ -387,7 +380,7 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* ── Row 1: KPI + Attendance ──────────────────────────────────────── */}
+      {/* —— Row 1: KPI + Attendance ———————————————————————————————————————— */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-5">
         {/* KPI Score Card */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col items-center gap-4">
@@ -516,7 +509,7 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* ── Row 2: Task Summary ───────────────────────────────────────────── */}
+      {/* —— Row 2: Task Summary ————————————————————————————————————————————— */}
       <div className="bg-surface rounded-2xl border border-contrast-low p-6 mb-5">
         <div className="flex items-center justify-between mb-4">
           <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
@@ -542,7 +535,7 @@ export default function Overview() {
         )}
       </div>
 
-      {/* ── Row 3: Announcements + Notifications ─────────────────────────── */}
+      {/* —— Row 3: Announcements + Notifications ——————————————————————————— */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Announcements */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4">
@@ -666,3 +659,6 @@ export default function Overview() {
     </div>
   );
 }
+
+
+

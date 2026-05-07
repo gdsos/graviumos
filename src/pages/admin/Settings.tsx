@@ -1,19 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PInlineNotification,
-  PSwitch,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { supabase, type OrgSettings } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PText, PSwitch } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function SectionHeading({ title, description }: { title: string; description?: string }) {
   return (
@@ -108,7 +102,7 @@ function NumberInput({
   );
 }
 
-// ─── Default form state ───────────────────────────────────────────────────────
+// ——— Default form state ———————————————————————————————————————————————————————
 
 interface SettingsForm {
   org_name: string;
@@ -148,7 +142,7 @@ function settingsToForm(s: OrgSettings): SettingsForm {
   };
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Settings() {
   const { isAdmin } = useAuth();
@@ -164,7 +158,7 @@ export default function Settings() {
   const [editMode, setEditMode] = useState(false);
   const canEdit = isSuperAdmin && editMode;
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  // —— Fetch —————————————————————————————————————————————————————————————————
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -186,7 +180,7 @@ export default function Settings() {
     fetchSettings();
   }, [fetchSettings]);
 
-  // ── Derived values ────────────────────────────────────────────────────────
+  // —— Derived values ————————————————————————————————————————————————————————
 
   const profitFirstTotal =
     parseFloat(form.profit_first_profit_pct || '0') +
@@ -196,7 +190,7 @@ export default function Settings() {
 
   const profitFirstWarning = Math.abs(profitFirstTotal - 100) > 0.01;
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // —— Save ——————————————————————————————————————————————————————————————————
 
   const handleSave = async () => {
     setSaving(true);
@@ -242,7 +236,7 @@ export default function Settings() {
     fetchSettings();
   };
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  // —— Reset —————————————————————————————————————————————————————————————————
 
   const handleReset = () => {
     if (settings) {
@@ -276,7 +270,7 @@ export default function Settings() {
     }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-3xl mx-auto" style={{ fontFamily: FONT }}>
@@ -338,7 +332,7 @@ export default function Settings() {
             />
           )}
 
-          {/* ── Organization Details ─────────────────────────────────────── */}
+          {/* —— Organization Details ——————————————————————————————————————— */}
           <div className="bg-surface rounded-xl border border-contrast-low p-5">
             <SectionHeading
               title="Organization Details"
@@ -397,7 +391,7 @@ export default function Settings() {
             </SettingRow>
           </div>
 
-          {/* ── Financial Settings ───────────────────────────────────────── */}
+          {/* —— Financial Settings ————————————————————————————————————————— */}
           <div className="bg-surface rounded-xl border border-contrast-low p-5">
             <SectionHeading
               title="Financial Settings"
@@ -456,7 +450,7 @@ export default function Settings() {
             </SettingRow>
           </div>
 
-          {/* ── Profit First Allocation ──────────────────────────────────── */}
+          {/* —— Profit First Allocation ———————————————————————————————————— */}
           <div className="bg-surface rounded-xl border border-contrast-low p-5">
             <SectionHeading
               title="Profit First Allocation"
@@ -599,7 +593,7 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* ── Actions ──────────────────────────────────────────────────── */}
+          {/* —— Actions ———————————————————————————————————————————————————— */}
           {canEdit && (
             <div className="flex items-center justify-between bg-surface rounded-xl border border-contrast-low p-4">
               <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
@@ -640,3 +634,6 @@ export default function Settings() {
     </div>
   );
 }
+
+
+

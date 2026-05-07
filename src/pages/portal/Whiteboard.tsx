@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PIcon,
-} from '@porsche-design-system/components-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PText, PIcon, PHeading } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 const DEBOUNCE_MS = 500;
@@ -19,7 +15,7 @@ interface WhiteboardNote {
   updated_at: string;
 }
 
-// ─── Toolbar actions ──────────────────────────────────────────────────────────
+// ——— Toolbar actions ——————————————————————————————————————————————————————————
 
 type FormatAction = 'bold' | 'italic' | 'h1' | 'h2' | 'ul';
 
@@ -64,7 +60,7 @@ function applyFormat(text: string, selStart: number, selEnd: number, action: For
   }
 }
 
-// ─── Toolbar Button ───────────────────────────────────────────────────────────
+// ——— Toolbar Button ———————————————————————————————————————————————————————————
 
 interface ToolbarBtnProps {
   label: string;
@@ -86,7 +82,7 @@ function ToolbarBtn({ label, title, onClick }: ToolbarBtnProps) {
   );
 }
 
-// ─── Save status indicator ────────────────────────────────────────────────────
+// ——— Save status indicator ————————————————————————————————————————————————————
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -111,7 +107,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
   );
 }
 
-// ─── Preview renderer (simple markdown to HTML) ───────────────────────────────
+// ——— Preview renderer (simple markdown to HTML) ———————————————————————————————
 
 function renderMarkdown(text: string): string {
   return text
@@ -131,7 +127,7 @@ function renderMarkdown(text: string): string {
     .replace(/\n/g, '<br />');
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Whiteboard() {
   const { profile } = useAuth();
@@ -146,7 +142,7 @@ export default function Whiteboard() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Load note on mount ───────────────────────────────────────────────────
+  // ——— Load note on mount ———————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -168,13 +164,13 @@ export default function Whiteboard() {
     })();
   }, [profile]);
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // ——— Helpers ——————————————————————————————————————————————————————————————
 
   function countWords(text: string): number {
     return text.trim() ? text.trim().split(/\s+/).length : 0;
   }
 
-  // ─── Debounced auto-save ─────────────────────────────────────────────────
+  // ——— Debounced auto-save —————————————————————————————————————————————————
 
   const saveNote = useCallback(
     async (text: string) => {
@@ -219,7 +215,7 @@ export default function Whiteboard() {
     }, DEBOUNCE_MS);
   };
 
-  // ─── Format toolbar ───────────────────────────────────────────────────────
+  // ——— Format toolbar ———————————————————————————————————————————————————————
 
   const handleFormat = (action: FormatAction) => {
     const textarea = textareaRef.current;
@@ -244,7 +240,7 @@ export default function Whiteboard() {
     }, 0);
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-5xl mx-auto" style={{ fontFamily: FONT }}>
@@ -355,3 +351,6 @@ export default function Whiteboard() {
     </div>
   );
 }
+
+
+

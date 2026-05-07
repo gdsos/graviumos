@@ -1,13 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
   formatINR,
@@ -17,8 +8,9 @@ import {
   type Department,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ——— Types ————————————————————————————————————————————————————————————————————
 
 type AttendanceStatus = Attendance['status'];
 
@@ -54,7 +46,7 @@ interface OverrideForm {
   status: AttendanceStatus;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -75,7 +67,7 @@ const STATUS_COLORS: Record<Payroll['status'], Parameters<typeof PTag>[0]['color
   Paid: 'notification-success-soft',
 };
 
-// ─── Calculation helper ───────────────────────────────────────────────────────
+// ——— Calculation helper ———————————————————————————————————————————————————————
 
 function calculatePayroll(emp: Profile) {
   const base = emp.base_salary ?? 0;
@@ -89,7 +81,7 @@ function calculatePayroll(emp: Profile) {
   return { base, kpiIncentive, tds, pf, esi, profTax, net };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -121,7 +113,7 @@ function TableHead({ cols }: { cols: string[] }) {
   );
 }
 
-// ─── Payslip Print Modal ──────────────────────────────────────────────────────
+// ——— Payslip Print Modal ——————————————————————————————————————————————————————
 
 interface PayslipProps {
   open: boolean;
@@ -425,7 +417,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function PayrollPage() {
   const { profile: currentProfile, departments, isAdmin, isFinance } = useAuth();
@@ -477,11 +469,11 @@ export default function PayrollPage() {
   const [overrideSaving, setOverrideSaving] = useState(false);
   const [overrideError, setOverrideError] = useState('');
 
-  // ─── Access guard ──────────────────────────────────────────────────────────
+  // ——— Access guard ——————————————————————————————————————————————————————————
 
   const hasAccess = isAdmin() || isFinance();
 
-  // ─── Fetch employees ───────────────────────────────────────────────────────
+  // ——— Fetch employees ———————————————————————————————————————————————————————
 
   const fetchEmployees = useCallback(async () => {
     setLoadingEmployees(true);
@@ -506,7 +498,7 @@ export default function PayrollPage() {
     setLoadingEmployees(false);
   }, [departments]);
 
-  // ─── Fetch payroll for selected period ─────────────────────────────────────
+  // ——— Fetch payroll for selected period —————————————————————————————————————
 
   const fetchPayroll = useCallback(async () => {
     setLoadingPayroll(true);
@@ -520,7 +512,7 @@ export default function PayrollPage() {
     setLoadingPayroll(false);
   }, [selectedMonth, selectedYear]);
 
-  // ─── Fetch attendance for selected period ──────────────────────────────────
+  // ——— Fetch attendance for selected period ——————————————————————————————————
 
   const fetchAttendance = useCallback(async () => {
     setLoadingAttendance(true);
@@ -548,7 +540,7 @@ export default function PayrollPage() {
     fetchAttendance();
   }, [fetchPayroll, fetchAttendance]);
 
-  // ─── Attendance summaries ──────────────────────────────────────────────────
+  // ——— Attendance summaries ——————————————————————————————————————————————————
 
   const attendanceSummaries: AttendanceSummary[] = employees
     .filter(emp => filterDeptId === 'all' || emp.department_ids?.includes(filterDeptId))
@@ -565,7 +557,7 @@ export default function PayrollPage() {
       };
     });
 
-  // ─── Payroll rows ──────────────────────────────────────────────────────────
+  // ——— Payroll rows ——————————————————————————————————————————————————————————
 
   const payrollRows: PayrollRow[] = employees
     .filter(emp => filterDeptId === 'all' || emp.department_ids?.includes(filterDeptId))
@@ -578,7 +570,7 @@ export default function PayrollPage() {
       };
     });
 
-  // ─── Process payroll ────────────────────────────────────────────────────────
+  // ——— Process payroll ————————————————————————————————————————————————————————
 
   const handleProcess = async (emp: EmployeeWithDepts) => {
     setProcessing(p => ({ ...p, [emp.id]: true }));
@@ -624,7 +616,7 @@ export default function PayrollPage() {
     setProcessing(p => ({ ...p, [emp.id]: false }));
   };
 
-  // ─── Mark as paid ────────────────────────────────────────────────────────────
+  // ——— Mark as paid ————————————————————————————————————————————————————————————
 
   const handleMarkPaid = async (record: Payroll) => {
     setProcessing(p => ({ ...p, [record.employee_id]: true }));
@@ -644,7 +636,7 @@ export default function PayrollPage() {
     setProcessing(p => ({ ...p, [record.employee_id]: false }));
   };
 
-  // ─── Open edit modal ─────────────────────────────────────────────────────────
+  // ——— Open edit modal —————————————————————————————————————————————————————————
 
   const openEdit = (record: Payroll) => {
     setEditRecord(record);
@@ -698,7 +690,7 @@ export default function PayrollPage() {
     setEditSaving(false);
   };
 
-  // ─── Generate payslip ────────────────────────────────────────────────────────
+  // ——— Generate payslip ————————————————————————————————————————————————————————
 
   const handleGeneratePayslip = async (emp: EmployeeWithDepts, record: Payroll | null) => {
     setPayslipEmployee(emp);
@@ -712,7 +704,7 @@ export default function PayrollPage() {
     }
   };
 
-  // ─── Attendance override ──────────────────────────────────────────────────────
+  // ——— Attendance override ——————————————————————————————————————————————————————
 
   const openOverride = (emp: EmployeeWithDepts) => {
     const today = new Date();
@@ -765,7 +757,7 @@ export default function PayrollPage() {
     setOverrideSaving(false);
   };
 
-  // ─── Access denied ────────────────────────────────────────────────────────────
+  // ——— Access denied ————————————————————————————————————————————————————————————
 
   if (!currentProfile) {
     return (
@@ -788,17 +780,17 @@ export default function PayrollPage() {
     );
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————————
 
   const isLoading = loadingEmployees || loadingPayroll || loadingAttendance;
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* ── Header ── */}
+      {/* —— Header —— */}
       <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">Payroll</PHeading>
-          <PText color="contrast-medium">Manage employee salaries and payslips</PText>
+          <PText size="x-small" color="contrast-medium">Manage employee salaries and payslips</PText>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Month select */}
@@ -823,7 +815,7 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* ── Department filter tabs ── */}
+      {/* —— Department filter tabs —— */}
       <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => setFilterDeptId('all')}
@@ -850,7 +842,7 @@ export default function PayrollPage() {
         ))}
       </div>
 
-      {/* ── Global notifications ── */}
+      {/* —— Global notifications —— */}
       {error && (
         <div className="mb-4">
           <PInlineNotification
@@ -880,7 +872,7 @@ export default function PayrollPage() {
         </div>
       ) : (
         <>
-          {/* ── Attendance Overview ─────────────────────────────────────────── */}
+          {/* —— Attendance Overview ——————————————————————————————————————————— */}
           <section className="mb-10">
             <PHeading tag="h2" size="medium" className="mb-4">
               Attendance Overview — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
@@ -964,7 +956,7 @@ export default function PayrollPage() {
             )}
           </section>
 
-          {/* ── Salary Table ────────────────────────────────────────────────── */}
+          {/* —— Salary Table —————————————————————————————————————————————————— */}
           <section>
             <PHeading tag="h2" size="medium" className="mb-4">
               Salary Table — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
@@ -1145,7 +1137,7 @@ export default function PayrollPage() {
         </>
       )}
 
-      {/* ── Edit Payroll Modal ── */}
+      {/* —— Edit Payroll Modal —— */}
       <PModal
         open={!!editRecord}
         onDismiss={() => setEditRecord(null)}
@@ -1269,7 +1261,7 @@ export default function PayrollPage() {
         </form>
       </PModal>
 
-      {/* ── Attendance Override Modal ── */}
+      {/* —— Attendance Override Modal —— */}
       <PModal
         open={showOverride}
         onDismiss={() => setShowOverride(false)}
@@ -1345,7 +1337,7 @@ export default function PayrollPage() {
         </form>
       </PModal>
 
-      {/* ── Payslip Modal ── */}
+      {/* —— Payslip Modal —— */}
       <PayslipModal
         open={!!payslipEmployee}
         onDismiss={() => { setPayslipEmployee(null); setPayslipRecord(null); }}
@@ -1357,3 +1349,6 @@ export default function PayrollPage() {
     </div>
   );
 }
+
+
+

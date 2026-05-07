@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import type React from 'react';
 import { useLocation } from 'react-router-dom';
-import {
-  PHeading, PText, PButton, PTag, PIcon, PModal, PInlineNotification,
-} from '@porsche-design-system/components-react';
-import {
-  supabase,
-  type Project,
-  type ProjectExpense,
-  type ProjectCashReceived,
-  formatINR,
-} from '../../lib/supabase';
+import { supabase, type Project, type ProjectExpense, type ProjectCashReceived, formatINR } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { Button } from '../../components/ui/button';
+import type { Task, Subtask, Profile } from '../../lib/supabase';
+import { Plus, Trash2, X, Edit2 } from 'lucide-react';
+import TaskDetailModal from './TaskDetailModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,29 +20,71 @@ interface LocationState {
   };
 }
 
+type TaskStatus =
+  | 'Not Started'
+  | 'Ongoing'
+  | 'Overdue'
+  | 'Completed';
+
+interface TaskWithDetails extends Task {
+  assignee?: Profile;
+  subtasks: Subtask[];
+  effectiveStatus: TaskStatus;
+  overdueByDays?: number;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, Parameters<typeof PTag>[0]['color']> = {
-  Active: 'notification-success-soft',
-  Completed: 'notification-info-soft',
-  'On Hold': 'notification-warning-soft',
-  Cancelled: 'notification-error-soft',
+const STATUS_COLORS: Record<string, string> = {
+  Active: 'bg-green-100 text-green-900',
+  Completed: 'bg-blue-100 text-blue-900',
+  'On Hold': 'bg-amber-100 text-amber-900',
+  Cancelled: 'bg-red-100 text-red-900',
 };
 
 const PROJECT_STATUSES = ['Active', 'Completed', 'On Hold', 'Cancelled'] as const;
 
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
+// ─── Helpers ───────────────────────────────────────────────────────────
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+function calcEffectiveStatus(task: Task): TaskStatus {
+  if (task.status === 'Completed') return 'Completed';
+  if (task.deadline && new Date(task.deadline) < new Date()) {
+    return 'Overdue';
+  }
+  return (
+  ['Not Started', 'Ongoing', 'Completed'].includes(task.status)
+    ? (task.status as TaskStatus)
+    : 'Not Started'
+);
+}
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function calcOverdueDays(task: Task): number | undefined {
+  if (
+    task.status !== 'Completed' ||
+    !task.deadline ||
+    !task.completed_at
+  ) {
+    return undefined;
+  }
+
+  const deadline = new Date(task.deadline);
+  const completed = new Date(task.completed_at);
+
+  const diff = Math.floor(
+    (completed.getTime() - deadline.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  return diff > 0 ? diff : undefined;
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FormField({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div>
-      <label
-        className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: FONT }}
-      >
-        {label}
+      <label className="block text-xs font-medium text-slate-900 mb-1.5">
+        {label}{required && ' *'}
       </label>
       {children}
     </div>
@@ -56,119 +94,276 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 function StatCard({
   label,
   value,
-  sub,
-  highlight,
+  currency = true,
+  valueClassName = '',
 }: {
   label: string;
-  value: string;
-  sub?: string;
-  highlight?: boolean;
+  value: number | string;
+  currency?: boolean;
+  valueClassName?: string;
 }) {
+  const displayValue = typeof value === 'number' && currency ? formatINR(value) : value;
   return (
-    <div
-      className={`rounded-xl border p-4 flex flex-col gap-1 ${
-        highlight ? 'border-primary bg-primary/5' : 'border-contrast-low bg-surface'
-      }`}
-    >
-      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-        {label}
-      </PText>
-      <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
-        {value}
-      </PText>
-      {sub && (
-        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-          {sub}
-        </PText>
-      )}
+    <div className="flex flex-col gap-1">
+      <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">{label}</p>
+      <p className={`text-lg font-bold ${valueClassName}`}>
+        {displayValue}
+      </p>
     </div>
   );
 }
 
-// ─── Empty form state ─────────────────────────────────────────────────────────
-
-const emptyForm = {
-  name: '',
-  client: '',
-  status: 'Active' as Project['status'],
-  revenue: '',
-  estimated_cogs: '',
-  design_fee_pct: '15',
-  description: '',
-  start_date: '',
-  end_date: '',
-};
-
-type ProjectForm = typeof emptyForm;
-
-// ─── Sub-entry form state ─────────────────────────────────────────────────────
-
-const emptyExpenseForm = { description: '', amount: '', expense_date: '' };
-const emptyCashForm = { description: '', amount: '', received_date: '' };
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Projects() {
-  const { profile, isAdmin, isFinance } = useAuth();
   const location = useLocation();
-  const locationState = location.state as LocationState | null;
+  const {
+  profile,
+  departments,
+  isAdmin,
+  isFinance,
+  isDeptHead,
+} = useAuth();
 
-  // List state
+  // ─── State ────────────────────────────────────────────────────────────────
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, _setError] = useState('');
+  const [selectedTask, setSelectedTask] = useState<TaskWithDetails | null>(null);
 
-  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [form, setForm] = useState<ProjectForm>(emptyForm);
+  const [form, setForm] = useState({
+    name: '',
+    client: '',
+    status: 'Active' as const,
+    start_date: '',
+    end_date: '',
+    description: '',
+    design_fee_pct: 0,
+    revenue: 0,
+    estimated_cogs: 0,
+  });
   const [modalError, setModalError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Detail panel state
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [detailTab, setDetailTab] = useState<'overview' | 'expenses' | 'cash'>('overview');
+  const [detailTab, setDetailTab] = useState<'overview' | 'expenses' | 'cash' | 'tasks'>('overview');
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [cashReceived, setCashReceived] = useState<ProjectCashReceived[]>([]);
+  const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Sub-entry forms
-  const [expenseForm, setExpenseForm] = useState(emptyExpenseForm);
-  const [cashForm, setCashForm] = useState(emptyCashForm);
+  const [expenseForm, setExpenseForm] = useState({ expense_date: '', description: '', amount: 0 });
+  const [cashForm, setCashForm] = useState<{
+    received_date: string;
+    description: string;
+    amount: number;
+    gst_treatment: 'GST' | 'NO_GST';
+  }>({
+    received_date: '',
+    description: '',
+    amount: 0,
+    gst_treatment: 'GST',
+  });
   const [subError, setSubError] = useState('');
   const [subSaving, setSubSaving] = useState(false);
 
-  // Delete confirm modal
-  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'project' | 'expense' | 'cash'; id: string } | null>(null);
 
-  // ── Data fetching ────────────────────────────────────────────────────────────
+  // ─── Permissions ──────────────────────────────────────────────────────────
+
+  const canManage = isAdmin() || isDeptHead();
+  const canEditFinancials = isAdmin() || isFinance();
+  const canManageSubEntries = canEditFinancials;
+
+  // ─── Calculations ────────────────────────────────────────────────────────
+
+  function calcFinancials(proj: Project) {
+  const grossRevenue = proj.revenue || 0;
+
+  // ─── GST CALCULATION (FIXED - YOUR FINAL VERSION) ───────────────────────
+
+  const gstOnRevenue = grossRevenue * 0.18;
+
+  const gstAdjustment = cashReceived.reduce((sum, c) => {
+    const treatment = c.gst_treatment as string;
+    if (treatment === 'NO_GST' || treatment === 'NO_GST 0%') {
+      return sum + c.amount * 0.18;
+    }
+    return sum;
+  }, 0);
+
+  const gstAmount = gstOnRevenue - gstAdjustment;
+
+  const netRevenue = grossRevenue - gstAmount;
+
+  // ─── COSTS ──────────────────────────────────────────────────────────────
+
+  const actualCogs = expenses.reduce(
+    (sum, e) => sum + (e.amount || 0),
+    0
+  );
+
+  const estCogs = proj.estimated_cogs || 0;
+
+  // ─── PROFITABILITY ─────────────────────────────────────────────────────
+
+  const netProfit = netRevenue - actualCogs;
+
+  // ─── FEES (BASED ON NET REVENUE - CORRECT BUSINESS LOGIC) ──────────────
+
+  const designFee = (netRevenue * (proj.design_fee_pct || 0)) / 100;
+
+  const incentive = netProfit > 0 ? netProfit * 0.1 : 0;
+
+  const commission = netRevenue * 0.025;
+
+  // ─── CASH FLOW ─────────────────────────────────────────────────────────
+
+  const totalCashReceived = cashReceived.reduce(
+    (sum, c) => sum + (c.amount || 0),
+    0
+  );
+
+  const outstanding = netRevenue - totalCashReceived;
+
+  // ─── FINAL RETURN ───────────────────────────────────────────────────────
+
+  return {
+    revenue: grossRevenue,
+
+    gstAmount,
+    netRevenue,
+
+    estCogs,
+    actualCogs,
+
+    netProfit,
+
+    designFee,
+    incentive,
+    commission,
+
+    totalCashReceived,
+    outstanding,
+  };
+}
+
+  // ─── Data fetching ────────────────────────────────────────────────────────
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error: err } = await supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (!error && data) setProjects(data as Project[]);
+    if (!err && data) {
+      setProjects(data as Project[]);
+    }
     setLoading(false);
   }, []);
 
   const fetchProjectDetail = useCallback(async (projectId: string) => {
-    setDetailLoading(true);
-    const [expRes, cashRes] = await Promise.all([
-      supabase
-        .from('project_expenses')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('expense_date', { ascending: false }),
-      supabase
-        .from('project_cash_received')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('received_date', { ascending: false }),
-    ]);
-    setExpenses((expRes.data as ProjectExpense[]) || []);
+  setDetailLoading(true);
+
+  const [expensesRes, cashRes, tasksRes] = await Promise.all([
+    supabase
+      .from('project_expenses')
+      .select('*')
+      .eq('project_id', projectId),
+
+    supabase
+      .from('project_cash_received')
+      .select('*')
+      .eq('project_id', projectId),
+
+    supabase
+      .from('tasks')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  // Expenses
+  if (expensesRes.data) {
+    setExpenses((expensesRes.data as ProjectExpense[]) || []);
+  }
+
+  // Cash
+  if (cashRes.data) {
     setCashReceived((cashRes.data as ProjectCashReceived[]) || []);
+  }
+
+  // Tasks + Subtasks + Assignees
+  if (tasksRes.data) {
+    const tasksData = tasksRes.data as Task[];
+
+    const taskIds = tasksData.map(t => t.id);
+
+    // ─── Fetch Subtasks ─────────────────────────────
+
+    let subtaskMap: Record<string, any[]> = {};
+
+    if (taskIds.length > 0) {
+      const { data: subtasksData } = await supabase
+        .from('subtasks')
+        .select('*')
+        .in('task_id', taskIds);
+
+      if (subtasksData) {
+        for (const sub of subtasksData) {
+          if (!subtaskMap[sub.task_id]) {
+            subtaskMap[sub.task_id] = [];
+          }
+
+          subtaskMap[sub.task_id].push(sub);
+        }
+      }
+    }
+
+    // ─── Fetch Assignees ────────────────────────────
+
+    const assigneeIds = [
+      ...new Set(
+        tasksData
+          .map(t => t.assigned_to)
+          .filter(Boolean)
+      ),
+    ] as string[];
+
+    let assigneeMap: Record<string, any> = {};
+
+    if (assigneeIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', assigneeIds);
+
+      if (profilesData) {
+        for (const p of profilesData) {
+          assigneeMap[p.id] = p;
+        }
+      }
+    }
+
+      // ─── Enrich Tasks ───────────────────────────────
+
+      const enrichedTasks: TaskWithDetails[] = tasksData.map(task => ({
+        ...task,
+        subtasks: subtaskMap[task.id] || [],
+        assignee: task.assigned_to
+          ? assigneeMap[task.assigned_to]
+          : undefined,
+        effectiveStatus: calcEffectiveStatus(task),
+        overdueByDays: calcOverdueDays(task),
+      }));
+
+      setTasks(enrichedTasks);
+    }
+
     setDetailLoading(false);
   }, []);
 
@@ -176,115 +371,92 @@ export default function Projects() {
     fetchProjects();
   }, [fetchProjects]);
 
-  // ── Handle fromLead navigation ────────────────────────────────────────────
-
   useEffect(() => {
-    if (locationState?.fromLead) {
-      const lead = locationState.fromLead;
-      setForm({
-        ...emptyForm,
-        name: lead.name || '',
-        client: lead.name || '',
-        description: lead.notes || '',
-      });
-      setEditingProject(null);
-      setModalError('');
+    const state = location.state as LocationState | undefined;
+    if (state?.fromLead && !editingProject) {
+      const fromLead = state.fromLead;
+      setForm(f => ({
+        ...f,
+        name: fromLead.name,
+        client: fromLead.contact_email || fromLead.contact_phone || '',
+        description: fromLead.notes || '',
+      }));
       setShowModal(true);
-      // Clear location state so re-render doesn't re-open
-      window.history.replaceState({}, '');
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state, editingProject]);
 
-  // ── Detail panel ──────────────────────────────────────────────────────────
-
-  const openDetail = (project: Project) => {
-    setSelectedProject(project);
-    setDetailTab('overview');
-    setSubError('');
-    setExpenseForm(emptyExpenseForm);
-    setCashForm(emptyCashForm);
-    fetchProjectDetail(project.id);
-  };
-
-  const closeDetail = () => {
-    setSelectedProject(null);
-    setExpenses([]);
-    setCashReceived([]);
-  };
-
-  // ── Project CRUD ──────────────────────────────────────────────────────────
+  // ─── Modal handlers ───────────────────────────────────────────────────────
 
   const openCreate = () => {
     setEditingProject(null);
-    setForm(emptyForm);
-    setModalError('');
-    setShowModal(true);
-  };
-
-  const openEdit = (project: Project, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingProject(project);
     setForm({
-      name: project.name,
-      client: project.client,
-      status: project.status,
-      revenue: String(project.revenue ?? ''),
-      estimated_cogs: String(project.estimated_cogs ?? ''),
-      design_fee_pct: String(project.design_fee_pct ?? 15),
-      description: project.description ?? '',
-      start_date: project.start_date ?? '',
-      end_date: project.end_date ?? '',
+      name: '',
+      client: '',
+      status: 'Active',
+      start_date: '',
+      end_date: '',
+      description: '',
+      design_fee_pct: 0,
+      revenue: 0,
+      estimated_cogs: 0,
     });
     setModalError('');
     setShowModal(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openEdit = (proj: Project) => {
+    setEditingProject(proj);
+    setForm({
+      name: proj.name,
+      client: proj.client || '',
+      status: proj.status as typeof form.status,
+      start_date: proj.start_date ? new Date(proj.start_date).toISOString().slice(0, 10) : '',
+      end_date: proj.end_date ? new Date(proj.end_date).toISOString().slice(0, 10) : '',
+      description: proj.description || '',
+      design_fee_pct: proj.design_fee_pct || 0,
+      revenue: proj.revenue || 0,
+      estimated_cogs: proj.estimated_cogs || 0,
+    });
     setModalError('');
-    setSaving(true);
+    setShowModal(true);
+  };
 
-    const payload: Partial<Project> & { created_by?: string | null } = {
+  const handleSaveProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.client.trim()) {
+      setModalError('Project name and client are required.');
+      return;
+    }
+
+    setSaving(true);
+    setModalError('');
+
+    const payload = {
       name: form.name.trim(),
       client: form.client.trim(),
       status: form.status,
-      revenue: parseFloat(form.revenue) || 0,
-      estimated_cogs: parseFloat(form.estimated_cogs) || 0,
-      design_fee_pct: parseFloat(form.design_fee_pct) || 15,
+      start_date: form.start_date ? new Date(form.start_date).toISOString() : null,
+      end_date: form.end_date ? new Date(form.end_date).toISOString() : null,
       description: form.description.trim(),
-      start_date: form.start_date || null,
-      end_date: form.end_date || null,
+      design_fee_pct: form.design_fee_pct,
+      revenue: form.revenue,
+      estimated_cogs: form.estimated_cogs,
+      updated_at: new Date().toISOString(),
     };
 
-    let err: { message: string } | null = null;
-
+    let err;
     if (editingProject) {
-      const { error } = await supabase
-        .from('projects')
-        .update({ ...payload, updated_at: new Date().toISOString() })
-        .eq('id', editingProject.id);
-      err = error;
-      // Refresh selected project data if detail panel is open
-      if (!error && selectedProject?.id === editingProject.id) {
-        const { data } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('id', editingProject.id)
-          .maybeSingle();
-        if (data) setSelectedProject(data as Project);
-      }
+      const { error: e } = await supabase.from('projects').update(payload).eq('id', editingProject.id);
+      err = e;
     } else {
-      const insertPayload = {
+      const { error: e } = await supabase.from('projects').insert({
         ...payload,
-        created_by: profile?.id ?? null,
-        created_from_lead_id: locationState?.fromLead?.id ?? null,
-      };
-      const { error } = await supabase.from('projects').insert(insertPayload);
-      err = error;
+        created_by: profile?.id,
+      });
+      err = e;
     }
 
     setSaving(false);
-
     if (err) {
       setModalError(err.message);
       return;
@@ -294,213 +466,331 @@ export default function Projects() {
     fetchProjects();
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await supabase.from('project_expenses').delete().eq('project_id', deleteTarget.id);
-    await supabase.from('project_cash_received').delete().eq('project_id', deleteTarget.id);
-    await supabase.from('projects').delete().eq('id', deleteTarget.id);
+  const handleDeleteProject = async (id: string) => {
+    await supabase.from('project_expenses').delete().eq('project_id', id);
+    await supabase.from('project_cash_received').delete().eq('project_id', id);
+    await supabase.from('projects').delete().eq('id', id);
+    setSelectedProject(null);
     setDeleteTarget(null);
-    if (selectedProject?.id === deleteTarget.id) closeDetail();
     fetchProjects();
   };
 
-  // ── Expense CRUD ──────────────────────────────────────────────────────────
-
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProject) return;
-    setSubError('');
-    setSubSaving(true);
+    if (!selectedProject || !expenseForm.expense_date || !expenseForm.description.trim() || expenseForm.amount <= 0) {
+      setSubError('All fields required.');
+      return;
+    }
 
-    const { error } = await supabase.from('project_expenses').insert({
-      project_id: selectedProject.id,
-      description: expenseForm.description.trim(),
-      amount: parseFloat(expenseForm.amount) || 0,
-      expense_date: expenseForm.expense_date,
-      created_by: profile?.id ?? null,
-    });
+    setSubSaving(true);
+    const { data, error: err } = await supabase
+      .from('project_expenses')
+      .insert({
+        project_id: selectedProject.id,
+        expense_date: new Date(expenseForm.expense_date).toISOString(),
+        description: expenseForm.description.trim(),
+        amount: expenseForm.amount,
+      })
+      .select();
 
     setSubSaving(false);
-    if (error) { setSubError(error.message); return; }
-    setExpenseForm(emptyExpenseForm);
-    fetchProjectDetail(selectedProject.id);
+    if (err) {
+      setSubError(err.message);
+      return;
+    }
+
+    if (data) {
+      setExpenses([...expenses, data[0] as ProjectExpense]);
+      setExpenseForm({ expense_date: '', description: '', amount: 0 });
+      setSubError('');
+    }
   };
 
   const handleDeleteExpense = async (id: string) => {
-    if (!selectedProject) return;
     await supabase.from('project_expenses').delete().eq('id', id);
-    fetchProjectDetail(selectedProject.id);
+    setExpenses(expenses.filter(e => e.id !== id));
+    setDeleteTarget(null);
   };
-
-  // ── Cash Received CRUD ────────────────────────────────────────────────────
 
   const handleAddCash = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProject) return;
-    setSubError('');
-    setSubSaving(true);
+    if (!selectedProject || !cashForm.received_date || !cashForm.description.trim() || cashForm.amount <= 0) {
+      setSubError('All fields required.');
+      return;
+    }
 
-    const { error } = await supabase.from('project_cash_received').insert({
-      project_id: selectedProject.id,
-      description: cashForm.description.trim(),
-      amount: parseFloat(cashForm.amount) || 0,
-      received_date: cashForm.received_date,
-      created_by: profile?.id ?? null,
-    });
+    setSubSaving(true);
+    const { data, error: err } = await supabase
+      .from('project_cash_received')
+      .insert({
+        project_id: selectedProject.id,
+        received_date: new Date(cashForm.received_date).toISOString(),
+        description: cashForm.description.trim(),
+        amount: cashForm.amount,
+        gst_treatment: cashForm.gst_treatment,
+      })
+      .select();
 
     setSubSaving(false);
-    if (error) { setSubError(error.message); return; }
-    setCashForm(emptyCashForm);
-    fetchProjectDetail(selectedProject.id);
+    if (err) {
+      setSubError(err.message);
+      return;
+    }
+
+    if (data) {
+      setCashReceived([...cashReceived, data[0] as ProjectCashReceived]);
+      setCashForm({
+        received_date: '',
+        description: '',
+        amount: 0,
+        gst_treatment: 'GST',
+      });
+      setSubError('');
+    }
   };
 
   const handleDeleteCash = async (id: string) => {
-    if (!selectedProject) return;
     await supabase.from('project_cash_received').delete().eq('id', id);
-    fetchProjectDetail(selectedProject.id);
+    setCashReceived(cashReceived.filter(c => c.id !== id));
+    setDeleteTarget(null);
   };
 
-  // ── Financial calculations ────────────────────────────────────────────────
-
-  const calcFinancials = (project: Project) => {
-    const revenue = project.revenue ?? 0;
-    const estimatedCogs = project.estimated_cogs ?? 0;
-    const actualCogs = expenses.reduce((s, x) => s + (x.amount ?? 0), 0);
-    const profitBeforeDesign = revenue - actualCogs;
-    const designFeePct = project.design_fee_pct ?? 15;
-    const designFee = (designFeePct / 100) * revenue;
-    const incentive = 0.2 * profitBeforeDesign;
-    const commission = 0.015 * profitBeforeDesign;
-    const totalCashReceived = cashReceived.reduce((s, x) => s + (x.amount ?? 0), 0);
-    const estimatedProfit = revenue - estimatedCogs;
-
-    return {
-      revenue,
-      estimatedCogs,
-      actualCogs,
-      profitBeforeDesign,
-      designFeePct,
-      designFee,
-      incentive,
-      commission,
-      totalCashReceived,
-      estimatedProfit,
-    };
+  const openDetail = async (proj: Project) => {
+    setSelectedProject(proj);
+    setDetailTab('overview');
+    await fetchProjectDetail(proj.id);
   };
 
-  const canEditFinancials = isFinance() || isAdmin();
-  const canManageSubEntries = isFinance() || isAdmin();
+  const closeDetail = () => {
+    setSelectedProject(null);
+    setExpenses([]);
+    setCashReceived([]);
+    setTasks([]);
+  };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
+
+  const financials = selectedProject ? calcFinancials(selectedProject) : null;
 
   return (
-    <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
+    <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-200">
         <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">Projects</PHeading>
-          <PText color="contrast-medium">Manage active and past projects</PText>
+          <h1 className="text-3xl font-bold mb-1">Projects</h1>
+          <p className="text-xs text-slate-600">Manage active and past projects</p>
         </div>
-        <PButton icon="add" onClick={openCreate}>New Project</PButton>
+        {canManage && (
+          <Button onClick={openCreate} className="flex items-center gap-2">
+            <Plus size={16} /> New Project
+          </Button>
+        )}
       </div>
 
-      {/* Two-panel layout when detail is open */}
-      <div className={selectedProject ? 'flex flex-col lg:flex-row gap-6' : ''}>
-        {/* ── Project List ─────────────────────────────────────────────────── */}
-        <div className={selectedProject ? 'w-full lg:w-1/2 min-w-0' : 'w-full'}>
+      {error && (
+        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
+          <p className="text-sm text-red-900">{error}</p>
+        </div>
+      )}
+
+      {/* Two-panel layout */}
+      <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden">
+        {/* Left panel: Project list */}
+        <div
+          className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedProject ? 'hidden lg:flex' : 'flex'
+            }`}
+        >
           {loading ? (
             <div className="flex items-center justify-center h-48">
-              <PText color="contrast-medium">Loading projects…</PText>
+              <p className="text-slate-600">Loading projects...</p>
             </div>
           ) : projects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-xl border border-contrast-low">
-              <PIcon name="highway" size="large" color="contrast-low" />
-              <PText color="contrast-medium" className="mt-3">
-                No projects yet. Create your first project.
-              </PText>
+            <div className="flex items-center justify-center h-48">
+              <p className="text-slate-600">No projects yet</p>
             </div>
           ) : (
-            <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+            <>
+              {/* MOBILE VIEW */}
+                  <div
+                    className={`flex flex-col gap-4 md:hidden transition-all duration-300 overflow-hidden ${selectedProject ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-[5000px] opacity-100'
+                      }`}
+                  >
+                {projects.map(proj => {
+                  const stats = calcFinancials(proj);
+
+                  return (
+                    <div
+                      key={proj.id}
+                      onClick={() => openDetail(proj)}
+                      className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm active:scale-[0.99] transition"
+                    >
+                      {/* Top */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-semibold text-slate-900 truncate">
+                            {proj.name}
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">
+                            {proj.client}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide shrink-0 ${STATUS_COLORS[proj.status]}`}
+                        >
+                          {proj.status}
+                        </span>
+                      </div>
+
+                      {/* Financials */}
+                      {canEditFinancials && (
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">
+                              Revenue
+                            </p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {formatINR(stats.revenue)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">
+                              Profit
+                            </p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {formatINR(stats.netProfit)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex justify-end gap-2 mt-4">
+                        {canManage && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEdit(proj);
+                              }}
+                              className="p-2 rounded-md hover:bg-blue-50 transition"
+                            >
+                              <Edit2 size={16} className="text-blue-600" />
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({ type: 'project', id: proj.id });
+                              }}
+                              className="p-2 rounded-md hover:bg-red-50 transition"
+                            >
+                              <Trash2 size={16} className="text-red-600" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DESKTOP VIEW */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-contrast-low">
-                      {['Name', 'Client', 'Status', ...(canEditFinancials ? ['Revenue', 'Est. Profit'] : []), 'Actions'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left">
-                          <PText size="xx-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide">
-                            {h}
-                          </PText>
+                    <tr className="border-b-2 border-slate-200">
+                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                        Name
+                      </th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                        Client
+                      </th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                        Status
+                      </th>
+
+                      {canEditFinancials && (
+                        <th className="text-right px-4 py-3 font-semibold text-slate-900">
+                          Revenue
                         </th>
-                      ))}
+                      )}
+
+                      {canEditFinancials && (
+                        <th className="text-right px-4 py-3 font-semibold text-slate-900">
+                          Est. Profit
+                        </th>
+                      )}
+
+                      <th className="text-center px-4 py-3 font-semibold text-slate-900">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {projects.map(project => {
-                      const isSelected = selectedProject?.id === project.id;
-                      const estProfit = (project.revenue ?? 0) - (project.estimated_cogs ?? 0);
+                    {projects.map(proj => {
+                      const stats = calcFinancials(proj);
+
                       return (
                         <tr
-                          key={project.id}
-                          onClick={() => isSelected ? closeDetail() : openDetail(project)}
-                          className={`border-b border-contrast-low last:border-0 cursor-pointer transition-colors ${
-                            isSelected
-                              ? 'bg-primary/5 border-l-2 border-l-primary'
-                              : 'hover:bg-canvas'
-                          }`}
+                          key={proj.id}
+                          onClick={() => openDetail(proj)}
+                          className="border-b border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
                         >
-                          <td className="px-4 py-3">
-                            <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
-                              {project.name}
-                            </PText>
-                            {project.start_date && (
-                              <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                                {new Date(project.start_date).toLocaleDateString('en-IN')}
-                              </PText>
-                            )}
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            {proj.name}
                           </td>
-                          <td className="px-4 py-3">
-                            <PText size="small" style={{ fontFamily: FONT }}>{project.client}</PText>
+
+                          <td className="px-4 py-3 text-slate-600">
+                            {proj.client}
                           </td>
+
                           <td className="px-4 py-3">
-                            <PTag color={STATUS_COLORS[project.status] || 'background-surface'}>
-                              {project.status}
-                            </PTag>
+                            <span
+                              className={`text-xs font-semibold px-2 py-1 rounded uppercase tracking-wide ${STATUS_COLORS[proj.status]}`}
+                            >
+                              {proj.status}
+                            </span>
                           </td>
+
                           {canEditFinancials && (
-                            <>
-                              <td className="px-4 py-3">
-                                <PText size="small" style={{ fontFamily: FONT }}>
-                                  {formatINR(project.revenue ?? 0)}
-                                </PText>
-                              </td>
-                              <td className="px-4 py-3">
-                                <PText
-                                  size="small"
-                                  color={estProfit >= 0 ? 'notification-success' : 'notification-error'}
-                                  style={{ fontFamily: FONT }}
-                                >
-                                  {formatINR(estProfit)}
-                                </PText>
-                              </td>
-                            </>
+                            <td className="px-4 py-3 text-right text-slate-600">
+                              {formatINR(stats.revenue)}
+                            </td>
                           )}
+
+                          {canEditFinancials && (
+                            <td className="px-4 py-3 text-right text-slate-600">
+                              {formatINR(stats.netProfit)}
+                            </td>
+                          )}
+
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              <button
-                                onClick={e => openEdit(project, e)}
-                                className="p-1.5 rounded hover:bg-contrast-low transition-colors"
-                                title="Edit project"
-                              >
-                                <PIcon name="edit" size="x-small" />
-                              </button>
-                              {isAdmin() && (
-                                <button
-                                  onClick={() => setDeleteTarget(project)}
-                                  className="p-1.5 rounded hover:bg-notification-error-soft transition-colors"
-                                  title="Delete project"
-                                >
-                                  <PIcon name="delete" size="x-small" color="notification-error" />
-                                </button>
+                            <div className="flex items-center justify-center gap-2">
+                              {canManage && (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEdit(proj);
+                                    }}
+                                    className="p-1 hover:bg-blue-100 rounded"
+                                  >
+                                    <Edit2 size={14} className="text-blue-600" />
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteTarget({ type: 'project', id: proj.id });
+                                    }}
+                                    className="p-1 hover:bg-red-100 rounded"
+                                  >
+                                    <Trash2 size={14} className="text-red-600" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -510,591 +800,613 @@ export default function Projects() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        {/* ── Detail Panel ──────────────────────────────────────────────────── */}
+        {/* Right panel: Detail panel */}
         {selectedProject && (
-          <div className="w-full lg:w-1/2 min-w-0 flex flex-col gap-4">
+          <div className="w-full lg:w-96 flex flex-col border-t lg:border-t-0 lg:border-l border-slate-200 pt-6 lg:pt-0 lg:pl-6 min-h-0">
             {/* Detail header */}
-            <div className="bg-surface rounded-xl border border-contrast-low p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <PHeading tag="h2" size="medium" style={{ fontFamily: FONT }}>
-                    {selectedProject.name}
-                  </PHeading>
-                  <PText size="small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                    {selectedProject.client}
-                  </PText>
-                </div>
-                <div className="flex items-center gap-2">
-                  <PTag color={STATUS_COLORS[selectedProject.status] || 'background-surface'}>
-                    {selectedProject.status}
-                  </PTag>
-                  <button
-                    onClick={closeDetail}
-                    className="p-1.5 rounded hover:bg-contrast-low transition-colors"
-                    title="Close detail"
-                  >
-                    <PIcon name="close" size="x-small" />
-                  </button>
-                </div>
+            <div className="pb-4 border-b border-slate-200 flex items-start justify-between">
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-slate-900">{selectedProject.name}</h2>
+                <p className="text-sm text-slate-600 mt-1">{selectedProject.client}</p>
+                {selectedProject.start_date && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    {new Date(selectedProject.start_date).toLocaleDateString()} {selectedProject.end_date ? `- ${new Date(selectedProject.end_date).toLocaleDateString()}` : ''}
+                  </p>
+                )}
               </div>
-
-              {selectedProject.description && (
-                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                  {selectedProject.description}
-                </PText>
-              )}
-
-              {(selectedProject.start_date || selectedProject.end_date) && (
-                <div className="flex gap-4 mt-3">
-                  {selectedProject.start_date && (
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                      Start: {new Date(selectedProject.start_date).toLocaleDateString('en-IN')}
-                    </PText>
-                  )}
-                  {selectedProject.end_date && (
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                      End: {new Date(selectedProject.end_date).toLocaleDateString('en-IN')}
-                    </PText>
-                  )}
-                </div>
-              )}
+              <button
+                onClick={closeDetail}
+                className="p-1 hover:bg-slate-100 rounded transition-colors"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            {/* Tab nav */}
-            <div className="flex gap-1 bg-surface rounded-xl border border-contrast-low p-1">
-              {(['overview', 'expenses', 'cash'] as const).map(tab => (
+            {/* Tabs */}
+            <div className="flex gap-2 mt-4 pb-3 border-b border-slate-200">
+              {(['overview', 'expenses', 'cash', 'tasks'] as const).map(tab => (
                 <button
                   key={tab}
-                  onClick={() => { setDetailTab(tab); setSubError(''); }}
-                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors capitalize ${
+                  onClick={() => setDetailTab(tab)}
+                  className={`text-xs font-semibold px-3 py-2 rounded transition-colors ${
                     detailTab === tab
-                      ? 'bg-primary text-background-base'
-                      : 'text-contrast-medium hover:text-primary hover:bg-canvas'
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
                   }`}
-                  style={{ fontFamily: FONT }}
                 >
-                  {tab === 'cash' ? 'Cash Received' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
             </div>
 
-            {detailLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <PText color="contrast-medium">Loading…</PText>
-              </div>
-            ) : (
-              <>
-                {/* ── Overview Tab ──────────────────────────────────────── */}
-                {detailTab === 'overview' && (() => {
-                  const f = calcFinancials(selectedProject);
-                  return (
-                    <div className="flex flex-col gap-4">
-                      {canEditFinancials ? (
-                        <>
-                          <div className="grid grid-cols-2 gap-3">
-                            <StatCard label="Revenue" value={formatINR(f.revenue)} />
-                            <StatCard label="Est. COGS" value={formatINR(f.estimatedCogs)} />
-                            <StatCard label="Actual COGS" value={formatINR(f.actualCogs)} sub="Sum of logged expenses" />
-                            <StatCard
-                              label="Net Profit"
-                              value={formatINR(f.profitBeforeDesign)}
-                              sub="Revenue − Actual COGS"
-                              highlight
-                            />
-                          </div>
-                          <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                            <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
-                              Derived Figures
-                            </PText>
-                            <div className="grid grid-cols-3 gap-3">
-                              <StatCard
-                                label={`Design Fee (${f.designFeePct}%)`}
-                                value={formatINR(f.designFee)}
-                                sub="% of Revenue"
-                              />
-                              <StatCard
-                                label="Incentive (20%)"
-                                value={formatINR(f.incentive)}
-                                sub="20% of Profit"
-                              />
-                              <StatCard
-                                label="Commission (1.5%)"
-                                value={formatINR(f.commission)}
-                                sub="1.5% of Profit"
-                              />
-                            </div>
-                          </div>
-                          <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                                  Total Cash Received
-                                </PText>
-                                <PText size="medium" weight="semi-bold" style={{ fontFamily: FONT }}>
-                                  {formatINR(f.totalCashReceived)}
-                                </PText>
-                              </div>
-                              <div className="text-right">
-                                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                                  Outstanding
-                                </PText>
-                                <PText
-                                  size="medium"
-                                  weight="semi-bold"
-                                  color={f.revenue - f.totalCashReceived > 0 ? 'notification-warning' : 'notification-success'}
-                                  style={{ fontFamily: FONT }}
-                                >
-                                  {formatINR(Math.max(0, f.revenue - f.totalCashReceived))}
-                                </PText>
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="bg-surface rounded-xl border border-contrast-low p-6 flex flex-col items-center gap-2">
-                          <PIcon name="lock" size="medium" color="contrast-low" />
-                          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-                            Financial details are visible to Finance department only.
-                          </PText>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto mt-4">
+              {detailLoading ? (
+                <p className="text-slate-600 text-sm">Loading...</p>
+              ) : detailTab === 'overview' && financials ? (
+                <div className="flex flex-col gap-6">
+                  {canEditFinancials ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <StatCard label="Revenue" value={financials.revenue} />
+                        <StatCard label="Est. COGS" value={financials.estCogs} />
+                        <StatCard label="Actual COGS" value={financials.actualCogs} />
+                        <StatCard label="Net Profit" value={financials.netProfit} />
+                      </div>
+                      <div className="border-t border-slate-200 pt-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <StatCard label="Design Fee" value={financials.designFee} />
+                            <StatCard label="Incentive" value={financials.incentive} />
 
-                {/* ── Expenses Tab ──────────────────────────────────────── */}
-                {detailTab === 'expenses' && (
-                  <div className="flex flex-col gap-4">
-                    {canManageSubEntries && (
-                      <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                        <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
-                          Add Expense
-                        </PText>
-                        <form onSubmit={handleAddExpense} className="flex flex-col gap-3">
-                          {subError && (
-                            <PInlineNotification
-                              heading="Error"
-                              description={subError}
-                              state="error"
-                              dismissButton={false}
-                            />
-                          )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField label="Description *">
-                              <input
-                                type="text"
-                                required
-                                value={expenseForm.description}
-                                onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))}
-                                className="form-input"
-                                placeholder="e.g. Material cost"
-                              />
-                            </FormField>
-                            <FormField label="Amount (₹) *">
-                              <input
-                                type="number"
-                                required
-                                min="0"
-                                step="0.01"
-                                value={expenseForm.amount}
-                                onChange={e => setExpenseForm(f => ({ ...f, amount: e.target.value }))}
-                                className="form-input"
-                                placeholder="0"
-                              />
-                            </FormField>
+                            <StatCard label="Commission" value={financials.commission} />
+                            <StatCard label="GST (18%)" value={financials.gstAmount} />
                           </div>
-                          <FormField label="Date *">
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center py-8">
+                      <p className="text-xs text-slate-500">Financials locked for non-finance users</p>
+                    </div>
+                  )}
+
+                    <div className="border-t border-slate-200 pt-4">
+                      <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-4">
+                        Cash Position
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <StatCard
+                          label="Total Received"
+                          value={financials.totalCashReceived}
+                          valueClassName="text-emerald-600"
+                        />
+
+                        <StatCard
+                          label="Outstanding"
+                          value={financials.outstanding}
+                          valueClassName="text-amber-600"
+                        />
+                      </div>
+                    </div>
+
+                  {selectedProject.description && (
+                    <div className="border-t border-slate-200 pt-4">
+                      <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-2">Description</h3>
+                      <p className="text-sm text-slate-600">{selectedProject.description}</p>
+                    </div>
+                  )}
+                </div>
+              ) : detailTab === 'expenses' ? (
+                <div className="flex flex-col gap-4">
+                  {canManageSubEntries && (
+                    <form onSubmit={handleAddExpense} className="flex flex-col gap-2">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[11px] text-slate-500 tracking-wide">
+                              Date (DD/MM/YYYY)
+                            </span>
+
                             <input
                               type="date"
-                              required
                               value={expenseForm.expense_date}
-                              onChange={e => setExpenseForm(f => ({ ...f, expense_date: e.target.value }))}
-                              className="form-input"
+                              onChange={e =>
+                                setExpenseForm(f => ({
+                                  ...f,
+                                  expense_date: e.target.value,
+                                }))
+                              }
+                              className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
                             />
-                          </FormField>
-                          <div className="flex justify-end">
-                            <PButton type="submit" loading={subSaving} icon="add">
-                              Add Expense
-                            </PButton>
                           </div>
-                        </form>
-                      </div>
-                    )}
+                      <input
+                        type="text"
+                        placeholder="Description"
+                        value={expenseForm.description}
+                        onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))}
+                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        value={expenseForm.amount === 0 ? '' : expenseForm.amount}
+                            onChange={e =>
+                              setExpenseForm(f => ({
+                                ...f,
+                                amount: e.target.value === '' ? 0 : Number(e.target.value),
+                              }))
+                            }
+                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                      />
+                      {subError && <p className="text-xs text-red-600">{subError}</p>}
+                      <Button type="submit" size="sm" disabled={subSaving}>
+                        Add Expense
+                      </Button>
+                    </form>
+                  )}
 
-                    <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
-                      {expenses.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8">
-                          <PIcon name="document" size="medium" color="contrast-low" />
-                          <PText color="contrast-medium" className="mt-2" style={{ fontFamily: FONT }}>
-                            No expenses logged yet.
-                          </PText>
+                  <div className="flex flex-col gap-2">
+                    {expenses.map(exp => (
+                      <div key={exp.id} className="flex justify-between items-center p-2 bg-slate-50 rounded">
+                        <div>
+                          <p className="text-xs font-medium">{exp.description}</p>
+                          <p className="text-xs text-slate-500">{new Date(exp.expense_date).toLocaleDateString()}</p>
                         </div>
-                      ) : (
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-contrast-low">
-                              {['Date', 'Description', 'Amount', ...(canManageSubEntries ? [''] : [])].map((h, i) => (
-                                <th key={i} className="px-4 py-3 text-left">
-                                  <PText size="xx-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide">
-                                    {h}
-                                  </PText>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {expenses.map(exp => (
-                              <tr key={exp.id} className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors">
-                                <td className="px-4 py-2">
-                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                                    {new Date(exp.expense_date).toLocaleDateString('en-IN')}
-                                  </PText>
-                                </td>
-                                <td className="px-4 py-2">
-                                  <PText size="x-small" style={{ fontFamily: FONT }}>{exp.description}</PText>
-                                </td>
-                                <td className="px-4 py-2">
-                                  <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
-                                    {formatINR(exp.amount)}
-                                  </PText>
-                                </td>
-                                {canManageSubEntries && (
-                                  <td className="px-4 py-2">
-                                    <button
-                                      onClick={() => handleDeleteExpense(exp.id)}
-                                      className="p-1 rounded hover:bg-notification-error-soft transition-colors"
-                                      title="Delete expense"
-                                    >
-                                      <PIcon name="delete" size="x-small" color="notification-error" />
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="border-t-2 border-contrast-low bg-canvas">
-                              <td colSpan={2} className="px-4 py-2">
-                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
-                                  Total
-                                </PText>
-                              </td>
-                              <td className="px-4 py-2" colSpan={canManageSubEntries ? 2 : 1}>
-                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
-                                  {formatINR(expenses.reduce((s, x) => s + (x.amount ?? 0), 0))}
-                                </PText>
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Cash Received Tab ─────────────────────────────────── */}
-                {detailTab === 'cash' && (
-                  <div className="flex flex-col gap-4">
-                    {canManageSubEntries && (
-                      <div className="bg-surface rounded-xl border border-contrast-low p-4">
-                        <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
-                          Add Cash Received
-                        </PText>
-                        <form onSubmit={handleAddCash} className="flex flex-col gap-3">
-                          {subError && (
-                            <PInlineNotification
-                              heading="Error"
-                              description={subError}
-                              state="error"
-                              dismissButton={false}
-                            />
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">{formatINR(exp.amount)}</p>
+                          {canManageSubEntries && (
+                            <button
+                              onClick={() => setDeleteTarget({ type: 'expense', id: exp.id })}
+                              className="p-1 hover:bg-red-100 rounded"
+                            >
+                              <Trash2 size={12} className="text-red-600" />
+                            </button>
                           )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField label="Description *">
-                              <input
-                                type="text"
-                                required
-                                value={cashForm.description}
-                                onChange={e => setCashForm(f => ({ ...f, description: e.target.value }))}
-                                className="form-input"
-                                placeholder="e.g. Milestone 1 payment"
-                              />
-                            </FormField>
-                            <FormField label="Amount (₹) *">
-                              <input
-                                type="number"
-                                required
-                                min="0"
-                                step="0.01"
-                                value={cashForm.amount}
-                                onChange={e => setCashForm(f => ({ ...f, amount: e.target.value }))}
-                                className="form-input"
-                                placeholder="0"
-                              />
-                            </FormField>
-                          </div>
-                          <FormField label="Date *">
-                            <input
-                              type="date"
-                              required
-                              value={cashForm.received_date}
-                              onChange={e => setCashForm(f => ({ ...f, received_date: e.target.value }))}
-                              className="form-input"
-                            />
-                          </FormField>
-                          <div className="flex justify-end">
-                            <PButton type="submit" loading={subSaving} icon="add">
-                              Add Entry
-                            </PButton>
-                          </div>
-                        </form>
+                        </div>
+                      </div>
+                    ))}
+                    {expenses.length > 0 && (
+                      <div className="flex justify-between items-center p-2 bg-slate-100 rounded font-semibold border-t-2">
+                        <p className="text-xs">Total</p>
+                        <p className="text-sm font-bold text-red-600">{formatINR(expenses.reduce((sum, e) => sum + e.amount, 0))}</p>
                       </div>
                     )}
-
-                    <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
-                      {cashReceived.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8">
-                          <PIcon name="purchase" size="medium" color="contrast-low" />
-                          <PText color="contrast-medium" className="mt-2" style={{ fontFamily: FONT }}>
-                            No payments recorded yet.
-                          </PText>
-                        </div>
-                      ) : (
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-contrast-low">
-                              {['Date', 'Description', 'Amount', ...(canManageSubEntries ? [''] : [])].map((h, i) => (
-                                <th key={i} className="px-4 py-3 text-left">
-                                  <PText size="xx-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide">
-                                    {h}
-                                  </PText>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {cashReceived.map(entry => (
-                              <tr key={entry.id} className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors">
-                                <td className="px-4 py-2">
-                                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                                    {new Date(entry.received_date).toLocaleDateString('en-IN')}
-                                  </PText>
-                                </td>
-                                <td className="px-4 py-2">
-                                  <PText size="x-small" style={{ fontFamily: FONT }}>{entry.description}</PText>
-                                </td>
-                                <td className="px-4 py-2">
-                                  <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
-                                    {formatINR(entry.amount)}
-                                  </PText>
-                                </td>
-                                {canManageSubEntries && (
-                                  <td className="px-4 py-2">
-                                    <button
-                                      onClick={() => handleDeleteCash(entry.id)}
-                                      className="p-1 rounded hover:bg-notification-error-soft transition-colors"
-                                      title="Delete entry"
-                                    >
-                                      <PIcon name="delete" size="x-small" color="notification-error" />
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="border-t-2 border-contrast-low bg-canvas">
-                              <td colSpan={2} className="px-4 py-2">
-                                <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
-                                  Total Received
-                                </PText>
-                              </td>
-                              <td className="px-4 py-2" colSpan={canManageSubEntries ? 2 : 1}>
-                                <PText size="x-small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
-                                  {formatINR(cashReceived.reduce((s, x) => s + (x.amount ?? 0), 0))}
-                                </PText>
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      )}
-                    </div>
                   </div>
-                )}
-              </>
-            )}
+                </div>
+              ) : detailTab === 'cash' ? (
+                <div className="flex flex-col gap-4">
+                  {canManageSubEntries && (
+                          <form onSubmit={handleAddCash} className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                              {/* Date */}
+                              <div className="flex flex-col gap-1 flex-1">
+                                <span className="text-[11px] text-slate-500 tracking-wide">
+                                  Date (DD/MM/YYYY)
+                                </span>
+
+                                <input
+                                  type="date"
+                                  value={cashForm.received_date}
+                                  onChange={e =>
+                                    setCashForm(f => ({
+                                      ...f,
+                                      received_date: e.target.value,
+                                    }))
+                                  }
+                                  className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                                />
+                              </div>
+
+                              {/* GST Dropdown */}
+                              <div className="flex flex-col gap-1 w-40">
+                                <span className="text-[11px] text-slate-500 tracking-wide">
+                                  GST Treatment
+                                </span>
+
+                                <select
+                                  value={cashForm.gst_treatment}
+                                  onChange={e =>
+                                    setCashForm(f => ({
+                                      ...f,
+                                      gst_treatment: e.target.value as 'GST' | 'NO_GST',
+                                    }))
+                                  }
+                                  className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                                >
+                                  <option value="GST">GST 18%</option>
+                                  <option value="NO_GST">No GST 0%</option>
+                                </select>
+                              </div>
+                            </div>
+                      <input
+                        type="text"
+                        placeholder="Description"
+                        value={cashForm.description}
+                        onChange={e => setCashForm(f => ({ ...f, description: e.target.value }))}
+                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                              value={cashForm.amount === 0 ? '' : cashForm.amount}
+                              onChange={e =>
+                                setCashForm(f => ({
+                                  ...f,
+                                  amount: e.target.value === '' ? 0 : Number(e.target.value),
+                                }))
+                              }  
+                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                      />
+                      {subError && <p className="text-xs text-red-600">{subError}</p>}
+                      <Button type="submit" size="sm" disabled={subSaving}>
+                        Add Entry
+                      </Button>
+                    </form>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    {cashReceived.map(cash => (
+                      <div key={cash.id} className="flex justify-between items-center p-2 bg-slate-50 rounded">
+                        <div>
+                          <p className="text-xs font-medium">{cash.description}</p>
+                          <p className="text-xs text-slate-500">{new Date(cash.received_date).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">{formatINR(cash.amount)}</p>
+                          {canManageSubEntries && (
+                            <button
+                              onClick={() => setDeleteTarget({ type: 'cash', id: cash.id })}
+                              className="p-1 hover:bg-red-100 rounded"
+                            >
+                              <Trash2 size={12} className="text-red-600" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {cashReceived.length > 0 && (
+                      <div className="flex justify-between items-center p-2 bg-slate-100 rounded font-semibold border-t-2">
+                        <p className="text-xs">Total Received</p>
+                        <p className="text-sm font-bold text-emerald-600">{formatINR(cashReceived.reduce((sum, c) => sum + c.amount, 0))}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : detailTab === 'tasks' ? (
+                <div className="flex flex-col gap-6">
+                  {tasks.length === 0 ? (
+                    <div className="flex items-center justify-center py-8">
+                      <p className="text-sm text-slate-500">
+                        No tasks found for this project
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {(
+                        [
+                          'Not Started',
+                          'Ongoing',
+                          'Overdue',
+                          'Completed',
+                        ] as TaskStatus[]
+                      ).map(status => {
+                        const filtered = tasks.filter(
+                          t => t.effectiveStatus === status
+                        );
+
+                        if (filtered.length === 0) return null;
+
+                        return (
+                          <div key={status}>
+                            {/* Section Header */}
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                {status}
+                              </h3>
+
+                              <span className="text-xs text-slate-400">
+                                {filtered.length}
+                              </span>
+                            </div>
+
+                            {/* Cards */}
+                            <div className="flex flex-col gap-3">
+                              {filtered.map(task => (
+                                <button
+                                  key={task.id}
+                                  onClick={() => setSelectedTask(task)}
+                                  className="w-full text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition"
+                                >
+                                  {/* Top */}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <h3 className="text-sm font-semibold text-slate-900 truncate">
+                                        {task.title}
+                                      </h3>
+
+                                      {task.description && (
+                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                                          {task.description}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <span
+                                      className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shrink-0 ${task.effectiveStatus === 'Completed'
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : task.effectiveStatus === 'Overdue'
+                                            ? 'bg-red-100 text-red-700'
+                                            : task.effectiveStatus === 'Ongoing'
+                                              ? 'bg-blue-100 text-blue-700'
+                                              : 'bg-slate-100 text-slate-700'
+                                        }`}
+                                    >
+                                      {task.effectiveStatus}
+                                    </span>
+                                  </div>
+
+                                  {/* Assignee + Deadline */}
+                                  <div className="flex flex-wrap items-center gap-3 mt-3">
+                                    {task.assignee && (
+                                      <div className="text-[11px] text-slate-600">
+                                        Assigned to:{' '}
+                                        <span className="font-medium">
+                                          {task.assignee.full_name}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {task.deadline && (
+                                      <div className="text-[11px] text-slate-600">
+                                        Due:{' '}
+                                        <span className="font-medium">
+                                          {new Date(
+                                            task.deadline
+                                          ).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {task.overdueByDays && (
+                                      <div className="text-[11px] text-red-600 font-medium">
+                                        {task.overdueByDays} day(s) late
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Subtasks Progress */}
+                                  {task.subtasks.length > 0 && (
+                                    <div className="mt-3">
+                                      <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                                        <span>Subtasks</span>
+
+                                        <span>
+                                          {
+                                            task.subtasks.filter(
+                                              s => s.is_completed
+                                            ).length
+                                          }{' '}
+                                          / {task.subtasks.length}
+                                        </span>
+                                      </div>
+
+                                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-slate-900 rounded-full transition-all"
+                                          style={{
+                                            width: `${(task.subtasks.filter(
+                                              s => s.is_completed
+                                            ).length /
+                                                task.subtasks.length) *
+                                              100
+                                              }%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── Create / Edit Project Modal ──────────────────────────────────────── */}
-      <PModal
-        open={showModal}
-        onDismiss={() => !saving && setShowModal(false)}
-        heading={editingProject ? 'Edit Project' : 'New Project'}
-        aria={{ 'aria-label': 'Project form' }}
-      >
-        <form onSubmit={handleSave} className="flex flex-col gap-4">
-          {modalError && (
-            <PInlineNotification
-              heading="Error"
-              description={modalError}
-              state="error"
-              dismissButton={false}
-            />
-          )}
-
-          <div className="grid grid-cols-1 gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Project Name *">
-                <input
-                  type="text"
-                  required
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="form-input"
-                  placeholder="e.g. Office Interior — Phase 1"
-                />
-              </FormField>
-              <FormField label="Client *">
-                <input
-                  type="text"
-                  required
-                  value={form.client}
-                  onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
-                  className="form-input"
-                  placeholder="Client name"
-                />
-              </FormField>
+      {/* Create/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-bold">
+                {editingProject ? 'Edit Project' : 'New Project'}
+              </h2>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Status">
-                <select
-                  value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value as Project['status'] }))}
-                  className="form-input"
-                >
-                  {PROJECT_STATUSES.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </FormField>
-              <FormField label="Design Fee %">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={form.design_fee_pct}
-                  onChange={e => setForm(f => ({ ...f, design_fee_pct: e.target.value }))}
-                  className="form-input"
-                  disabled={!canEditFinancials}
-                />
-              </FormField>
-            </div>
+            <form onSubmit={handleSaveProject} className="flex flex-col gap-4 p-6">
+              {modalError && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-sm text-red-900">{modalError}</p>
+                </div>
+              )}
 
-            {canEditFinancials && (
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Revenue (₹)">
+                <FormField label="Project Name" required>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.revenue}
-                    onChange={e => setForm(f => ({ ...f, revenue: e.target.value }))}
-                    className="form-input"
-                    placeholder="0"
+                    type="text"
+                    required
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                    placeholder="Project name"
                   />
                 </FormField>
-                <FormField label="Estimated COGS (₹)">
+
+                <FormField label="Client" required>
+                  <input
+                    type="text"
+                    required
+                    value={form.client}
+                    onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                    placeholder="Client name"
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Status">
+                  <select
+                    value={form.status}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                  >
+                    {PROJECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </FormField>
+
+                <FormField label="Design Fee %">
                   <input
                     type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.estimated_cogs}
-                    onChange={e => setForm(f => ({ ...f, estimated_cogs: e.target.value }))}
-                    className="form-input"
+                    value={form.design_fee_pct}
+                    onChange={e => setForm(f => ({ ...f, design_fee_pct: parseFloat(e.target.value) || 0 }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
                     placeholder="0"
                   />
                 </FormField>
               </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Start Date">
-                <input
-                  type="date"
-                  value={form.start_date}
-                  onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                  className="form-input"
+              {canEditFinancials && (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Revenue">
+                    <input
+                      type="number"
+                      value={form.revenue}
+                      onChange={e => setForm(f => ({ ...f, revenue: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                      placeholder="0"
+                    />
+                  </FormField>
+
+                  <FormField label="Est. COGS">
+                    <input
+                      type="number"
+                      value={form.estimated_cogs}
+                      onChange={e => setForm(f => ({ ...f, estimated_cogs: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                      placeholder="0"
+                    />
+                  </FormField>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Start Date">
+                  <input
+                    type="date"
+                    value={form.start_date}
+                    onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                  />
+                </FormField>
+
+                <FormField label="End Date">
+                  <input
+                    type="date"
+                    value={form.end_date}
+                    onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                  />
+                </FormField>
+              </div>
+
+              <FormField label="Description">
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900 resize-none"
+                  placeholder="Optional description"
                 />
               </FormField>
-              <FormField label="End Date">
-                <input
-                  type="date"
-                  value={form.end_date}
-                  onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
-                  className="form-input"
-                />
-              </FormField>
-            </div>
 
-            <FormField label="Description">
-              <textarea
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                rows={3}
-                className="form-input resize-none"
-                placeholder="Project scope, notes…"
-              />
-            </FormField>
-          </div>
-
-          <div className="flex gap-3 justify-end pt-2">
-            <PButton
-              type="button"
-              variant="secondary"
-              onClick={() => setShowModal(false)}
-              disabled={saving}
-            >
-              Cancel
-            </PButton>
-            <PButton type="submit" loading={saving}>
-              {editingProject ? 'Save Changes' : 'Create Project'}
-            </PButton>
-          </div>
-        </form>
-      </PModal>
-
-      {/* ── Delete Confirmation Modal ─────────────────────────────────────────── */}
-      <PModal
-        open={!!deleteTarget}
-        onDismiss={() => setDeleteTarget(null)}
-        heading="Delete Project"
-        aria={{ 'aria-label': 'Delete project confirmation' }}
-      >
-        <div className="flex flex-col gap-4">
-          <PInlineNotification
-            heading="This action is permanent"
-            description={`All expenses and cash received entries for "${deleteTarget?.name}" will also be deleted. This cannot be undone.`}
-            state="warning"
-            dismissButton={false}
-          />
-          <div className="flex gap-3 justify-end">
-            <PButton variant="secondary" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </PButton>
-            <PButton onClick={handleDelete} icon="delete">
-              Delete Project
-            </PButton>
+              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? 'Saving...' : (editingProject ? 'Save Changes' : 'Create Project')}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-      </PModal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-sm w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-red-900 mb-2">Delete Confirmation</h3>
+              <p className="text-sm text-slate-600 mb-4">
+                {deleteTarget.type === 'project'
+                  ? 'This action will permanently delete the project and all associated expenses and cash records. This cannot be undone.'
+                  : 'This action cannot be undone.'}
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteTarget(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    if (deleteTarget.type === 'project') {
+                      await handleDeleteProject(deleteTarget.id);
+                    } else if (deleteTarget.type === 'expense') {
+                      await handleDeleteExpense(deleteTarget.id);
+                    } else {
+                      await handleDeleteCash(deleteTarget.id);
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <TaskDetailModal
+        task={selectedTask}
+        open={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        departments={departments}
+        canManage={canManage}
+        onRefresh={() => {
+          if (selectedProject) {
+            fetchProjectDetail(selectedProject.id);
+          }
+        }}
+      />
     </div>
   );
 }

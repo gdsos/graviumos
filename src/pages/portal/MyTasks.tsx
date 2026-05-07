@@ -1,17 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ——— Types ————————————————————————————————————————————————————————————————————
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
@@ -44,9 +36,9 @@ const EMPTY_FORM: TaskFormState = {
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="flex flex-col gap-1.5">
       <label
-        className="block text-xs font-medium text-contrast-high mb-1.5"
+        className="block text-xs font-medium text-contrast-high"
         style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
       >
         {label}
@@ -56,7 +48,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -76,7 +68,7 @@ const STATUS_COLUMN_BG: Record<TaskStatus, string> = {
   Completed: 'bg-success-soft/30',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function calcEffectiveStatus(task: Task): TaskStatus {
   if (task.status === 'Completed') return 'Completed';
@@ -107,7 +99,7 @@ function isOverdue(deadline: string | null): boolean {
   return new Date(deadline) < new Date();
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function ProgressBar({ value }: { value: number }) {
   const color = value === 100 ? '#2e7d32' : value >= 75 ? '#0288d1' : '#ed6c02';
@@ -195,7 +187,7 @@ function TaskCard({ task, onClick }: TaskCardProps) {
   );
 }
 
-// ─── Kanban Column ────────────────────────────────────────────────────────────
+// ——— Kanban Column ————————————————————————————————————————————————————————————
 
 interface KanbanColumnProps {
   status: TaskStatus;
@@ -238,7 +230,7 @@ function KanbanColumn({ status, tasks, onCardClick }: KanbanColumnProps) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function MyTasks() {
   const { profile, departments, isDeptHead, isAdmin } = useAuth();
@@ -254,6 +246,7 @@ export default function MyTasks() {
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const deadlineDateRef = useRef<HTMLInputElement>(null);
 
   const [detailTask, setDetailTask] = useState<TaskWithDetails | null>(null);
@@ -270,7 +263,7 @@ export default function MyTasks() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [addingSubtask, setAddingSubtask] = useState(false);
 
-  // ─── Fetch profiles ─────────────────────────────────────────────────────
+  // ——— Fetch profiles —————————————————————————————————————————————————————
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase
       .from('profiles')
@@ -279,7 +272,18 @@ export default function MyTasks() {
     setAllProfiles((data as Profile[]) || []);
   }, []);
 
-  // ─── Fetch tasks ────────────────────────────────────────────────────────
+  const fetchProjects = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name')
+      .order('name');
+
+    if (!error && data) {
+      setProjects(data);
+    }
+  }, []);
+
+  // ——— Fetch tasks ————————————————————————————————————————————————————————
 
   const fetchTasks = useCallback(async () => {
     if (!profile) return;
@@ -354,9 +358,10 @@ export default function MyTasks() {
   useEffect(() => {
     fetchTasks();
     fetchProfiles();
-  }, [fetchTasks, fetchProfiles]);
+    fetchProjects();
+  }, [fetchTasks, fetchProfiles, fetchProjects]);
 
-  // ─── Create task ─────────────────────────────────────────────────────────
+  // ——— Create task —————————————————————————————————————————————————————————
 
   const openCreateModal = () => {
     if (profile?.department_ids?.[0]) {
@@ -408,7 +413,7 @@ export default function MyTasks() {
     fetchTasks();
   };
 
-  // ─── Subtask operations ────────────────────────────────────────────────────
+  // ——— Subtask operations ————————————————————————————————————————————————————
 
   const handleToggleSubtask = async (subtask: Subtask) => {
     if (!detailTask) return;
@@ -486,7 +491,7 @@ export default function MyTasks() {
     fetchTasks();
   };
 
-  // ─── Open detail ─────────────────────────────────────────────────────────
+  // ——— Open detail —————————————————————————————————————————————————————————
 
   const openDetail = (task: TaskWithDetails) => {
     setDetailTask(task);
@@ -516,7 +521,7 @@ export default function MyTasks() {
   }, [tasks]);
 
 
-  // ─── Save status / progress ───────────────────────────────────────────────
+  // ——— Save status / progress ———————————————————————————————————————————————
 
   const recalculateKpi = async (userId: string) => {
     const { data: userTasks } = await supabase
@@ -572,14 +577,14 @@ export default function MyTasks() {
     }
   };
 
-  // ─── Filter tasks by tab for department heads ────────────────────────────
+  // ——— Filter tasks by tab for department heads ————————————————————————————
 
   const isDeptHeadOnly = isDeptHead() && !isAdmin();
   const filteredTasks = isDeptHeadOnly && activeTab === 'assigned'
     ? tasks.filter(t => t.assigned_to === profile?.id)
     : tasks;
 
-  // ─── Grouped tasks ────────────────────────────────────────────────────────
+  // ——— Grouped tasks ————————————————————————————————————————————————————————
 
   const grouped = filteredTasks.reduce<Record<TaskStatus, TaskWithDetails[]>>(
     (acc, t) => {
@@ -591,7 +596,7 @@ export default function MyTasks() {
 
   const totalTasks = filteredTasks.length;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-full" style={{ fontFamily: FONT }}>
@@ -674,7 +679,7 @@ export default function MyTasks() {
         </div>
       )}
 
-      {/* ── Task Detail Modal ─────────────────────────────────────────────── */}
+      {/* —— Task Detail Modal ——————————————————————————————————————————————— */}
       {detailTask && (
         <PModal
           open={showDetailModal}
@@ -911,7 +916,7 @@ export default function MyTasks() {
         </PModal>
       )}
 
-      {/* ── Create Task Modal (for dept heads) ────────────────────────────── */}
+      {/* —— Create Task Modal (for dept heads) —————————————————————————————— */}
       {isDeptHead() && !isAdmin() && (
         <PModal
           open={showCreateModal}
@@ -982,6 +987,21 @@ export default function MyTasks() {
               </FormField>
             </div>
 
+            {projects.length > 0 && (
+              <FormField label="Project">
+                <select
+                  value={createForm.project_id}
+                  onChange={e => setCreateForm(f => ({ ...f, project_id: e.target.value }))}
+                  className="form-input"
+                >
+                  <option value="">— No Project —</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </FormField>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Deadline Date">
                 <div className="relative">
@@ -1029,7 +1049,7 @@ export default function MyTasks() {
         </PModal>
       )}
 
-      {/* ── Task Detail Modal (for dept heads to manage tasks) ─────────────── */}
+      {/* —— Task Detail Modal (for dept heads to manage tasks) ——————————————— */}
       {isDeptHead() && !isAdmin() && detailTask && (
         <PModal
           open={showDetailModal}
@@ -1218,3 +1238,6 @@ export default function MyTasks() {
     </div>
   );
 }
+
+
+

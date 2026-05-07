@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PModal,
-  PInlineNotification,
-} from '@porsche-design-system/components-react';
-import {
   supabase,
   type Project,
   type Task,
@@ -19,8 +10,9 @@ import {
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminProjects from '../admin/Projects';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ——— Types ————————————————————————————————————————————————————————————————————
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 type StatusFilter = 'All' | Project['status'];
@@ -31,7 +23,7 @@ interface TaskWithDetails extends Task {
   overdueByDays?: number;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -51,7 +43,7 @@ const TASK_STATUS_VARIANT: Record<TaskStatus, Parameters<typeof PTag>[0]['varian
   Completed: 'success',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function calcEffectiveStatus(task: Task): TaskStatus {
   if (task.status === 'Completed') return 'Completed';
@@ -92,7 +84,7 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
-// ─── Main Export ───────────────────────────────────────────────────────────────
+// ——— Main Export ———————————————————————————————————————————————————————————————
 
 export default function PortalProjects() {
   const { isFinance, isDeptHead } = useAuth();
@@ -105,7 +97,7 @@ export default function PortalProjects() {
   return <PortalProjectsView />;
 }
 
-// ─── Employee Portal Projects View ────────────────────────────────────────────
+// ——— Employee Portal Projects View ————————————————————————————————————————————
 
 function PortalProjectsView() {
   const { userDepartments, isFinance, isAdmin } = useAuth();
@@ -620,3 +612,6 @@ function PortalProjectsView() {
     </div>
   );
 }
+
+
+

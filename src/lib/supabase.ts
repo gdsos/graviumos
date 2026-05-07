@@ -85,6 +85,7 @@ export interface ProjectCashReceived {
   project_id: string;
   description: string;
   amount: number;
+  gst_treatment: 'GST' | 'NO_GST';
   received_date: string;
   created_by: string | null;
   created_at: string;

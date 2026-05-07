@@ -1,20 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PInlineNotification,
-  PModal,
-} from '@porsche-design-system/components-react';
-import {
   supabase,
   type ApprovalRequest,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
@@ -27,7 +19,7 @@ interface ProfileFormState {
   twitter: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function FormField({
   label,
@@ -69,7 +61,7 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ─── KPI Progress Bar ─────────────────────────────────────────────────────────
+// ——— KPI Progress Bar —————————————————————————————————————————————————————————
 
 function KpiBar({ score }: { score: number }) {
   const pct = Math.min(Math.max((score / 10) * 100, 0), 100);
@@ -101,7 +93,7 @@ function KpiBar({ score }: { score: number }) {
   );
 }
 
-// ─── Avatar component ─────────────────────────────────────────────────────────
+// ——— Avatar component —————————————————————————————————————————————————————————
 
 function Avatar({ url, name }: { url: string; name: string }) {
   const initials = name
@@ -137,7 +129,7 @@ function Avatar({ url, name }: { url: string; name: string }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function ProfilePage() {
   const { profile, userDepartments, refreshProfile } = useAuth();
@@ -185,7 +177,7 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  // ─── Init form from profile ─────────────────────────────────────────────
+  // ——— Init form from profile —————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -200,7 +192,7 @@ export default function ProfilePage() {
     setFormDirty(false);
   }, [profile]);
 
-  // ─── Fetch task count ───────────────────────────────────────────────────
+  // ——— Fetch task count ———————————————————————————————————————————————————
 
   useEffect(() => {
     if (!profile) return;
@@ -213,7 +205,7 @@ export default function ProfilePage() {
     })();
   }, [profile]);
 
-  // ─── Fetch pending name change request ──────────────────────────────────
+  // ——— Fetch pending name change request ——————————————————————————————————
 
   const fetchNameRequest = useCallback(async () => {
     if (!profile) return;
@@ -233,7 +225,7 @@ export default function ProfilePage() {
     fetchNameRequest();
   }, [fetchNameRequest]);
 
-  // ─── Handle profile save ────────────────────────────────────────────────
+  // ——— Handle profile save ————————————————————————————————————————————————
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,7 +260,7 @@ export default function ProfilePage() {
     }
   };
 
-  // ─── Handle name change request ──────────────────────────────────────────
+  // ——— Handle name change request ——————————————————————————————————————————
 
   const handleRequestNameChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -325,7 +317,7 @@ export default function ProfilePage() {
     setFormDirty(true);
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————
 
   if (!profile) {
     return (
@@ -368,7 +360,7 @@ export default function ProfilePage() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {/* ── Identity Card ──────────────────────────────────────────────── */}
+        {/* —— Identity Card ———————————————————————————————————————————————— */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <div className="flex flex-col sm:flex-row gap-5 items-start">
             {/* Avatar */}
@@ -430,7 +422,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Name Change Section ──────────────────────────────────────────── */}
+        {/* —— Name Change Section ———————————————————————————————————————————— */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
@@ -491,7 +483,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Editable Profile Fields ──────────────────────────────────────── */}
+        {/* —— Editable Profile Fields ———————————————————————————————————————— */}
         <form onSubmit={handleSave} className="bg-surface rounded-2xl border border-contrast-low p-6">
           <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
             Personal Details
@@ -686,7 +678,7 @@ export default function ProfilePage() {
           </div>
         </form>
 
-        {/* ── Account info (readonly) ──────────────────────────────────────── */}
+        {/* —— Account info (readonly) ———————————————————————————————————————— */}
         <div className="bg-surface rounded-2xl border border-contrast-low p-6">
           <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
             Account Information
@@ -708,7 +700,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Name Change Modal ──────────────────────────────────────────────── */}
+      {/* —— Name Change Modal ———————————————————————————————————————————————— */}
       <PModal
         open={showNameModal}
         onDismiss={() => !nameRequestLoading && setShowNameModal(false)}
@@ -785,3 +777,6 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+
+

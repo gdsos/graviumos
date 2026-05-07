@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading, PText, PButton, PTag, PIcon, PModal, PSwitch, PInlineNotification,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon, PSwitch } from '@/components/ui/porsche';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ——— Types ———————————————————————————————————————————————————————————————————
 
 interface ProfileWithDepts extends Profile {
   departmentNames: string[];
@@ -53,7 +53,7 @@ const EMPTY_FORM: EmployeeForm = {
   professional_tax_enabled: false,
 };
 
-// ─── Employee Code Generation ─────────────────────────────────────────────────
+// ——— Employee Code Generation —————————————————————————————————————————————————
 
 async function generateEmployeeCode(deptCode: string): Promise<string> {
   const year = new Date().getFullYear();
@@ -77,14 +77,14 @@ async function generateEmployeeCode(deptCode: string): Promise<string> {
   return `GDS${year}${deptCode}${nextNumber}`;
 }
 
-// ─── FormField helper ─────────────────────────────────────────────────────────
+// ——— FormField helper —————————————————————————————————————————————————————————
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <label
         className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+        style={{ fontFamily: "'Neue Montreal', sans-serif" }}
       >
         {label}
       </label>
@@ -93,7 +93,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function People() {
   const { profile: _currentUserProfile, departments, isAdmin, suppressAuthChanges } = useAuth();
@@ -120,7 +120,7 @@ export default function People() {
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ─── Fetch ──────────────────────────────────────────────────────────────────
+  // ——— Fetch ——————————————————————————————————————————————————————————————————
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -149,7 +149,7 @@ export default function People() {
     if (departments.length > 0) fetchEmployees();
   }, [fetchEmployees, departments]);
 
-  // ─── Department head check ───────────────────────────────────────────────────
+  // ——— Department head check ———————————————————————————————————————————————————
 
   const checkDeptHeadConflict = useCallback(
     (newRole: string, selectedDeptIds: string[], excludeId?: string): string => {
@@ -172,7 +172,7 @@ export default function People() {
     [employees, departments]
   );
 
-  // ─── Employee code preview ───────────────────────────────────────────────────
+  // ——— Employee code preview ———————————————————————————————————————————————————
 
   useEffect(() => {
     if (editingEmployee) { setPreviewCode(''); return; }
@@ -199,7 +199,7 @@ export default function People() {
     fetchPreview();
   }, [form.department_ids, departments, editingEmployee]);
 
-  // ─── Dept head warning ───────────────────────────────────────────────────────
+  // ——— Dept head warning ———————————————————————————————————————————————————————
 
   useEffect(() => {
     const warning = checkDeptHeadConflict(
@@ -210,7 +210,7 @@ export default function People() {
     setDeptHeadWarning(warning);
   }, [form.role, form.department_ids, editingEmployee, checkDeptHeadConflict]);
 
-  // ─── Modal helpers ───────────────────────────────────────────────────────────
+  // ——— Modal helpers ———————————————————————————————————————————————————————————
 
   const openCreate = () => {
     setEditingEmployee(null);
@@ -242,7 +242,7 @@ export default function People() {
     setShowModal(true);
   };
 
-  // ─── Toggle dept selection ───────────────────────────────────────────────────
+  // ——— Toggle dept selection ———————————————————————————————————————————————————
 
   const toggleDept = (deptId: string) => {
     setForm(f => {
@@ -256,7 +256,7 @@ export default function People() {
     });
   };
 
-  // ─── Save (create or update) ─────────────────────────────────────────────────
+  // ——— Save (create or update) —————————————————————————————————————————————————
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,7 +265,7 @@ export default function People() {
 
     try {
       if (editingEmployee) {
-        // ── UPDATE existing employee ──
+        // —— UPDATE existing employee ——
         const updates: Partial<Profile> = {
           full_name: form.full_name,
           role: form.role,
@@ -287,7 +287,7 @@ export default function People() {
 
         if (updateErr) throw new Error(updateErr.message);
       } else {
-        // ── CREATE new employee ──
+        // —— CREATE new employee ——
         if (!form.email || !form.password) {
           throw new Error('Email and password are required.');
         }
@@ -358,7 +358,7 @@ export default function People() {
     }
   };
 
-  // ─── Toggle active ────────────────────────────────────────────────────────────
+  // ——— Toggle active ————————————————————————————————————————————————————————————
 
   const toggleActive = async (emp: Profile) => {
     const { error: toggleErr } = await supabase
@@ -373,7 +373,7 @@ export default function People() {
     }
   };
 
-  // ─── Delete ───────────────────────────────────────────────────────────────────
+  // ——— Delete ———————————————————————————————————————————————————————————————————
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -395,14 +395,14 @@ export default function People() {
     await fetchEmployees();
   };
 
-  // ─── Filtered list ────────────────────────────────────────────────────────────
+  // ——— Filtered list ————————————————————————————————————————————————————————————
 
   const filtered =
     filterDeptId === 'all'
       ? employees
       : employees.filter(emp => emp.department_ids?.includes(filterDeptId));
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  // ——— Render ———————————————————————————————————————————————————————————————————
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -410,12 +410,12 @@ export default function People() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">People</PHeading>
-          <PText color="contrast-medium">Manage employees and their access</PText>
+          <PText size="x-small" color="contrast-medium">Manage employees and their access</PText>
         </div>
         {isAdmin() && (
-          <PButton icon="add" onClick={openCreate}>
-            Add Employee
-          </PButton>
+          <Button onClick={openCreate} className="flex items-center gap-2">
+            <Plus size={16} /> Add Employee
+          </Button>
         )}
       </div>
 
@@ -459,202 +459,216 @@ export default function People() {
         </div>
       )}
 
-      {/* Table */}
+      {/* People Cards */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
           <PText color="contrast-medium">Loading employees…</PText>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-xl border border-contrast-low">
+        <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-2xl border border-contrast-low">
           <PIcon name="user" size="large" color="contrast-low" />
           <PText color="contrast-medium" className="mt-3">
             No employees found.
           </PText>
         </div>
       ) : (
-        <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-contrast-low">
-                  {['Code', 'Name', 'Email', 'Role', 'Departments', 'Status', 'Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left">
-                      <PText
-                        size="xx-small"
-                        color="contrast-medium"
-                        weight="semi-bold"
-                        className="uppercase tracking-wide"
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filtered.map(emp => (
+            <div
+              key={emp.id}
+              className="bg-surface border border-contrast-low rounded-2xl p-5 hover:border-contrast-medium transition-all"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-full bg-contrast-low flex items-center justify-center flex-shrink-0">
+                    <PText size="small" weight="semi-bold">
+                      {(emp.full_name || emp.email || '?')[0].toUpperCase()}
+                    </PText>
+                  </div>
+
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold truncate">
+                      {emp.full_name || 'Unnamed Employee'}
+                    </h3>
+
+                    <p className="text-xs text-muted-foreground truncate">
+                      {emp.email}
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <PTag color={ROLE_COLORS[emp.role] ?? 'background-surface'}>
+                        {ROLE_LABELS[emp.role] ?? emp.role}
+                      </PTag>
+
+                      <PTag
+                        color={
+                          emp.is_active
+                            ? 'notification-success-soft'
+                            : 'notification-error-soft'
+                        }
                       >
-                        {h}
-                      </PText>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(emp => (
-                  <>
-                    <tr
-                      key={emp.id}
-                      className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors cursor-pointer"
-                      onClick={() => setExpandedId(expandedId === emp.id ? null : emp.id)}
+                        {emp.is_active ? 'Active' : 'Inactive'}
+                      </PTag>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {isAdmin() && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => openEdit(emp)}
+                      className="p-2 rounded-lg hover:bg-contrast-low transition-colors"
+                      title="Edit"
                     >
-                      {/* Code */}
-                      <td className="px-4 py-3">
-                        <PText size="x-small" color="contrast-medium">
-                          {emp.employee_code ?? '—'}
-                        </PText>
-                      </td>
+                      <PIcon name="edit" size="x-small" />
+                    </button>
 
-                      {/* Name */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-contrast-low flex items-center justify-center flex-shrink-0">
-                            <PText size="xx-small" weight="semi-bold">
-                              {(emp.full_name || emp.email || '?')[0].toUpperCase()}
-                            </PText>
-                          </div>
-                          <PText size="small" weight="semi-bold">
-                            {emp.full_name || '—'}
-                          </PText>
-                        </div>
-                      </td>
+                    <button
+                      onClick={() => toggleActive(emp)}
+                      className="p-2 rounded-lg hover:bg-contrast-low transition-colors"
+                      title={emp.is_active ? 'Deactivate' : 'Activate'}
+                    >
+                      <PIcon
+                        name={emp.is_active ? 'close' : 'check'}
+                        size="x-small"
+                      />
+                    </button>
 
-                      {/* Email */}
-                      <td className="px-4 py-3">
-                        <PText size="x-small" color="contrast-medium">
-                          {emp.email}
-                        </PText>
-                      </td>
+                    <button
+                      onClick={() => setDeleteTarget(emp)}
+                      className="p-2 rounded-lg hover:bg-notification-error-soft transition-colors"
+                      title="Delete"
+                    >
+                      <PIcon name="delete" size="x-small" />
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                      {/* Role */}
-                      <td className="px-4 py-3">
-                        <PTag color={ROLE_COLORS[emp.role] ?? 'background-surface'}>
-                          {ROLE_LABELS[emp.role] ?? emp.role}
-                        </PTag>
-                      </td>
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <DetailItem
+                  label="Employee Code"
+                  value={emp.employee_code ?? '—'}
+                />
 
-                      {/* Departments */}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {emp.departmentNames.length > 0 ? (
-                            emp.departmentNames.map(n => (
-                              <span
-                                key={n}
-                                className="text-xs px-2 py-0.5 rounded-full bg-contrast-low text-contrast-high"
-                              >
-                                {n}
-                              </span>
-                            ))
-                          ) : (
-                            <PText size="x-small" color="contrast-low">None</PText>
-                          )}
-                        </div>
-                      </td>
+                <DetailItem
+                  label="Base Salary"
+                  value={
+                    emp.base_salary != null
+                      ? `₹${emp.base_salary.toLocaleString('en-IN')}`
+                      : '—'
+                  }
+                />
 
-                      {/* Status */}
-                      <td className="px-4 py-3">
-                        <PTag
-                          color={
-                            emp.is_active
-                              ? 'notification-success-soft'
-                              : 'notification-error-soft'
-                          }
-                        >
-                          {emp.is_active ? 'Active' : 'Inactive'}
-                        </PTag>
-                      </td>
+                <DetailItem
+                  label="Phone"
+                  value={emp.phone || '—'}
+                />
 
-                      {/* Actions */}
-                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
-                          {isAdmin() && (
-                            <>
-                              <button
-                                onClick={() => openEdit(emp)}
-                                className="p-1.5 rounded hover:bg-contrast-low transition-colors"
-                                title="Edit"
-                              >
-                                <PIcon name="edit" size="x-small" />
-                              </button>
-                              <button
-                                onClick={() => toggleActive(emp)}
-                                className="p-1.5 rounded hover:bg-contrast-low transition-colors"
-                                title={emp.is_active ? 'Deactivate' : 'Activate'}
-                              >
-                                <PIcon
-                                  name={emp.is_active ? 'close' : 'check'}
-                                  size="x-small"
-                                />
-                              </button>
-                              <button
-                                onClick={() => setDeleteTarget(emp)}
-                                className="p-1.5 rounded hover:bg-notification-error-soft transition-colors"
-                                title="Delete"
-                              >
-                                <PIcon name="delete" size="x-small" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => setExpandedId(expandedId === emp.id ? null : emp.id)}
-                            className="p-1.5 rounded hover:bg-contrast-low transition-colors"
-                            title="View details"
-                          >
-                            <PIcon
-                              name={expandedId === emp.id ? 'arrow-head-up' : 'arrow-head-down'}
-                              size="x-small"
-                            />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                <DetailItem
+                  label="KPI Score"
+                  value={String(emp.kpi_score ?? 0)}
+                />
+              </div>
 
-                    {/* Expanded row — profile details */}
-                    {expandedId === emp.id && (
-                      <tr key={`${emp.id}-detail`} className="bg-canvas border-b border-contrast-low">
-                        <td colSpan={7} className="px-6 py-5">
-                          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-                            <DetailItem label="Employee Code" value={emp.employee_code ?? '—'} />
-                            <DetailItem label="Phone" value={emp.phone || '—'} />
-                            <DetailItem label="Address" value={emp.address || '—'} />
-                            <DetailItem
-                              label="Base Salary"
-                              value={
-                                emp.base_salary != null
-                                  ? `₹${emp.base_salary.toLocaleString('en-IN')}`
-                                  : '—'
-                              }
-                            />
-                            <DetailItem label="KPI Score" value={String(emp.kpi_score ?? 0)} />
-                            <DetailItem label="TDS" value={emp.tds_enabled ? 'Enabled' : 'Disabled'} />
-                            <DetailItem label="PF" value={emp.pf_enabled ? 'Enabled' : 'Disabled'} />
-                            <DetailItem label="ESI" value={emp.esi_enabled ? 'Enabled' : 'Disabled'} />
-                            <DetailItem
-                              label="Prof. Tax"
-                              value={emp.professional_tax_enabled ? 'Enabled' : 'Disabled'}
-                            />
-                            <DetailItem
-                              label="Joined"
-                              value={
-                                emp.created_at
-                                  ? new Date(emp.created_at).toLocaleDateString('en-IN')
-                                  : '—'
-                              }
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              {/* Departments */}
+              <div className="mb-5">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                  Departments
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {emp.departmentNames.length > 0 ? (
+                    emp.departmentNames.map(name => (
+                      <span
+                        key={name}
+                        className="text-xs py-1 rounded-full bg-contrast-low text-contrast-high"
+                      >
+                      {name}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No departments assigned
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Expand Toggle */}
+              <button
+                onClick={() =>
+                  setExpandedId(expandedId === emp.id ? null : emp.id)
+                }
+                className="w-full flex items-center justify-center gap-2 border border-contrast-low rounded-xl py-2.5 hover:bg-canvas transition-colors"
+              >
+                <PText size="x-small" weight="semi-bold">
+                  {expandedId === emp.id ? 'Hide Details' : 'View Details'}
+                </PText>
+
+                <PIcon
+                  name={
+                    expandedId === emp.id
+                      ? 'arrow-head-up'
+                      : 'arrow-head-down'
+                  }
+                  size="x-small"
+                />
+              </button>
+
+              {/* Expanded Section */}
+              {expandedId === emp.id && (
+                <div className="mt-5 pt-5 border-t border-contrast-low">
+                  <div className="grid grid-cols-2 gap-4">
+                    <DetailItem
+                      label="Address"
+                      value={emp.address || '—'}
+                    />
+
+                    <DetailItem
+                      label="Joined"
+                      value={
+                        emp.created_at
+                          ? new Date(emp.created_at).toLocaleDateString('en-IN')
+                          : '—'
+                      }
+                    />
+
+                    <DetailItem
+                      label="TDS"
+                      value={emp.tds_enabled ? 'Enabled' : 'Disabled'}
+                    />
+
+                    <DetailItem
+                      label="PF"
+                      value={emp.pf_enabled ? 'Enabled' : 'Disabled'}
+                    />
+
+                    <DetailItem
+                      label="ESI"
+                      value={emp.esi_enabled ? 'Enabled' : 'Disabled'}
+                    />
+
+                    <DetailItem
+                      label="Professional Tax"
+                      value={
+                        emp.professional_tax_enabled
+                          ? 'Enabled'
+                          : 'Disabled'
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* ── Add / Edit Modal ── */}
+      {/* —— Add / Edit Modal —— */}
       <PModal
         open={showModal}
         onDismiss={() => { setShowModal(false); setError(''); }}
@@ -782,7 +796,7 @@ export default function People() {
           <div>
             <label
               className="block text-xs font-medium text-contrast-high mb-2"
-              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+              style={{ fontFamily: "'Neue Montreal', sans-serif" }}
             >
               Departments *
             </label>
@@ -823,7 +837,7 @@ export default function People() {
           <div>
             <label
               className="block text-xs font-medium text-contrast-high mb-3"
-              style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
+              style={{ fontFamily: "'Neue Montreal', sans-serif" }}
             >
               Payroll Deductions
             </label>
@@ -868,7 +882,7 @@ export default function People() {
         </form>
       </PModal>
 
-      {/* ── Delete Confirm Modal ── */}
+      {/* —— Delete Confirm Modal —— */}
       <PModal
         open={!!deleteTarget}
         onDismiss={() => setDeleteTarget(null)}
@@ -905,15 +919,17 @@ export default function People() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide mb-0.5">
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground uppercase tracking-wide">
         {label}
-      </PText>
-      <PText size="small">{value}</PText>
+      </p>
+      <p className="text-sm font-medium break-words">
+        {value}
+      </p>
     </div>
   );
 }
@@ -940,3 +956,6 @@ function SwitchField({
     </div>
   );
 }
+
+
+

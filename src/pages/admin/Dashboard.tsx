@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { PHeading, PText, PIcon } from '@porsche-design-system/components-react';
 import { supabase, formatINR } from '../../lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTheme } from '../../contexts/ThemeContext';
+import { ArrowRight, TrendingUp, Settings, Calculator } from 'lucide-react';
 
 interface KPIData {
   totalLeads: number;
@@ -59,11 +59,11 @@ export default function Dashboard() {
       // Lead funnel
       const statuses = ['Open', 'Qualified', 'Converted', 'Rejected', 'Ghosted'];
       const colors = [
-        'var(--p-color-notification-info)',
-        'var(--p-color-contrast-medium)',
-        'var(--p-color-notification-success)',
-        'var(--p-color-notification-error)',
-        'var(--p-color-notification-warning)',
+        '#3B82F6', // Open - Blue
+        '#6B7280', // Qualified - Gray
+        '#10B981', // Converted - Green
+        '#EF4444', // Rejected - Red
+        '#F59E0B', // Ghosted - Amber
       ];
       setLeadFunnel(statuses.map((s, i) => ({
         name: s,
@@ -77,48 +77,64 @@ export default function Dashboard() {
     fetch();
   }, []);
 
-  const chartColor = theme === 'dark' ? '#FBFCFF' : '#010205';
-  const gridColor = theme === 'dark' ? '#333' : '#eee';
+  const chartColor = theme === 'dark' ? '#ffffff' : '#25dc3a';
+  const textColor = theme === 'dark' ? '#000000' : '#0800f5';
+  const gridColor = theme === 'dark' ? '#000000' : '#ff1515';
 
   const kpiCards = [
-    { label: 'Total Leads', value: kpi.totalLeads.toString(), icon: 'arrow-right', color: 'bg-info-soft text-info' },
-    { label: 'Conversion Rate', value: kpi.totalLeads > 0 ? `${Math.round((kpi.convertedLeads / kpi.totalLeads) * 100)}%` : '0%', icon: 'increase', color: 'bg-success-soft text-success' },
-    { label: 'Active Projects', value: kpi.activeProjects.toString(), icon: 'configurate', color: 'bg-warning-soft text-warning' },
-    { label: 'Total Revenue', value: formatINR(kpi.totalRevenue), icon: 'calculator', color: 'bg-surface' },
+    { label: 'Total Leads', value: kpi.totalLeads.toString(), icon: ArrowRight, color: 'bg-info-soft text-info' },
+    { label: 'Conversion Rate', value: kpi.totalLeads > 0 ? `${Math.round((kpi.convertedLeads / kpi.totalLeads) * 100)}%` : '0%', icon: TrendingUp, color: 'bg-success-soft text-success' },
+    { label: 'Active Projects', value: kpi.activeProjects.toString(), icon: Settings, color: 'bg-warning-soft text-warning' },
+    { label: 'Total Revenue', value: formatINR(kpi.totalRevenue), icon: Calculator, color: 'bg-surface' },
   ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6">
       <div className="mb-8">
-        <PHeading tag="h1" size="x-large" className="mb-1">Dashboard</PHeading>
-        <PText color="contrast-medium">Welcome back! Here's your business overview.</PText>
+        <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
+        <span className="text-sm text-slate-600">Welcome back! Here's your business overview.</span>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {kpiCards.map(card => (
-          <div key={card.label} className="bg-surface rounded-xl border border-contrast-low p-5 flex items-start gap-4">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${card.color}`}>
-              <PIcon name={card.icon as Parameters<typeof PIcon>[0]['name']} size="small" color="inherit" />
+        {kpiCards.map(card => {
+          const IconComponent = card.icon;
+
+          return (
+            <div
+              key={card.label}
+              className="bg-surface rounded-xl border border-contrast-low p-4 sm:p-5 flex items-start gap-3 min-w-0 overflow-hidden"
+            >
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${card.color}`}
+              >
+                <IconComponent size={20} className="text-current" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] sm:text-xs text-slate-600 uppercase tracking-wide block truncate">
+                  {card.label}
+                </span>
+
+                <h3 className="text-lg sm:text-xl font-bold mt-1 break-words leading-tight">
+                  {loading ? '—' : card.value}
+                </h3>
+              </div>
             </div>
-            <div>
-              <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">{card.label}</PText>
-              <PHeading tag="h3" size="medium" className="mt-1">{loading ? '—' : card.value}</PHeading>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Monthly Revenue */}
         <div className="bg-surface rounded-xl border border-contrast-low p-5">
-          <PHeading tag="h3" size="small" className="mb-4">Monthly Revenue</PHeading>
+          <h3 className="text-lg font-bold mb-4">Monthly Revenue</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={monthlyRevenue} margin={{ top: 0, right: 0, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-              <XAxis dataKey="month" tick={{ fill: chartColor, fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+              <XAxis dataKey="month" tick={{ fill: textColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: textColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
               <Tooltip
                 formatter={(v: unknown) => [formatINR(v as number), 'Revenue']}
                 contentStyle={{ background: theme === 'dark' ? '#212225' : '#fff', border: '1px solid #D8D8DB', borderRadius: '8px' }}
@@ -130,17 +146,17 @@ export default function Dashboard() {
 
         {/* Lead Funnel */}
         <div className="bg-surface rounded-xl border border-contrast-low p-5">
-          <PHeading tag="h3" size="small" className="mb-4">Lead Funnel</PHeading>
+          <h3 className="text-lg font-bold mb-4">Lead Funnel</h3>
           {loading ? (
             <div className="h-52 flex items-center justify-center">
-              <PText color="contrast-medium">Loading...</PText>
+              <span className="text-sm text-slate-600">Loading...</span>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
               {leadFunnel.map(item => (
                 <div key={item.name} className="flex items-center gap-3">
                   <div className="w-24 text-right">
-                    <PText size="x-small" color="contrast-medium">{item.name}</PText>
+                    <span className="text-xs text-slate-600">{item.name}</span>
                   </div>
                   <div className="flex-1 bg-contrast-low/30 rounded-full h-6 overflow-hidden">
                     <div

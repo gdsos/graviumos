@@ -1,14 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  PHeading,
-  PText,
-  PButton,
-  PTag,
-  PIcon,
-  PInlineNotification,
-  PTabs,
-  PTabsItem,
-} from '@porsche-design-system/components-react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
   type Project,
@@ -31,22 +21,28 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { 
+  Calculator,
+  BarChart3,
+  TrendingUp,
+  DoorOpen } from 'lucide-react';
+import { PButton, PHeading, PInlineNotification, PTag, PText, PIcon, PTabs, PTabsItem } from '@/components/ui/porsche';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ——— Constants ————————————————————————————————————————————————————————————————
 
 const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
-const PIE_COLORS = ['#010205', '#6B6D70', '#AFB0B3', '#D8D8DB'];
+const PIE_COLORS = ['#3dff87', '#00ddff', '#3e17ff', '#ec7f19'];
 const PIE_COLORS_DARK = ['#FBFCFF', '#AFB0B3', '#6B6D70', '#535457'];
 
-const STATUS_COLORS: Record<string, Parameters<typeof PTag>[0]['color']> = {
-  Active: 'notification-success-soft',
-  Completed: 'notification-info-soft',
-  'On Hold': 'notification-warning-soft',
-  Cancelled: 'notification-error-soft',
+const STATUS_COLORS: Record<string, string> = {
+  Active: 'bg-green-50 text-green-700',
+  Completed: 'bg-blue-50 text-blue-700',
+  'On Hold': 'bg-amber-50 text-amber-700',
+  Cancelled: 'bg-red-50 text-red-700',
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ——— Sub-components ———————————————————————————————————————————————————————————
 
 function KpiCard({
   label,
@@ -58,7 +54,7 @@ function KpiCard({
   label: string;
   value: string;
   sub?: string;
-  icon: string;
+  icon: React.ReactNode;
   accent?: 'success' | 'warning' | 'error' | 'info' | 'default';
 }) {
   const accentMap: Record<string, string> = {
@@ -72,31 +68,20 @@ function KpiCard({
 
   return (
     <div className="bg-surface rounded-xl border border-contrast-low p-5 flex items-start gap-4">
-      <div
-        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${iconClass}`}
-      >
-        <PIcon
-          name={icon as Parameters<typeof PIcon>[0]['name']}
-          size="small"
-          color="inherit"
-        />
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${iconClass}`}>
+        {icon}
       </div>
       <div className="min-w-0">
-        <PText
-          size="xx-small"
-          color="contrast-medium"
-          className="uppercase tracking-wide"
-          style={{ fontFamily: FONT }}
-        >
+        <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide block" style={{ fontFamily: FONT }}>
           {label}
-        </PText>
-        <PHeading tag="h3" size="medium" className="mt-1" style={{ fontFamily: FONT }}>
+        </span>
+        <h3 className="text-xl font-bold mt-1" style={{ fontFamily: FONT }}>
           {value}
-        </PHeading>
+        </h3>
         {sub && (
-          <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+          <span className="text-xs text-slate-600 block" style={{ fontFamily: FONT }}>
             {sub}
-          </PText>
+          </span>
         )}
       </div>
     </div>
@@ -105,30 +90,18 @@ function KpiCard({
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <PText
-      size="x-small"
-      weight="semi-bold"
-      className="uppercase tracking-wide mb-3"
-      color="contrast-medium"
-      style={{ fontFamily: FONT }}
-    >
+    <span className="text-xs font-semibold uppercase tracking-wide mb-3 text-slate-600 block" style={{ fontFamily: FONT }}>
       {children}
-    </PText>
+    </span>
   );
 }
 
 function TableHeaderCell({ children }: { children: React.ReactNode }) {
   return (
     <th className="px-4 py-3 text-left">
-      <PText
-        size="xx-small"
-        color="contrast-medium"
-        weight="semi-bold"
-        className="uppercase tracking-wide"
-        style={{ fontFamily: FONT }}
-      >
+      <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide" style={{ fontFamily: FONT }}>
         {children}
-      </PText>
+      </span>
     </th>
   );
 }
@@ -148,46 +121,40 @@ function AllocationRow({
     <div className="flex items-center justify-between py-3 border-b border-contrast-low last:border-0">
       <div className="flex items-center gap-3">
         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: color }} />
-        <PText size="small" style={{ fontFamily: FONT }}>
+        <span className="text-sm" style={{ fontFamily: FONT }}>
           {label}
-        </PText>
-        <PTag color="background-surface">
+        </span>
+        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-slate-50 text-slate-700">
           {pct}%
-        </PTag>
+        </span>
       </div>
-      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
+      <span className="text-sm font-semibold" style={{ fontFamily: FONT }}>
         {formatINR(amount)}
-      </PText>
+      </span>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Financials() {
   const { isAdmin, isFinance } = useAuth();
   const { theme } = useTheme();
 
-  // ── Access gate ────────────────────────────────────────────────────────────
+  // —— Access gate ————————————————————————————————————————————————————————————
   if (!isAdmin() && !isFinance()) {
     return (
       <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <div className="w-16 h-16 rounded-full bg-error-soft flex items-center justify-center">
-            <PIcon name="lock" size="large" color="notification-error" />
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+            <Lock size={32} className="text-red-600" />
           </div>
-          <PHeading tag="h2" size="large" style={{ fontFamily: FONT }}>
-            Access Restricted
-          </PHeading>
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-            This section is only accessible to Finance department members and Administrators.
-          </PText>
-          <PInlineNotification
-            heading="Insufficient Permissions"
-            description="You do not have the required role to view financial data. Contact your administrator for access."
-            state="error"
-            dismissButton={false}
-          />
+          <h2 className="text-2xl font-bold">Access Restricted</h2>
+          <span className="text-sm text-slate-600">This section is only accessible to Finance department members and Administrators.</span>
+          <div className="p-4 rounded-lg bg-red-50 border border-red-200 mt-4 w-full max-w-md">
+            <p className="text-sm font-semibold text-red-900">Insufficient Permissions</p>
+            <p className="text-sm text-red-700 mt-1">You do not have the required role to view financial data. Contact your administrator for access.</p>
+          </div>
         </div>
       </div>
     );
@@ -196,7 +163,7 @@ export default function Financials() {
   return <FinancialsInner theme={theme} />;
 }
 
-// ─── Inner component (only rendered when authorised) ──────────────────────────
+// ——— Inner component (only rendered when authorised) ——————————————————————————
 
 function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
   // Data
@@ -213,16 +180,16 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
   const [projectCash, setProjectCash] = useState<ProjectCashReceived[]>([]);
   const [projectDetailLoading, setProjectDetailLoading] = useState(false);
 
-  // ── Chart colours ─────────────────────────────────────────────────────────
+  // —— Chart colours —————————————————————————————————————————————————————————
   const chartTextColor = theme === 'dark' ? '#FBFCFF' : '#010205';
   const chartGridColor = theme === 'dark' ? '#333' : '#EEEFF2';
   const chartTooltipBg = theme === 'dark' ? '#212225' : '#ffffff';
   const chartBarColors = theme === 'dark'
     ? ['#FBFCFF', '#6B6D70', '#AFB0B3']
-    : ['#010205', '#6B6D70', '#D8D8DB'];
+    : ['#00b3ff', '#a91e1e', '#20df60'];
   const pieColors = theme === 'dark' ? PIE_COLORS_DARK : PIE_COLORS;
 
-  // ── Fetch all data ─────────────────────────────────────────────────────────
+  // —— Fetch all data —————————————————————————————————————————————————————————
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -249,7 +216,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     fetchAll();
   }, [fetchAll]);
 
-  // ── Fetch project-specific detail when selection changes ───────────────────
+  // —— Fetch project-specific detail when selection changes ———————————————————
   useEffect(() => {
     if (!selectedProjectId) {
       setProjectExpenses([]);
@@ -277,14 +244,14 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     })();
   }, [selectedProjectId]);
 
-  // ── Auto-select first project when list loads ──────────────────────────────
+  // —— Auto-select first project when list loads ——————————————————————————————
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
     }
   }, [projects, selectedProjectId]);
 
-  // ── Global Calculations ────────────────────────────────────────────────────
+  // —— Global Calculations ————————————————————————————————————————————————————
 
   const totalRevenue = projects.reduce((s, p) => s + (p.revenue ?? 0), 0);
   const totalActualCogs = allExpenses.reduce((s, e) => s + (e.amount ?? 0), 0);
@@ -311,7 +278,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     { label: 'Owner Pay', pct: profitFirstOwnerPayPct, amount: pfOwnerPay, color: pieColors[3] },
   ];
 
-  // ── Bar chart data: Revenue vs COGS vs Profit per project ─────────────────
+  // —— Bar chart data: Revenue vs COGS vs Profit per project —————————————————
   const barChartData = projects.map(p => {
     const projectCogs = allExpenses
       .filter(e => e.project_id === p.id)
@@ -325,13 +292,13 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     };
   });
 
-  // ── Pie chart data ─────────────────────────────────────────────────────────
+  // —— Pie chart data —————————————————————————————————————————————————————————
   const pieData = profitFirstAllocations.map(a => ({
     name: a.label,
     value: a.pct,
   }));
 
-  // ── Project-wise calculations ──────────────────────────────────────────────
+  // —— Project-wise calculations ——————————————————————————————————————————————
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
 
   const calcProjectFinancials = () => {
@@ -369,10 +336,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
 
   const projFinancials = calcProjectFinancials();
 
-  // ── Chart tooltip formatter ────────────────────────────────────────────────
+  // —— Chart tooltip formatter ————————————————————————————————————————————————
   const currencyFormatter = (v: number) => formatINR(v);
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ——— Render ————————————————————————————————————————————————————————————————
 
   if (loading) {
     return (
@@ -389,7 +356,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
 
   return (
     <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* ── Page Header ────────────────────────────────────────────────────── */}
+      {/* —— Page Header —————————————————————————————————————————————————————— */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1" style={{ fontFamily: FONT }}>
@@ -404,7 +371,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         </PButton>
       </div>
 
-      {/* ── Error Banner ───────────────────────────────────────────────────── */}
+      {/* —— Error Banner ————————————————————————————————————————————————————— */}
       {error && (
         <div className="mb-6">
           <PInlineNotification
@@ -417,14 +384,14 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         </div>
       )}
 
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+      {/* —— Tabs ————————————————————————————————————————————————————————————— */}
       <PTabs activeTabIndex={0}>
         {/* ══════════════════════════════════════════════════════════════════ */}
         {/* TAB 1: Global Financial View                                       */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         <PTabsItem label="Global Overview">
           <div className="flex flex-col gap-8 pt-6">
-            {/* ── KPI Cards ────────────────────────────────────────────────── */}
+            {/* —— KPI Cards —————————————————————————————————————————————————— */}
             <div>
               <SectionHeading>Key Performance Indicators</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -432,34 +399,34 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
                   label="Total Revenue"
                   value={formatINR(totalRevenue)}
                   sub={`Across ${projects.length} project${projects.length !== 1 ? 's' : ''}`}
-                  icon="calculator"
+                  icon={<Calculator size={18} />}
                   accent="info"
                 />
                 <KpiCard
                   label="Total Actual COGS"
                   value={formatINR(totalActualCogs)}
                   sub="Sum of all project expenses"
-                  icon="chart"
+                  icon={<BarChart3 size={18} />}
                   accent="warning"
                 />
                 <KpiCard
                   label="Total Profit"
                   value={formatINR(totalProfit)}
                   sub="Revenue − Actual COGS"
-                  icon="increase"
+                  icon={<TrendingUp size={18} />}
                   accent={totalProfit >= 0 ? 'success' : 'error'}
                 />
                 <KpiCard
                   label="Remaining Opex"
                   value={formatINR(remainingOpex)}
                   sub={`Allocated ${formatINR(allocatedOpex)} − Used ${formatINR(usedOpex)}`}
-                  icon="door"
+                  icon={<DoorOpen size={18} />}
                   accent={remainingOpex >= 0 ? 'success' : 'error'}
                 />
               </div>
             </div>
 
-            {/* ── Opex Summary ─────────────────────────────────────────────── */}
+            {/* —— Opex Summary ——————————————————————————————————————————————— */}
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
               <SectionHeading>Operating Expense Tracker</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -517,7 +484,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               )}
             </div>
 
-            {/* ── Profit First Allocations ──────────────────────────────────── */}
+            {/* —— Profit First Allocations ———————————————————————————————————— */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {/* Table */}
               <div className="bg-surface rounded-xl border border-contrast-low p-5">
@@ -614,7 +581,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </div>
             </div>
 
-            {/* ── Bar Chart: Revenue vs COGS vs Profit per project ─────────── */}
+            {/* —— Bar Chart: Revenue vs COGS vs Profit per project ——————————— */}
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
               <SectionHeading>Revenue vs COGS vs Profit — Per Project</SectionHeading>
               {projects.length === 0 ? (
@@ -679,7 +646,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               )}
             </div>
 
-            {/* ── Projects Summary Table ────────────────────────────────────── */}
+            {/* —— Projects Summary Table —————————————————————————————————————— */}
             <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
               <div className="px-5 py-4 border-b border-contrast-low">
                 <SectionHeading>All Projects Summary</SectionHeading>
@@ -830,7 +797,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         {/* ══════════════════════════════════════════════════════════════════ */}
         <PTabsItem label="Project Breakdown">
           <div className="flex flex-col gap-6 pt-6">
-            {/* ── Project Selector ─────────────────────────────────────────── */}
+            {/* —— Project Selector ——————————————————————————————————————————— */}
             <div className="bg-surface rounded-xl border border-contrast-low p-5">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
@@ -874,7 +841,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </div>
             </div>
 
-            {/* ── Project Detail ────────────────────────────────────────────── */}
+            {/* —— Project Detail —————————————————————————————————————————————— */}
             {selectedProject && !projectDetailLoading && projFinancials && (
               <>
                 {/* Financial KPIs */}
@@ -1162,7 +1129,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </>
             )}
 
-            {/* ── Loading state for project detail ─────────────────────────── */}
+            {/* —— Loading state for project detail ——————————————————————————— */}
             {projectDetailLoading && (
               <div className="flex items-center justify-center h-48 gap-3">
                 <PIcon name="chart" size="medium" color="contrast-medium" />
@@ -1172,7 +1139,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
               </div>
             )}
 
-            {/* ── Empty state ───────────────────────────────────────────────── */}
+            {/* —— Empty state ————————————————————————————————————————————————— */}
             {!selectedProject && !projectDetailLoading && projects.length === 0 && (
               <div className="flex flex-col items-center justify-center h-64 gap-3 bg-surface rounded-xl border border-contrast-low">
                 <PIcon name="highway" size="large" color="contrast-low" />
@@ -1187,3 +1154,6 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     </div>
   );
 }
+
+
+
