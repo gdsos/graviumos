@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Task, type Subtask, type Profile, type Department } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
-import { User, Calendar, Check, Trash2, Plus, X, List } from 'lucide-react';
+import { User, Calendar, Check, Plus, X } from 'lucide-react';
+import TaskDetailModal from './TaskDetailModal';
+import type React from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,7 @@ const DEPT_NAMES = [
   'Finance',
 ] as const;
 
-const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing', 'Overdue', 'Completed'];
+const STATUSES: Exclude<TaskStatus, 'Overdue'>[] = ['Not Started', 'Ongoing', 'Completed'];
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
   'Not Started': 'bg-slate-100 text-slate-900',
@@ -39,7 +41,7 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 function calcEffectiveStatus(task: Task): TaskStatus {
   if (task.status === 'Completed') return 'Completed';
   if (task.deadline && new Date(task.deadline) < new Date()) return 'Overdue';
-  return task.status;
+  return task.status as TaskStatus;
 }
 
 function calcOverdueDays(task: Task): number | undefined {
@@ -216,10 +218,7 @@ export default function Tasks() {
   const [saving, setSaving] = useState(false);
   const deadlineDateRef = useRef<HTMLInputElement>(null);
 
-  const [detailTask, setDetailTask] = useState<TaskWithDetails | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<TaskWithDetails | null>(null);
 
   const canManage = isAdmin() || isDeptHead();
   const activeDeptName = DEPT_NAMES[activeTabIndex];
@@ -408,119 +407,9 @@ export default function Tasks() {
     if (!confirm('Delete this task and all its subtasks?')) return;
     await supabase.from('subtasks').delete().eq('task_id', id);
     await supabase.from('tasks').delete().eq('id', id);
-    setShowDetailModal(false);
+    setSelectedTask(null);
     fetchTasks();
   };
-
-  const recalculateKpi = async (userId: string) => {
-    const { data: userTasks } = await supabase
-      .from('tasks')
-      .select('status')
-      .eq('assigned_to', userId);
-
-    if (!userTasks || userTasks.length === 0) return;
-
-    const completed = userTasks.filter(t => t.status === 'Completed').length;
-    const total = userTasks.length;
-    const newScore = Math.round((completed / total) * 10 * 10) / 10;
-
-    await supabase
-      .from('profiles')
-      .update({ kpi_score: newScore, updated_at: new Date().toISOString() })
-      .eq('id', userId);
-  };
-
-  const handleToggleSubtask = async (taskId: string, subtask: Subtask) => {
-    const newVal = !subtask.is_completed;
-    await supabase.from('subtasks').update({ is_completed: newVal }).eq('id', subtask.id);
-
-    const updatedSubtasks = (detailTask?.subtasks || []).map(s =>
-      s.id === subtask.id ? { ...s, is_completed: newVal } : s
-    );
-    const newProgress = calcProgress(updatedSubtasks);
-
-    let newStatus: TaskStatus = detailTask!.status;
-    if (newProgress === 100) newStatus = 'Completed';
-    else if (newProgress > 0 && newStatus === 'Not Started') newStatus = 'Ongoing';
-
-    const updatePayload: Partial<Task> = {
-      progress: newProgress,
-      updated_at: new Date().toISOString(),
-    };
-    if (newStatus !== detailTask!.status) {
-      updatePayload.status = newStatus;
-      if (newStatus === 'Completed') updatePayload.completed_at = new Date().toISOString();
-      else updatePayload.completed_at = null;
-    }
-
-    await supabase.from('tasks').update(updatePayload).eq('id', taskId);
-
-    if (newStatus === 'Completed' && detailTask?.assigned_to) {
-      recalculateKpi(detailTask.assigned_to);
-    }
-
-    setDetailTask(prev => {
-      if (!prev) return prev;
-      const newSubtasks = prev.subtasks.map(s =>
-        s.id === subtask.id ? { ...s, is_completed: newVal } : s
-      );
-      const updated: TaskWithDetails = {
-        ...prev,
-        subtasks: newSubtasks,
-        progress: newProgress,
-        status: newStatus,
-        effectiveStatus: calcEffectiveStatus({ ...prev, status: newStatus, progress: newProgress }),
-        overdueByDays: calcOverdueDays({ ...prev, status: newStatus }),
-        completed_at: updatePayload.completed_at ?? prev.completed_at,
-      };
-      return updated;
-    });
-
-    fetchTasks();
-  };
-
-  const handleAddSubtask = async () => {
-    if (!newSubtaskTitle.trim() || !detailTask) return;
-    setAddingSubtask(true);
-    const { data } = await supabase
-      .from('subtasks')
-      .insert({ task_id: detailTask.id, title: newSubtaskTitle.trim(), is_completed: false })
-      .select()
-      .single();
-    setAddingSubtask(false);
-    if (data) {
-      setDetailTask(prev => {
-        if (!prev) return prev;
-        const newSubtasks = [...prev.subtasks, data as Subtask];
-        return { ...prev, subtasks: newSubtasks };
-      });
-      setNewSubtaskTitle('');
-      fetchTasks();
-    }
-  };
-
-  const handleDeleteSubtask = async (subtaskId: string) => {
-    if (!detailTask) return;
-    await supabase.from('subtasks').delete().eq('id', subtaskId);
-    const newSubtasks = detailTask.subtasks.filter(s => s.id !== subtaskId);
-    const newProgress = calcProgress(newSubtasks);
-    await supabase.from('tasks').update({ progress: newProgress, updated_at: new Date().toISOString() }).eq('id', detailTask.id);
-    setDetailTask(prev => prev ? { ...prev, subtasks: newSubtasks, progress: newProgress } : prev);
-    fetchTasks();
-  };
-
-  const openDetail = (task: TaskWithDetails) => {
-    setDetailTask(task);
-    setNewSubtaskTitle('');
-    setShowDetailModal(true);
-  };
-
-  useEffect(() => {
-    if (detailTask && showDetailModal) {
-      const refreshed = tasks.find(t => t.id === detailTask.id);
-      if (refreshed) setDetailTask(refreshed);
-    }
-  }, [tasks, detailTask, showDetailModal]);
 
   const activeDeptTasks = tabTasks(activeDept?.id);
   const grouped = groupByStatus(activeDeptTasks);
@@ -615,7 +504,7 @@ export default function Tasks() {
                   key={status}
                   status={status}
                   tasks={grouped[status]}
-                  onCardClick={openDetail}
+                  onCardClick={setSelectedTask}
                 />
               ))}
             </div>
@@ -758,192 +647,14 @@ export default function Tasks() {
           </div>
         </div>
       )}
-
-      {/* Task Detail Modal */}
-      {detailTask && showDetailModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">{detailTask.title}</h2>
-              <button
-                type="button"
-                onClick={() => setShowDetailModal(false)}
-                className="p-1 hover:bg-slate-100 rounded transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 flex flex-col gap-5">
-              {/* Status tag */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-xs font-semibold px-3 py-1 rounded ${STATUS_COLORS[detailTask.effectiveStatus]}`}>
-                  {detailTask.effectiveStatus === 'Completed' && detailTask.overdueByDays
-                    ? `Completed (Overdue by ${detailTask.overdueByDays} days)`
-                    : detailTask.effectiveStatus}
-                </span>
-              </div>
-
-              {/* Meta grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Assigned To</p>
-                  <div className="flex items-center gap-2">
-                    <User size={14} className="text-slate-700" />
-                    <p className="text-sm">{detailTask.assignee?.full_name || detailTask.assignee?.email || 'Unassigned'}</p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Department</p>
-                  <p className="text-sm">
-                    {departments.find(d => d.id === detailTask.department_id)?.name || '—'}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Deadline</p>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm" style={{ color: detailTask.status !== 'Completed' && isOverdue(detailTask.deadline) ? '#dc2626' : '#1e293b' }}>
-                      {formatDeadline(detailTask.deadline)}
-                    </p>
-                    {detailTask.status !== 'Completed' && isOverdue(detailTask.deadline) && (
-                      <span className="text-xs font-semibold px-2 py-1 rounded bg-red-100 text-red-900">Overdue</span>
-                    )}
-                  </div>
-                </div>
-                {detailTask.completed_at && (
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Completed At</p>
-                    <p className="text-sm">{formatDeadline(detailTask.completed_at)}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Description */}
-              {detailTask.description && (
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Description</p>
-                  <div className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2.5">
-                    <p className="text-sm text-slate-800">{detailTask.description}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Progress */}
-              {detailTask.subtasks.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">Progress</p>
-                    <p className="text-xs font-semibold">
-                      {calcProgress(detailTask.subtasks)}%
-                    </p>
-                  </div>
-                  <ProgressBar value={calcProgress(detailTask.subtasks)} />
-                  <p className="text-xs text-slate-600">
-                    {detailTask.subtasks.filter(s => s.is_completed).length} of {detailTask.subtasks.length} subtasks completed
-                  </p>
-                </div>
-              )}
-
-              <div className="border-t border-slate-200" />
-
-              {/* Subtasks section */}
-              <div className="flex flex-col gap-3">
-                <p className="text-sm font-semibold">Subtasks</p>
-
-                {detailTask.subtasks.length === 0 && (
-                  <div className="flex items-center gap-2 py-3">
-                    <List size={14} className="text-slate-400" />
-                    <p className="text-xs text-slate-400">No subtasks yet</p>
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-1.5">
-                  {detailTask.subtasks.map(sub => (
-                    <div
-                      key={sub.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors group"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={sub.is_completed}
-                        onChange={() => handleToggleSubtask(detailTask.id, sub)}
-                        className="w-4 h-4 rounded accent-slate-900 flex-shrink-0 cursor-pointer"
-                      />
-                      <p
-                        className={`flex-1 text-sm ${sub.is_completed ? 'line-through text-slate-600' : 'text-slate-900'}`}
-                      >
-                        {sub.title}
-                      </p>
-                      {canManage && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSubtask(sub.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 transition-all"
-                          aria-label="Delete subtask"
-                        >
-                          <Trash2 size={14} className="text-red-600" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add subtask input */}
-                {canManage && (
-                  <div className="flex gap-2 mt-1">
-                    <input
-                      type="text"
-                      value={newSubtaskTitle}
-                      onChange={e => setNewSubtaskTitle(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
-                      placeholder="Add a subtask…"
-                      className="flex-1 px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
-                    />
-                    <Button
-                      type="button"
-                      disabled={!newSubtaskTitle.trim() || addingSubtask}
-                      onClick={handleAddSubtask}
-                    >
-                      {addingSubtask ? 'Adding...' : 'Add'}
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer actions */}
-              <div className="border-t border-slate-200 pt-4 flex items-center justify-between">
-                <div>
-                  {canManage && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => handleDeleteTask(detailTask.id)}
-                    >
-                      <Trash2 size={16} /> Delete
-                    </Button>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => setShowDetailModal(false)}>
-                    Close
-                  </Button>
-                  {canManage && (
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        setShowDetailModal(false);
-                        openEdit(detailTask);
-                      }}
-                    >
-                      Edit Task
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <TaskDetailModal
+        task={selectedTask}
+        open={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        departments={departments}
+        canManage={canManage}
+        onRefresh={fetchTasks}
+      />
     </div>
   );
 }

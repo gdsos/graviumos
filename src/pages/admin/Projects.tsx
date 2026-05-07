@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import type React from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase, type Project, type ProjectExpense, type ProjectCashReceived, formatINR } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
-import type { Task } from '../../lib/supabase';
+import type { Task, Subtask, Profile } from '../../lib/supabase';
 import { Plus, Trash2, X, Edit2 } from 'lucide-react';
+import TaskDetailModal from './TaskDetailModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +20,19 @@ interface LocationState {
   };
 }
 
+type TaskStatus =
+  | 'Not Started'
+  | 'Ongoing'
+  | 'Overdue'
+  | 'Completed';
+
+interface TaskWithDetails extends Task {
+  assignee?: Profile;
+  subtasks: Subtask[];
+  effectiveStatus: TaskStatus;
+  overdueByDays?: number;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
@@ -28,6 +43,40 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PROJECT_STATUSES = ['Active', 'Completed', 'On Hold', 'Cancelled'] as const;
+
+// ─── Helpers ───────────────────────────────────────────────────────────
+
+function calcEffectiveStatus(task: Task): TaskStatus {
+  if (task.status === 'Completed') return 'Completed';
+  if (task.deadline && new Date(task.deadline) < new Date()) {
+    return 'Overdue';
+  }
+  return (
+  ['Not Started', 'Ongoing', 'Completed'].includes(task.status)
+    ? (task.status as TaskStatus)
+    : 'Not Started'
+);
+}
+
+function calcOverdueDays(task: Task): number | undefined {
+  if (
+    task.status !== 'Completed' ||
+    !task.deadline ||
+    !task.completed_at
+  ) {
+    return undefined;
+  }
+
+  const deadline = new Date(task.deadline);
+  const completed = new Date(task.completed_at);
+
+  const diff = Math.floor(
+    (completed.getTime() - deadline.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  return diff > 0 ? diff : undefined;
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -42,12 +91,24 @@ function FormField({ label, children, required = false }: { label: string; child
   );
 }
 
-function StatCard({ label, value, currency = true }: { label: string; value: number | string; currency?: boolean }) {
+function StatCard({
+  label,
+  value,
+  currency = true,
+  valueClassName = '',
+}: {
+  label: string;
+  value: number | string;
+  currency?: boolean;
+  valueClassName?: string;
+}) {
   const displayValue = typeof value === 'number' && currency ? formatINR(value) : value;
   return (
     <div className="flex flex-col gap-1">
       <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">{label}</p>
-      <p className="text-lg font-bold text-slate-900">{displayValue}</p>
+      <p className={`text-lg font-bold ${valueClassName}`}>
+        {displayValue}
+      </p>
     </div>
   );
 }
@@ -56,13 +117,20 @@ function StatCard({ label, value, currency = true }: { label: string; value: num
 
 export default function Projects() {
   const location = useLocation();
-  const { profile, isAdmin, isFinance, isDeptHead } = useAuth();
+  const {
+  profile,
+  departments,
+  isAdmin,
+  isFinance,
+  isDeptHead,
+} = useAuth();
 
   // ─── State ────────────────────────────────────────────────────────────────
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, _setError] = useState('');
+  const [selectedTask, setSelectedTask] = useState<TaskWithDetails | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -84,11 +152,21 @@ export default function Projects() {
   const [detailTab, setDetailTab] = useState<'overview' | 'expenses' | 'cash' | 'tasks'>('overview');
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [cashReceived, setCashReceived] = useState<ProjectCashReceived[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [expenseForm, setExpenseForm] = useState({ expense_date: '', description: '', amount: 0 });
-  const [cashForm, setCashForm] = useState({ received_date: '', description: '', amount: 0 });
+  const [cashForm, setCashForm] = useState<{
+    received_date: string;
+    description: string;
+    amount: number;
+    gst_treatment: 'GST' | 'NO_GST';
+  }>({
+    received_date: '',
+    description: '',
+    amount: 0,
+    gst_treatment: 'GST',
+  });
   const [subError, setSubError] = useState('');
   const [subSaving, setSubSaving] = useState(false);
 
@@ -103,18 +181,75 @@ export default function Projects() {
   // ─── Calculations ────────────────────────────────────────────────────────
 
   function calcFinancials(proj: Project) {
-    const revenue = proj.revenue || 0;
-    const estCogs = proj.estimated_cogs || 0;
-    const actualCogs = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const netProfit = revenue - actualCogs;
-    const designFee = (revenue * (proj.design_fee_pct || 0)) / 100;
-    const incentive = netProfit > 0 ? netProfit * 0.1 : 0;
-    const commission = revenue * 0.025;
-    const totalCashReceived = cashReceived.reduce((sum, c) => sum + (c.amount || 0), 0);
-    const outstanding = revenue - totalCashReceived;
+  const grossRevenue = proj.revenue || 0;
 
-    return { revenue, estCogs, actualCogs, netProfit, designFee, incentive, commission, totalCashReceived, outstanding };
-  }
+  // ─── GST CALCULATION (FIXED - YOUR FINAL VERSION) ───────────────────────
+
+  const gstOnRevenue = grossRevenue * 0.18;
+
+  const gstAdjustment = cashReceived.reduce((sum, c) => {
+    const treatment = c.gst_treatment as string;
+    if (treatment === 'NO_GST' || treatment === 'NO_GST 0%') {
+      return sum + c.amount * 0.18;
+    }
+    return sum;
+  }, 0);
+
+  const gstAmount = gstOnRevenue - gstAdjustment;
+
+  const netRevenue = grossRevenue - gstAmount;
+
+  // ─── COSTS ──────────────────────────────────────────────────────────────
+
+  const actualCogs = expenses.reduce(
+    (sum, e) => sum + (e.amount || 0),
+    0
+  );
+
+  const estCogs = proj.estimated_cogs || 0;
+
+  // ─── PROFITABILITY ─────────────────────────────────────────────────────
+
+  const netProfit = netRevenue - actualCogs;
+
+  // ─── FEES (BASED ON NET REVENUE - CORRECT BUSINESS LOGIC) ──────────────
+
+  const designFee = (netRevenue * (proj.design_fee_pct || 0)) / 100;
+
+  const incentive = netProfit > 0 ? netProfit * 0.1 : 0;
+
+  const commission = netRevenue * 0.025;
+
+  // ─── CASH FLOW ─────────────────────────────────────────────────────────
+
+  const totalCashReceived = cashReceived.reduce(
+    (sum, c) => sum + (c.amount || 0),
+    0
+  );
+
+  const outstanding = netRevenue - totalCashReceived;
+
+  // ─── FINAL RETURN ───────────────────────────────────────────────────────
+
+  return {
+    revenue: grossRevenue,
+
+    gstAmount,
+    netRevenue,
+
+    estCogs,
+    actualCogs,
+
+    netProfit,
+
+    designFee,
+    incentive,
+    commission,
+
+    totalCashReceived,
+    outstanding,
+  };
+}
 
   // ─── Data fetching ────────────────────────────────────────────────────────
 
@@ -132,17 +267,102 @@ export default function Projects() {
   }, []);
 
   const fetchProjectDetail = useCallback(async (projectId: string) => {
-    setDetailLoading(true);
+  setDetailLoading(true);
 
-    const [expensesRes, cashRes, tasksRes] = await Promise.all([
-      supabase.from('project_expenses').select('*').eq('project_id', projectId),
-      supabase.from('project_cash_received').select('*').eq('project_id', projectId),
-      supabase.from('tasks').select('*').eq('project_id', projectId),
-    ]);
+  const [expensesRes, cashRes, tasksRes] = await Promise.all([
+    supabase
+      .from('project_expenses')
+      .select('*')
+      .eq('project_id', projectId),
 
-    if (expensesRes.data) setExpenses((expensesRes.data as ProjectExpense[]) || []);
-    if (cashRes.data) setCashReceived((cashRes.data as ProjectCashReceived[]) || []);
-    if (tasksRes.data) setTasks((tasksRes.data as Task[]) || []);
+    supabase
+      .from('project_cash_received')
+      .select('*')
+      .eq('project_id', projectId),
+
+    supabase
+      .from('tasks')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  // Expenses
+  if (expensesRes.data) {
+    setExpenses((expensesRes.data as ProjectExpense[]) || []);
+  }
+
+  // Cash
+  if (cashRes.data) {
+    setCashReceived((cashRes.data as ProjectCashReceived[]) || []);
+  }
+
+  // Tasks + Subtasks + Assignees
+  if (tasksRes.data) {
+    const tasksData = tasksRes.data as Task[];
+
+    const taskIds = tasksData.map(t => t.id);
+
+    // ─── Fetch Subtasks ─────────────────────────────
+
+    let subtaskMap: Record<string, any[]> = {};
+
+    if (taskIds.length > 0) {
+      const { data: subtasksData } = await supabase
+        .from('subtasks')
+        .select('*')
+        .in('task_id', taskIds);
+
+      if (subtasksData) {
+        for (const sub of subtasksData) {
+          if (!subtaskMap[sub.task_id]) {
+            subtaskMap[sub.task_id] = [];
+          }
+
+          subtaskMap[sub.task_id].push(sub);
+        }
+      }
+    }
+
+    // ─── Fetch Assignees ────────────────────────────
+
+    const assigneeIds = [
+      ...new Set(
+        tasksData
+          .map(t => t.assigned_to)
+          .filter(Boolean)
+      ),
+    ] as string[];
+
+    let assigneeMap: Record<string, any> = {};
+
+    if (assigneeIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', assigneeIds);
+
+      if (profilesData) {
+        for (const p of profilesData) {
+          assigneeMap[p.id] = p;
+        }
+      }
+    }
+
+      // ─── Enrich Tasks ───────────────────────────────
+
+      const enrichedTasks: TaskWithDetails[] = tasksData.map(task => ({
+        ...task,
+        subtasks: subtaskMap[task.id] || [],
+        assignee: task.assigned_to
+          ? assigneeMap[task.assigned_to]
+          : undefined,
+        effectiveStatus: calcEffectiveStatus(task),
+        overdueByDays: calcOverdueDays(task),
+      }));
+
+      setTasks(enrichedTasks);
+    }
 
     setDetailLoading(false);
   }, []);
@@ -307,6 +527,7 @@ export default function Projects() {
         received_date: new Date(cashForm.received_date).toISOString(),
         description: cashForm.description.trim(),
         amount: cashForm.amount,
+        gst_treatment: cashForm.gst_treatment,
       })
       .select();
 
@@ -318,7 +539,12 @@ export default function Projects() {
 
     if (data) {
       setCashReceived([...cashReceived, data[0] as ProjectCashReceived]);
-      setCashForm({ received_date: '', description: '', amount: 0 });
+      setCashForm({
+        received_date: '',
+        description: '',
+        amount: 0,
+        gst_treatment: 'GST',
+      });
       setSubError('');
     }
   };
@@ -368,9 +594,12 @@ export default function Projects() {
       )}
 
       {/* Two-panel layout */}
-      <div className="flex gap-6 flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden">
         {/* Left panel: Project list */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div
+          className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedProject ? 'hidden lg:flex' : 'flex'
+            }`}
+        >
           {loading ? (
             <div className="flex items-center justify-center h-48">
               <p className="text-slate-600">Loading projects...</p>
@@ -382,7 +611,10 @@ export default function Projects() {
           ) : (
             <>
               {/* MOBILE VIEW */}
-              <div className="flex flex-col gap-4 md:hidden">
+                  <div
+                    className={`flex flex-col gap-4 md:hidden transition-all duration-300 overflow-hidden ${selectedProject ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-[5000px] opacity-100'
+                      }`}
+                  >
                 {projects.map(proj => {
                   const stats = calcFinancials(proj);
 
@@ -574,7 +806,7 @@ export default function Projects() {
 
         {/* Right panel: Detail panel */}
         {selectedProject && (
-          <div className="w-96 flex flex-col border-l border-slate-200 pl-6 min-h-0">
+          <div className="w-full lg:w-96 flex flex-col border-t lg:border-t-0 lg:border-l border-slate-200 pt-6 lg:pt-0 lg:pl-6 min-h-0">
             {/* Detail header */}
             <div className="pb-4 border-b border-slate-200 flex items-start justify-between">
               <div className="flex-1">
@@ -626,11 +858,13 @@ export default function Projects() {
                         <StatCard label="Net Profit" value={financials.netProfit} />
                       </div>
                       <div className="border-t border-slate-200 pt-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <StatCard label="Design Fee" value={financials.designFee} />
-                          <StatCard label="Incentive" value={financials.incentive} />
-                          <StatCard label="Commission" value={financials.commission} />
-                        </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <StatCard label="Design Fee" value={financials.designFee} />
+                            <StatCard label="Incentive" value={financials.incentive} />
+
+                            <StatCard label="Commission" value={financials.commission} />
+                            <StatCard label="GST (18%)" value={financials.gstAmount} />
+                          </div>
                       </div>
                     </>
                   ) : (
@@ -639,13 +873,25 @@ export default function Projects() {
                     </div>
                   )}
 
-                  <div className="border-t border-slate-200 pt-4">
-                    <div className="flex flex-col gap-3">
-                      <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider">Cash Position</h3>
-                      <StatCard label="Total Received" value={financials.totalCashReceived} />
-                      <StatCard label="Outstanding" value={financials.outstanding} />
+                    <div className="border-t border-slate-200 pt-4">
+                      <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-4">
+                        Cash Position
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <StatCard
+                          label="Total Received"
+                          value={financials.totalCashReceived}
+                          valueClassName="text-emerald-600"
+                        />
+
+                        <StatCard
+                          label="Outstanding"
+                          value={financials.outstanding}
+                          valueClassName="text-amber-600"
+                        />
+                      </div>
                     </div>
-                  </div>
 
                   {selectedProject.description && (
                     <div className="border-t border-slate-200 pt-4">
@@ -658,12 +904,23 @@ export default function Projects() {
                 <div className="flex flex-col gap-4">
                   {canManageSubEntries && (
                     <form onSubmit={handleAddExpense} className="flex flex-col gap-2">
-                      <input
-                        type="date"
-                        value={expenseForm.expense_date}
-                        onChange={e => setExpenseForm(f => ({ ...f, expense_date: e.target.value }))}
-                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
-                      />
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[11px] text-slate-500 tracking-wide">
+                              Date (DD/MM/YYYY)
+                            </span>
+
+                            <input
+                              type="date"
+                              value={expenseForm.expense_date}
+                              onChange={e =>
+                                setExpenseForm(f => ({
+                                  ...f,
+                                  expense_date: e.target.value,
+                                }))
+                              }
+                              className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                            />
+                          </div>
                       <input
                         type="text"
                         placeholder="Description"
@@ -674,8 +931,13 @@ export default function Projects() {
                       <input
                         type="number"
                         placeholder="Amount"
-                        value={expenseForm.amount}
-                        onChange={e => setExpenseForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
+                        value={expenseForm.amount === 0 ? '' : expenseForm.amount}
+                            onChange={e =>
+                              setExpenseForm(f => ({
+                                ...f,
+                                amount: e.target.value === '' ? 0 : Number(e.target.value),
+                              }))
+                            }
                         className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
                       />
                       {subError && <p className="text-xs text-red-600">{subError}</p>}
@@ -708,7 +970,7 @@ export default function Projects() {
                     {expenses.length > 0 && (
                       <div className="flex justify-between items-center p-2 bg-slate-100 rounded font-semibold border-t-2">
                         <p className="text-xs">Total</p>
-                        <p className="text-sm">{formatINR(expenses.reduce((sum, e) => sum + e.amount, 0))}</p>
+                        <p className="text-sm font-bold text-red-600">{formatINR(expenses.reduce((sum, e) => sum + e.amount, 0))}</p>
                       </div>
                     )}
                   </div>
@@ -716,13 +978,48 @@ export default function Projects() {
               ) : detailTab === 'cash' ? (
                 <div className="flex flex-col gap-4">
                   {canManageSubEntries && (
-                    <form onSubmit={handleAddCash} className="flex flex-col gap-2">
-                      <input
-                        type="date"
-                        value={cashForm.received_date}
-                        onChange={e => setCashForm(f => ({ ...f, received_date: e.target.value }))}
-                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
-                      />
+                          <form onSubmit={handleAddCash} className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                              {/* Date */}
+                              <div className="flex flex-col gap-1 flex-1">
+                                <span className="text-[11px] text-slate-500 tracking-wide">
+                                  Date (DD/MM/YYYY)
+                                </span>
+
+                                <input
+                                  type="date"
+                                  value={cashForm.received_date}
+                                  onChange={e =>
+                                    setCashForm(f => ({
+                                      ...f,
+                                      received_date: e.target.value,
+                                    }))
+                                  }
+                                  className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                                />
+                              </div>
+
+                              {/* GST Dropdown */}
+                              <div className="flex flex-col gap-1 w-40">
+                                <span className="text-[11px] text-slate-500 tracking-wide">
+                                  GST Treatment
+                                </span>
+
+                                <select
+                                  value={cashForm.gst_treatment}
+                                  onChange={e =>
+                                    setCashForm(f => ({
+                                      ...f,
+                                      gst_treatment: e.target.value as 'GST' | 'NO_GST',
+                                    }))
+                                  }
+                                  className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                                >
+                                  <option value="GST">GST 18%</option>
+                                  <option value="NO_GST">No GST 0%</option>
+                                </select>
+                              </div>
+                            </div>
                       <input
                         type="text"
                         placeholder="Description"
@@ -733,8 +1030,13 @@ export default function Projects() {
                       <input
                         type="number"
                         placeholder="Amount"
-                        value={cashForm.amount}
-                        onChange={e => setCashForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
+                              value={cashForm.amount === 0 ? '' : cashForm.amount}
+                              onChange={e =>
+                                setCashForm(f => ({
+                                  ...f,
+                                  amount: e.target.value === '' ? 0 : Number(e.target.value),
+                                }))
+                              }  
                         className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
                       />
                       {subError && <p className="text-xs text-red-600">{subError}</p>}
@@ -767,42 +1069,151 @@ export default function Projects() {
                     {cashReceived.length > 0 && (
                       <div className="flex justify-between items-center p-2 bg-slate-100 rounded font-semibold border-t-2">
                         <p className="text-xs">Total Received</p>
-                        <p className="text-sm">{formatINR(cashReceived.reduce((sum, c) => sum + c.amount, 0))}</p>
+                        <p className="text-sm font-bold text-emerald-600">{formatINR(cashReceived.reduce((sum, c) => sum + c.amount, 0))}</p>
                       </div>
                     )}
                   </div>
                 </div>
               ) : detailTab === 'tasks' ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-6">
                   {tasks.length === 0 ? (
-                    <p className="text-xs text-slate-500">No tasks assigned</p>
+                    <div className="flex items-center justify-center py-8">
+                      <p className="text-sm text-slate-500">
+                        No tasks found for this project
+                      </p>
+                    </div>
                   ) : (
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="text-left py-2 font-semibold text-slate-900">Title</th>
-                          <th className="text-left py-2 font-semibold text-slate-900">Status</th>
-                          <th className="text-center py-2 font-semibold text-slate-900">Progress</th>
-                          <th className="text-left py-2 font-semibold text-slate-900">Deadline</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tasks.map(task => (
-                          <tr key={task.id} className="border-b border-slate-200">
-                            <td className="py-2 pr-2">{task.title}</td>
-                            <td className="py-2 pr-2">
-                              <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-900">
-                                {task.status}
+                    <>
+                      {(
+                        [
+                          'Not Started',
+                          'Ongoing',
+                          'Overdue',
+                          'Completed',
+                        ] as TaskStatus[]
+                      ).map(status => {
+                        const filtered = tasks.filter(
+                          t => t.effectiveStatus === status
+                        );
+
+                        if (filtered.length === 0) return null;
+
+                        return (
+                          <div key={status}>
+                            {/* Section Header */}
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                {status}
+                              </h3>
+
+                              <span className="text-xs text-slate-400">
+                                {filtered.length}
                               </span>
-                            </td>
-                            <td className="py-2 text-center">{task.progress || 0}%</td>
-                            <td className="py-2 pr-2 text-slate-600">
-                              {task.deadline ? new Date(task.deadline).toLocaleDateString() : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            </div>
+
+                            {/* Cards */}
+                            <div className="flex flex-col gap-3">
+                              {filtered.map(task => (
+                                <button
+                                  key={task.id}
+                                  onClick={() => setSelectedTask(task)}
+                                  className="w-full text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition"
+                                >
+                                  {/* Top */}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <h3 className="text-sm font-semibold text-slate-900 truncate">
+                                        {task.title}
+                                      </h3>
+
+                                      {task.description && (
+                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                                          {task.description}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <span
+                                      className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shrink-0 ${task.effectiveStatus === 'Completed'
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : task.effectiveStatus === 'Overdue'
+                                            ? 'bg-red-100 text-red-700'
+                                            : task.effectiveStatus === 'Ongoing'
+                                              ? 'bg-blue-100 text-blue-700'
+                                              : 'bg-slate-100 text-slate-700'
+                                        }`}
+                                    >
+                                      {task.effectiveStatus}
+                                    </span>
+                                  </div>
+
+                                  {/* Assignee + Deadline */}
+                                  <div className="flex flex-wrap items-center gap-3 mt-3">
+                                    {task.assignee && (
+                                      <div className="text-[11px] text-slate-600">
+                                        Assigned to:{' '}
+                                        <span className="font-medium">
+                                          {task.assignee.full_name}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {task.deadline && (
+                                      <div className="text-[11px] text-slate-600">
+                                        Due:{' '}
+                                        <span className="font-medium">
+                                          {new Date(
+                                            task.deadline
+                                          ).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {task.overdueByDays && (
+                                      <div className="text-[11px] text-red-600 font-medium">
+                                        {task.overdueByDays} day(s) late
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Subtasks Progress */}
+                                  {task.subtasks.length > 0 && (
+                                    <div className="mt-3">
+                                      <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                                        <span>Subtasks</span>
+
+                                        <span>
+                                          {
+                                            task.subtasks.filter(
+                                              s => s.is_completed
+                                            ).length
+                                          }{' '}
+                                          / {task.subtasks.length}
+                                        </span>
+                                      </div>
+
+                                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-slate-900 rounded-full transition-all"
+                                          style={{
+                                            width: `${(task.subtasks.filter(
+                                              s => s.is_completed
+                                            ).length /
+                                                task.subtasks.length) *
+                                              100
+                                              }%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
                   )}
                 </div>
               ) : null}
@@ -984,6 +1395,18 @@ export default function Projects() {
           </div>
         </div>
       )}
+      <TaskDetailModal
+        task={selectedTask}
+        open={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        departments={departments}
+        canManage={canManage}
+        onRefresh={() => {
+          if (selectedProject) {
+            fetchProjectDetail(selectedProject.id);
+          }
+        }}
+      />
     </div>
   );
 }
