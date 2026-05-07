@@ -37,6 +37,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "fdir": "^6.5.0",
     "globals": "^17.4.0",
     "postcss": "^8.5.10",
     "supabase": "^2.98.1",
