@@ -578,7 +578,7 @@ export default function Projects() {
       <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-200">
         <div>
           <h1 className="text-3xl font-bold mb-1">Projects</h1>
-          <p className="text-slate-600">Manage active and past projects</p>
+          <p className="text-xs text-slate-600">Manage active and past projects</p>
         </div>
         {canManage && (
           <Button onClick={openCreate} className="flex items-center gap-2">

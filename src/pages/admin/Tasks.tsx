@@ -420,7 +420,7 @@ export default function Tasks() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold mb-1">Tasks</h1>
-          <p className="text-slate-600">Manage department tasks across your organisation</p>
+          <p className="text-xs text-slate-600">Manage department tasks across your organisation</p>
         </div>
         {canManage && (
           <Button onClick={openCreate} className="flex items-center gap-2">

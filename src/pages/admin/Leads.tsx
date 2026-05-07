@@ -141,7 +141,7 @@ export default function Leads() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-1">Leads</h1>
-          <span className="text-sm text-slate-600">Manage your CRM pipeline</span>
+          <span className="text-xs text-slate-600">Manage your CRM pipeline</span>
         </div>
         <Button onClick={openCreate} className="flex items-center gap-2">
           <Plus size={16} />

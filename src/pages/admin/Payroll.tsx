@@ -790,7 +790,7 @@ export default function PayrollPage() {
       <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
         <div>
           <PHeading tag="h1" size="x-large" className="mb-1">Payroll</PHeading>
-          <PText color="contrast-medium">Manage employee salaries and payslips</PText>
+          <PText size="x-small" color="contrast-medium">Manage employee salaries and payslips</PText>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Month select */}

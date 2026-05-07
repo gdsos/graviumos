@@ -96,17 +96,29 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         {kpiCards.map(card => {
           const IconComponent = card.icon;
+
           return (
-            <div key={card.label} className="bg-surface rounded-xl border border-contrast-low p-5 flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${card.color}`}>
+            <div
+              key={card.label}
+              className="bg-surface rounded-xl border border-contrast-low p-4 sm:p-5 flex items-start gap-3 min-w-0 overflow-hidden"
+            >
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${card.color}`}
+              >
                 <IconComponent size={20} className="text-current" />
               </div>
-              <div>
-                <span className="text-xs text-slate-600 uppercase tracking-wide block">{card.label}</span>
-                <h3 className="text-xl font-bold mt-1">{loading ? '—' : card.value}</h3>
+
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] sm:text-xs text-slate-600 uppercase tracking-wide block truncate">
+                  {card.label}
+                </span>
+
+                <h3 className="text-lg sm:text-xl font-bold mt-1 break-words leading-tight">
+                  {loading ? '—' : card.value}
+                </h3>
               </div>
             </div>
           );
