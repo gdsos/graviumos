@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Task, type Subtask, type Department } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
-import { Pencil, User, Trash2, X, List } from 'lucide-react';
+import { Pencil, User, Trash2, List } from 'lucide-react';
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
 interface TaskWithDetails extends Task {

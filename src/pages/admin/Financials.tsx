@@ -25,6 +25,7 @@ import {
   Calculator,
   BarChart3,
   TrendingUp,
+  Lock,
   DoorOpen } from 'lucide-react';
 import { PButton, PHeading, PInlineNotification, PTag, PText, PIcon, PTabs, PTabsItem } from '@/components/ui/porsche';
 

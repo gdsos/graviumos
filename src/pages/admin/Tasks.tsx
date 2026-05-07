@@ -342,26 +342,6 @@ export default function Tasks() {
     setShowTaskModal(true);
   };
 
-  const openEdit = (task: TaskWithDetails) => {
-    setEditingTask(task);
-    let deadline_date = '';
-    if (task.deadline) {
-      const d = new Date(task.deadline);
-      deadline_date = d.toISOString().slice(0, 10);
-    }
-    setForm({
-      title: task.title,
-      description: task.description || '',
-      assigned_to: task.assigned_to || '',
-      department_id: task.department_id || '',
-      deadline_date,
-      status: task.status,
-      project_id: task.project_id || '',
-    });
-    setFormError('');
-    setShowTaskModal(true);
-  };
-
   const handleSaveTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) { setFormError('Title is required.'); return; }
@@ -400,14 +380,6 @@ export default function Tasks() {
     setSaving(false);
     if (err) { setFormError(err.message); return; }
     setShowTaskModal(false);
-    fetchTasks();
-  };
-
-  const handleDeleteTask = async (id: string) => {
-    if (!confirm('Delete this task and all its subtasks?')) return;
-    await supabase.from('subtasks').delete().eq('task_id', id);
-    await supabase.from('tasks').delete().eq('id', id);
-    setSelectedTask(null);
     fetchTasks();
   };
 
