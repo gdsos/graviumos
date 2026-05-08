@@ -42,12 +42,14 @@ function formatDeadline(iso: string | null): string {
 }
 
 function isOverdue(
-    deadline: string | null,
-    status?: string
+  deadline: string | null,
+  status?: string
 ): boolean {
-    if (!deadline || status === 'Completed') return false;
+  if (!deadline || status === 'Completed') {
+    return false;
+  }
 
-    return new Date(deadline) < new Date();
+  return new Date(deadline).getTime() < Date.now();
 }
 
 function calcProgress(subtasks: Subtask[]): number {

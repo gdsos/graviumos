@@ -149,7 +149,9 @@ export default function Projects() {
   const [saving, setSaving] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [detailTab, setDetailTab] = useState<'overview' | 'expenses' | 'cash' | 'tasks'>('overview');
+  const [detailTab, setDetailTab] = useState<
+    'overview' | 'expenses' | 'cash' | 'tasks' | 'timeline'
+  >('overview');
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [cashReceived, setCashReceived] = useState<ProjectCashReceived[]>([]);
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
@@ -557,7 +559,7 @@ export default function Projects() {
 
   const openDetail = async (proj: Project) => {
     setSelectedProject(proj);
-    setDetailTab('overview');
+    setDetailTab(canEditFinancials ? 'overview' : 'tasks');
     await fetchProjectDetail(proj.id);
   };
 
@@ -827,20 +829,65 @@ export default function Projects() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mt-4 pb-3 border-b border-slate-200">
-              {(['overview', 'expenses', 'cash', 'tasks'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setDetailTab(tab)}
-                  className={`text-xs font-semibold px-3 py-2 rounded transition-colors ${
-                    detailTab === tab
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-600 hover:bg-slate-100'
+            <div className="flex gap-2 mt-4 pb-3 border-b border-slate-200 overflow-x-auto">
+
+              {/* Finance/Admin Only */}
+              {canEditFinancials && (
+                <>
+                  <button
+                    onClick={() => setDetailTab('overview')}
+                    className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'overview'
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                  >
+                    Overview
+                  </button>
+
+                  <button
+                    onClick={() => setDetailTab('expenses')}
+                    className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'expenses'
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                  >
+                    Expenses
+                  </button>
+
+                  <button
+                    onClick={() => setDetailTab('cash')}
+                    className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'cash'
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                  >
+                    Cash
+                  </button>
+                </>
+              )}
+
+              {/* Everyone gets Timeline */}
+              <button
+                onClick={() => setDetailTab('timeline')}
+                className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'timeline'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
                   }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
+              >
+                Timeline
+              </button>
+
+              {/* Tasks ALWAYS LAST */}
+              <button
+                onClick={() => setDetailTab('tasks')}
+                className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'tasks'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+              >
+                Tasks
+              </button>
+
             </div>
 
             {/* Tab content */}
@@ -1215,6 +1262,12 @@ export default function Projects() {
                       })}
                     </>
                   )}
+                </div>
+              ) : detailTab === 'timeline' ? (
+                <div className="flex items-center justify-center py-10">
+                  <p className="text-sm text-slate-500">
+                    Timeline coming soon
+                  </p>
                 </div>
               ) : null}
             </div>

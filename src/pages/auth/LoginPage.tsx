@@ -64,32 +64,31 @@ export default function LoginPage({ portalType }: LoginPageProps) {
   const isDark = theme === 'dark';
 
   return (
-    <div className={`min-h-screen flex ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
-      {/* Left branding panel - placeholder background that can be replaced with image */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-950 flex-col items-center justify-center p-16 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-64 h-64 rounded-full border-2 border-white"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full border border-white"></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-128 h-128 rounded-full border border-white"></div>
-        </div>
+    <div className={`min-h-screen flex ${isDark ? 'bg-black' : 'bg-white'}`}>
+      {/* Left branding panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden p-16 flex-col items-center justify-center">
+
+        {/* Background Image */}
+        <img
+          src="/loginbg.jpg"
+          alt="Background"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+
+        {/* Optional dark overlay for readability */}
+        <div className="absolute inset-0 bg-black/75" />
+
+        {/* Foreground content (unchanged) */}
         <div className="relative z-10 flex flex-col items-center text-center">
+
           <div className="flex items-center gap-2 mb-8">
             <img
-              src="/GRAVIUM.png"
+              src="/Logo-Icon.png"
               alt="GRAVIUM"
               className="h-10 brightness-0 invert"
-              style={{ height: '40px' }}
+              style={{ height: '200px' }}
             />
-            <span className="text-white font-bold text-3xl tracking-tight">OS</span>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-4">
-            {portalType === 'admin' ? 'Admin Portal' : 'Employee Portal'}
-          </h2>
-          <p className="text-slate-300">
-            {portalType === 'admin'
-              ? 'Full control over your organization'
-              : 'Your personal workspace'}
-          </p>
         </div>
       </div>
 
@@ -99,17 +98,17 @@ export default function LoginPage({ portalType }: LoginPageProps) {
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-10 justify-center">
             <img
-              src={isDark ? '/Logo-Icon.png' : '/Logo-Icon.png'}
+              src={isDark ? '/GRAVIUM.png' : '/GRAVIUM.png'}
               alt="GRAVIUM"
-              style={{ height: '36px', filter: isDark ? 'invert(1)' : 'none' }}
+              style={{ height: '30px', filter: isDark ? 'invert(1)' : 'none' }}
             />
-            <span className="font-bold text-2xl text-slate-900">OS</span>
+            <span className="font-medium text-2xl text-black">OS</span>
           </div>
 
-          <h1 className="text-3xl font-bold mb-2">
+          <h1 className="text-2xl font-bold mb-2 text-black">
             {portalType === 'admin' ? 'Admin Sign In' : 'Employee Sign In'}
           </h1>
-          <p className="text-slate-600 mb-8">
+          <p className="text-xs text-black mb-8">
             Sign in to your {portalType === 'admin' ? 'admin' : 'employee'} account
           </p>
 
@@ -122,7 +121,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-5">
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1.5">
+              <label className="block text-sm font-medium text-black mb-1.5">
                 Email address
               </label>
               <input
@@ -131,11 +130,11 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                 onChange={e => setEmail(e.target.value)}
                 required
                 placeholder="you@gravium.com"
-                className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+                className="w-full px-4 py-3 rounded-lg border-2 border-black bg-white text-black font-medium placeholder:text-small text-black/72 focus:outline-none focus:border-black transition-colors"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1.5">
+              <label className="block text-sm font-medium text-black mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -146,12 +145,12 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                   required
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors pr-16"
+                  className="w-full px-4 py-3 rounded-lg border-2 border-black bg-white text-black placeholder:text-black/50 focus:outline-none focus:border-black transition-colors pr-16"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-black/50 hover:text-black transition-colors"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -167,26 +166,26 @@ export default function LoginPage({ portalType }: LoginPageProps) {
             </Button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-200">
+          <div className="mt-8 pt-6 border-t border-black">
             {portalType === 'admin' ? (
               <div className="flex flex-col gap-3 text-center">
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-black">
                   Employee?{' '}
-                  <Link to="/login/employee" className="text-slate-900 underline font-medium hover:text-slate-700">
+                  <Link to="/login/employee" className="text-black underline font-medium hover:text-black">
                     Switch to Employee Portal
                   </Link>
                 </p>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-black">
                   First time?{' '}
-                  <Link to="/admin/create" className="text-slate-900 underline font-medium hover:text-slate-700">
+                  <Link to="/admin/create" className="text-black underline font-medium hover:text-black">
                     Create Admin Account
                   </Link>
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-slate-600 text-center">
+              <p className="text-sm text-black text-center">
                 Admin?{' '}
-                <Link to="/login/admin" className="text-slate-900 underline font-medium hover:text-slate-700">
+                <Link to="/login/admin" className="text-black underline font-medium hover:text-black">
                   Switch to Admin Portal
                 </Link>
               </p>

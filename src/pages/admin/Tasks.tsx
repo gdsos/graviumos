@@ -27,7 +27,11 @@ const DEPT_NAMES = [
   'Finance',
 ] as const;
 
-const STATUSES: Exclude<TaskStatus, 'Overdue'>[] = ['Not Started', 'Ongoing', 'Completed'];
+const STATUSES: TaskStatus[] = [
+  'Not Started',
+  'Ongoing',
+  'Completed'
+];
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
   'Not Started': 'bg-slate-100 text-slate-900',
@@ -39,8 +43,20 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function calcEffectiveStatus(task: Task): TaskStatus {
-  if (task.status === 'Completed') return 'Completed';
-  if (task.deadline && new Date(task.deadline) < new Date()) return 'Overdue';
+  // Completed always wins
+  if (task.status === 'Completed') {
+    return 'Completed';
+  }
+
+  // Overdue only if not completed
+  if (task.deadline) {
+    const now = new Date(task.deadline);
+
+    if (now.getTime() < Date.now()) {
+      return 'Overdue';
+    }
+  }
+
   return task.status as TaskStatus;
 }
 
@@ -64,7 +80,8 @@ function formatDeadline(iso: string | null): string {
 
 function isOverdue(deadline: string | null): boolean {
   if (!deadline) return false;
-  return new Date(deadline) < new Date();
+
+  return new Date(deadline).getTime() < Date.now();
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -299,6 +316,13 @@ export default function Tasks() {
     });
 
     setTasks(enriched);
+    if (selectedTask) {
+      const updatedSelected = enriched.find(
+        t => t.id === selectedTask.id
+      );
+
+      setSelectedTask(updatedSelected || null);
+    }
     setLoading(false);
   }, []);
 
@@ -308,11 +332,49 @@ export default function Tasks() {
     fetchProjects();
   }, [fetchTasks, fetchProfiles, fetchProjects]);
 
+  useEffect(() => {
+    if (!profile || departments.length === 0) return;
+
+    if (isAdmin()) return;
+
+    const firstAccessible = DEPT_NAMES.findIndex(name => {
+      const dept = departments.find(d => d.name === name);
+      return dept && profile.department_ids?.includes(dept.id);
+    });
+
+    if (firstAccessible >= 0) {
+      setActiveTabIndex(firstAccessible);
+    }
+  }, [profile, departments]);
+
   const tabTasks = (deptId?: string): TaskWithDetails[] => {
-    if (!deptId) return [];
-    let filtered = tasks.filter(t => t.department_id === deptId);
-    if (filterAssignee) filtered = filtered.filter(t => t.assigned_to === filterAssignee);
-    return filtered;
+    if (!deptId || !profile) return [];
+
+    // ADMIN
+    if (isAdmin()) {
+      return tasks.filter(
+        t => t.department_id === deptId
+      );
+    }
+
+    // DEPARTMENT HEAD
+    if (isDeptHead()) {
+      // Must belong to this department
+      if (!profile.department_ids?.includes(deptId)) {
+        return [];
+      }
+
+      return tasks.filter(
+        t => t.department_id === deptId
+      );
+    }
+
+    // EMPLOYEE
+    return tasks.filter(
+      t =>
+        t.department_id === deptId &&
+        t.assigned_to === profile.id
+    );
   };
 
   const groupByStatus = (taskList: TaskWithDetails[]): Record<TaskStatus, TaskWithDetails[]> => {
@@ -352,6 +414,11 @@ export default function Tasks() {
       ? new Date(form.deadline_date).toISOString()
       : null;
 
+    const completedAt =
+      form.status === 'Completed'
+        ? editingTask?.completed_at || new Date().toISOString()
+        : null;
+
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
@@ -361,6 +428,7 @@ export default function Tasks() {
       status: form.status,
       project_id: form.project_id || null,
       updated_at: new Date().toISOString(),
+      completed_at: completedAt,
     };
 
     let err;
@@ -382,8 +450,11 @@ export default function Tasks() {
     setShowTaskModal(false);
     fetchTasks();
   };
-
-  const activeDeptTasks = tabTasks(activeDept?.id);
+  
+  const activeDeptTasks = tabTasks(activeDept?.id).filter(task => {
+    if (!filterAssignee) return true;
+    return task.assigned_to === filterAssignee;
+  });
   const grouped = groupByStatus(activeDeptTasks);
 
   return (
@@ -413,19 +484,36 @@ export default function Tasks() {
         <div className="flex gap-6">
           {DEPT_NAMES.map((deptName, idx) => {
             const dept = departments.find(d => d.name === deptName);
-            const deptTaskCount = dept ? tasks.filter(t => t.department_id === dept.id).length : 0;
+
+            // Hide departments user should not access
+            if (
+              !isAdmin() &&
+              dept &&
+              !profile?.department_ids?.includes(dept.id)
+            ) {
+              return null;
+            }
+
+            let deptTaskCount = 0;
+
+            if (dept) {
+              deptTaskCount = tabTasks(dept.id).length;
+            }
 
             return (
               <button
                 key={deptName}
-                onClick={() => { setActiveTabIndex(idx); setFilterAssignee(''); }}
-                className={`py-3 px-1 font-medium text-sm transition-colors border-b-2 ${
-                  idx === activeTabIndex
+                onClick={() => {
+                  setActiveTabIndex(idx);
+                  setFilterAssignee('');
+                }}
+                className={`py-3 px-1 font-medium text-sm transition-colors border-b-2 ${idx === activeTabIndex
                     ? 'border-slate-900 text-slate-900'
                     : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
-                {deptName}{deptTaskCount > 0 ? ` (${deptTaskCount})` : ''}
+                {deptName}
+                {deptTaskCount > 0 ? ` (${deptTaskCount})` : ''}
               </button>
             );
           })}
