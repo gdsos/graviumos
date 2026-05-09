@@ -106,10 +106,10 @@ export default function LoginPage({ portalType }: LoginPageProps) {
           </div>
 
           <h1 className="text-2xl font-bold mb-2 text-black">
-            {portalType === 'admin' ? 'Admin Sign In' : 'Employee Sign In'}
+            {portalType === 'admin' ? 'Admin Sign In' : 'Welcome Back'}
           </h1>
           <p className="text-xs text-black mb-8">
-            Sign in to your {portalType === 'admin' ? 'admin' : 'employee'} account
+            Sign in to your {portalType === 'admin' ? 'admin' : 'employee'} dashboard
           </p>
 
           {error && (

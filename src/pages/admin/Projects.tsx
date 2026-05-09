@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import type { Task, Subtask, Profile } from '../../lib/supabase';
 import { Plus, Trash2, X, Edit2 } from 'lucide-react';
-import TaskDetailModal from './TaskDetailModal';
+import TaskDetailModal from '../../components/tasks/TaskDetailModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,6 +120,7 @@ export default function Projects() {
   const {
   profile,
   departments,
+  userDepartments,
   isAdmin,
   isFinance,
   isDeptHead,
@@ -179,6 +180,7 @@ export default function Projects() {
   const canManage = isAdmin() || isDeptHead();
   const canEditFinancials = isAdmin() || isFinance();
   const canManageSubEntries = canEditFinancials;
+  const canViewTasks = isAdmin() || isDeptHead();
 
   // ─── Calculations ────────────────────────────────────────────────────────
 
@@ -282,11 +284,22 @@ export default function Projects() {
       .select('*')
       .eq('project_id', projectId),
 
-    supabase
-      .from('tasks')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false }),
+    (() => {
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  // Non-admin users only see their own department tasks
+      if (!isAdmin() && userDepartments.length > 0) {
+        const departmentCodes = userDepartments.map(d => d.code);
+
+        query = query.in('department', departmentCodes);
+      }
+
+  return query;
+})(),
   ]);
 
   // Expenses
@@ -559,7 +572,13 @@ export default function Projects() {
 
   const openDetail = async (proj: Project) => {
     setSelectedProject(proj);
-    setDetailTab(canEditFinancials ? 'overview' : 'tasks');
+    setDetailTab(
+      canEditFinancials
+        ? 'overview'
+        : canViewTasks
+          ? 'tasks'
+          : 'timeline'
+    );
     await fetchProjectDetail(proj.id);
   };
 
@@ -877,16 +896,18 @@ export default function Projects() {
                 Timeline
               </button>
 
-              {/* Tasks ALWAYS LAST */}
-              <button
-                onClick={() => setDetailTab('tasks')}
-                className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'tasks'
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-              >
-                Tasks
-              </button>
+              {/* Tasks */}
+              {canViewTasks && (
+                <button
+                  onClick={() => setDetailTab('tasks')}
+                  className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'tasks'
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                >
+                  Tasks
+                </button>
+              )}
 
             </div>
 
@@ -1121,7 +1142,7 @@ export default function Projects() {
                     )}
                   </div>
                 </div>
-              ) : detailTab === 'tasks' ? (
+              ) : detailTab === 'tasks' && canViewTasks ? (
                 <div className="flex flex-col gap-6">
                   {tasks.length === 0 ? (
                     <div className="flex items-center justify-center py-8">

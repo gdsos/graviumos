@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import type { Task, Subtask, Profile } from '../../lib/supabase';
 import { Plus, Trash2, X, Edit2 } from 'lucide-react';
-import TaskDetailModal from "../admin/TaskDetailModal";
+import TaskDetailModal from "../../components/tasks/TaskDetailModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,7 +173,7 @@ export default function PortalProjects() {
 
   // ─── Permissions ──────────────────────────────────────────────────────────
 
-  const canManage = false;
+  const canManage = isAdmin() || isDeptHead();
   const canEditFinancials = isAdmin() || isFinance();
   const canManageSubEntries = canEditFinancials;
   const [detailTab, setDetailTab] = useState<
@@ -288,8 +288,8 @@ export default function PortalProjects() {
           .select('*')
           .eq('project_id', projectId);
 
-        // Admin + Finance → all tasks
-        if (isAdmin() || isFinance()) {
+        // Admin → all tasks
+        if (isAdmin()) {
           return query.order('created_at', { ascending: false });
         }
 
@@ -311,7 +311,12 @@ export default function PortalProjects() {
           }
 
           // Remove duplicates
-          const uniqueIds = [...new Set(deptMemberIds)];
+          const uniqueIds = [
+            ...new Set([
+              ...deptMemberIds,
+              ...(profile?.id ? [profile.id] : []),
+            ]),
+          ];
 
           if (uniqueIds.length === 0) {
             return query.eq('assigned_to', '___never___');

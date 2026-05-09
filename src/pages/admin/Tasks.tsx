@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase, type Task, type Subtask, type Profile, type Department } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Calendar, Plus } from 'lucide-react';
-import TaskDetailModal from './TaskDetailModal';
-import TasksBoard from './TasksBoard';
+import TaskDetailModal from '../../components/tasks/TaskDetailModal';
+import TasksBoard from '../../components/tasks/TasksBoard';
+import { createNotification } from '../../lib/notifications';
+import {
+    calcEffectiveStatus,
+    calcOverdueDays,
+} from '../../lib/taskUtils';
 import type React from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,31 +42,6 @@ const STATUSES: TaskStatus[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function calcEffectiveStatus(task: Task): TaskStatus {
-  // Completed always wins
-  if (task.status === 'Completed') {
-    return 'Completed';
-  }
-
-  // Overdue only if not completed
-  if (task.deadline) {
-    const now = new Date(task.deadline);
-
-    if (now.getTime() < Date.now()) {
-      return 'Overdue';
-    }
-  }
-
-  return task.status as TaskStatus;
-}
-
-function calcOverdueDays(task: Task): number | undefined {
-  if (task.status !== 'Completed' || !task.deadline || !task.completed_at) return undefined;
-  const deadline = new Date(task.deadline);
-  const completed = new Date(task.completed_at);
-  const diff = Math.floor((completed.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24));
-  return diff > 0 ? diff : undefined;
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -98,8 +79,8 @@ const EMPTY_FORM: TaskFormState = {
 };
 
 export default function Tasks() {
+  const location = useLocation();
   const { profile, departments, isAdmin, isDeptHead } = useAuth();
-
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,16 +126,15 @@ export default function Tasks() {
   }, []);
 
   const fetchTasks = useCallback(async () => {
-    setLoading(true);
-    const { data: tasksData, error: tasksErr } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      setLoading(true);
 
-    if (tasksErr || !tasksData) {
-      setLoading(false);
-      return;
-    }
+      const { data: tasksData, error: tasksErr } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (tasksErr || !tasksData) return;
 
     const taskIds = tasksData.map((t: Task) => t.id);
     let subtaskMap: Record<string, Subtask[]> = {};
@@ -185,8 +165,12 @@ export default function Tasks() {
       }
     }
 
-    const enriched: TaskWithDetails[] = tasksData.map((t: Task) => {
-      const subtasks = subtaskMap[t.id] || [];
+      const safeTasks = (tasksData || []).filter(Boolean);
+
+      const enriched: TaskWithDetails[] = safeTasks.map((t: Task) => {
+        const subtasks = Array.isArray(subtaskMap[t.id])
+          ? subtaskMap[t.id]
+          : [];
       return {
         ...t,
         subtasks,
@@ -196,15 +180,16 @@ export default function Tasks() {
       };
     });
 
-    setTasks(enriched);
-    if (selectedTask) {
-      const updatedSelected = enriched.find(
-        t => t.id === selectedTask.id
-      );
+      setTasks(enriched);
 
-      setSelectedTask(updatedSelected || null);
+      setLoading(false);
+
+    } catch (error) {
+
+      console.error('Failed to fetch tasks:', error);
+
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -212,6 +197,65 @@ export default function Tasks() {
     fetchProfiles();
     fetchProjects();
   }, [fetchTasks, fetchProfiles, fetchProjects]);
+
+  useEffect(() => {
+
+    if (!profile) return;
+
+    if (loading) return;
+
+    if (!Array.isArray(tasks)) return;
+
+    const params = new URLSearchParams(location.search);
+
+    const taskId = params.get('task');
+
+    // no task in URL
+    if (!taskId) {
+      return;
+    }
+
+    const foundTask = tasks.find(
+      t => t && t.id === taskId
+    );
+
+    // task deleted or missing
+    if (!foundTask) {
+
+      setSelectedTask(null);
+
+      window.history.replaceState(
+        {},
+        '',
+        '/portal/tasks'
+      );
+
+      return;
+    }
+
+    // switch department tab
+    const deptIndex = DEPT_NAMES.findIndex(name => {
+      const dept = departments.find(
+        d => d.name === name
+      );
+
+      return dept?.id === foundTask.department_id;
+    });
+
+    if (deptIndex >= 0) {
+      setActiveTabIndex(deptIndex);
+    }
+
+    setSelectedTask(foundTask);
+
+  }, [
+    location.search,
+    tasks,
+    loading,
+    profile,
+    departments
+  ]);
+
 
   useEffect(() => {
     if (!profile || departments.length === 0) return;
@@ -301,16 +345,58 @@ export default function Tasks() {
 
     let err;
     if (editingTask) {
-      const { error: e } = await supabase.from('tasks').update(payload).eq('id', editingTask.id);
+
+      const { error: e } = await supabase
+        .from('tasks')
+        .update(payload)
+        .eq('id', editingTask.id);
+
       err = e;
+
+      // UPDATE NOTIFICATION
+      if (!e && form.assigned_to) {
+
+        let notifTitle = 'Task Updated';
+        let notifMessage = `"${form.title}" was updated`;
+
+        // COMPLETED
+        if (form.status === 'Completed') {
+          notifTitle = 'Task Completed';
+          notifMessage = `"${form.title}" was marked completed`;
+        }
+
+        await createNotification(
+          form.assigned_to,
+          notifTitle,
+          notifMessage,
+          'task',
+          `/portal/tasks?task=${editingTask.id}`
+        );
+      }
     } else {
-      const { error: e } = await supabase.from('tasks').insert({
-        ...payload,
-        created_by: profile?.id,
-        progress: 0,
-        completed_at: null,
-      });
+
+      const { data, error: e } = await supabase
+        .from('tasks')
+        .insert({
+          ...payload,
+          created_by: profile?.id,
+          progress: 0,
+          completed_at: null,
+        })
+        .select()
+        .single();
+
       err = e;
+
+      if (!e && data && form.assigned_to) {
+        await createNotification(
+          form.assigned_to,
+          'New Task Assigned',
+          `You were assigned: ${form.title}`,
+          'task',
+          `/portal/tasks?task=${data.id}`
+        );
+      }
     }
 
     setSaving(false);
@@ -319,7 +405,30 @@ export default function Tasks() {
     fetchTasks();
   };
   
-  const activeDeptTasks = tabTasks(activeDept?.id).filter(task => {
+  const handleTaskDeleted = (taskId: string) => {
+
+    // clear selected FIRST
+    setSelectedTask(null);
+
+    // remove deleted task safely
+    setTasks(prev =>
+      (prev || []).filter(t => t && t.id !== taskId)
+    );
+
+    // remove modal query param
+    window.history.replaceState(
+      {},
+      '',
+      '/portal/tasks'
+    );
+
+    // FULL REFRESH TO PREVENT STALE STATE
+    setTimeout(() => {
+      fetchTasks();
+    }, 0);
+  };
+
+  const activeDeptTasks = (tabTasks(activeDept?.id) || []).filter(task => {
     if (!filterAssignee) return true;
     return task.assigned_to === filterAssignee;
   });
@@ -539,10 +648,19 @@ export default function Tasks() {
       <TaskDetailModal
         task={selectedTask}
         open={!!selectedTask}
-        onClose={() => setSelectedTask(null)}
+        onClose={() => {
+          setSelectedTask(null);
+
+          window.history.replaceState(
+            {},
+            '',
+            '/portal/tasks'
+          );
+        }}
         departments={departments}
         canManage={canManage}
         onRefresh={fetchTasks}
+        onTaskDeleted={handleTaskDeleted}
       />
     </div>
   );

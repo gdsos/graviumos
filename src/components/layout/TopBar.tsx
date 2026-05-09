@@ -29,6 +29,19 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   const { theme, toggleTheme } = useTheme();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [lastSeenAnnouncement, setLastSeenAnnouncement] =
+  useState<string | null>(
+    localStorage.getItem("lastSeenAnnouncement")
+  );
+
+  const unreadAnnouncements = announcements.filter(a => {
+    if (!lastSeenAnnouncement) return true;
+
+    return (
+      new Date(a.created_at).getTime() >
+      new Date(lastSeenAnnouncement).getTime()
+    );
+  }).length;
   const isAdmin = hasPermission(profile?.role, "settings.view");
   const accountRoute = isAdmin
     ? "/admin/settings"
@@ -43,7 +56,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   useEffect(() => {
     if (!profile) return;
 
-    const fetchData = async () => {
+    const fetchNotifications = async () => {
       const { data } = await supabase
         .from("notifications")
         .select("*")
@@ -52,34 +65,136 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         .limit(10);
 
       setNotifications(data || []);
+    };
 
-      const { data: ann } = await supabase
+    const fetchAnnouncements = async () => {
+      let query = supabase
         .from("announcements")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(5);
 
-      setAnnouncements(ann || []);
+      // Company-wide + user's departments
+      if (profile.department_ids?.length) {
+        query = query.or(
+          `target_type.eq.company,target_department_id.in.(${profile.department_ids.join(",")})`
+        );
+      } else {
+        query = query.eq("target_type", "company");
+      }
+
+      const { data } = await query;
+
+      setAnnouncements(data || []);
     };
 
-    fetchData();
+    const fetchAll = async () => {
+      await Promise.all([
+        fetchNotifications(),
+        fetchAnnouncements(),
+      ]);
+    };
 
-    const channel = supabase
-      .channel("topbar-notifications")
+    fetchAll();
+
+    // Notifications realtime
+    const notificationsChannel = supabase
+      .channel(`notifications-${profile.id}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "notifications",
           filter: `user_id=eq.${profile.id}`,
         },
-        () => fetchData()
+        payload => {
+          if (payload.eventType === "INSERT") {
+            setNotifications(prev => [
+              payload.new as any,
+              ...prev,
+            ].slice(0, 10));
+          }
+
+          if (payload.eventType === "UPDATE") {
+            setNotifications(prev =>
+              prev.map(n =>
+                n.id === payload.new.id
+                  ? payload.new
+                  : n
+              )
+            );
+          }
+
+          if (payload.eventType === "DELETE") {
+            setNotifications(prev =>
+              prev.filter(n => n.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Announcements realtime
+    const announcementsChannel = supabase
+      .channel(`announcements-${profile.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "announcements",
+        },
+        payload => {
+          // INSERT
+          if (payload.eventType === "INSERT") {
+            const newAnnouncement = payload.new as any;
+
+            const userDeptIds = profile.department_ids || [];
+
+            const canView =
+              newAnnouncement.target_type === "company" ||
+              (
+                newAnnouncement.target_department_id &&
+                userDeptIds.includes(
+                  newAnnouncement.target_department_id
+                )
+              );
+
+            if (canView) {
+              setAnnouncements(prev => [
+                newAnnouncement,
+                ...prev,
+              ].slice(0, 5));
+            }
+          }
+
+          // DELETE
+          if (payload.eventType === "DELETE") {
+            setAnnouncements(prev =>
+              prev.filter(
+                a => a.id !== payload.old.id
+              )
+            );
+          }
+
+          // UPDATE
+          if (payload.eventType === "UPDATE") {
+            setAnnouncements(prev =>
+              prev.map(a =>
+                a.id === payload.new.id
+                  ? payload.new
+                  : a
+              )
+            );
+          }
+        }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(notificationsChannel);
+      supabase.removeChannel(announcementsChannel);
     };
   }, [profile]);
 
@@ -105,8 +220,28 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         {/* Announcement */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              onClick={() => {
+                const now = new Date().toISOString();
+
+                localStorage.setItem(
+                  "lastSeenAnnouncement",
+                  now
+                );
+
+                setLastSeenAnnouncement(now);
+              }}
+            >
               <Megaphone size={18} />
+
+              {unreadAnnouncements > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] flex items-center justify-center rounded-full">
+                  {unreadAnnouncements}
+                </span>
+              )}
             </Button>
           </DropdownMenuTrigger>
 
@@ -153,17 +288,42 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                 No notifications
               </div>
             ) : (
-              notifications.map(n => (
-                <div
-                  key={n.id}
-                  className={`p-2 rounded-md text-sm ${n.is_read ? "opacity-60" : "bg-muted"}`}
-                >
-                  <div className="font-medium">{n.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {n.message}
+                notifications.map(n => (
+                  <div
+                    key={n.id}
+                    onClick={async () => {
+
+                      // mark notification as read
+                      if (!n.is_read) {
+                        await supabase
+                          .from("notifications")
+                          .update({ is_read: true })
+                          .eq("id", n.id);
+
+                        setNotifications(prev =>
+                          prev.map(notif =>
+                            notif.id === n.id
+                              ? { ...notif, is_read: true }
+                              : notif
+                          )
+                        );
+                      }
+
+                      // navigate to linked page
+                      if (n.link) {
+                        navigate(n.link, { replace: false });
+                      }
+                    }}
+                    className={`p-2 rounded-md text-sm cursor-pointer hover:bg-muted/80 transition-colors ${n.is_read ? "opacity-60" : "bg-muted"
+                      }`}
+                  >
+                    <div className="font-medium">{n.title}</div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {n.message}
+                    </div>
                   </div>
-                </div>
-              ))
+                ))
             )}
           </DropdownMenuContent>
         </DropdownMenu>

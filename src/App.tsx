@@ -41,7 +41,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div>Loading...</div>;
-  if (!user) return <Navigate to="/login/employee" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -49,9 +49,9 @@ function AppWithTheme() {
   return (
     <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/login/admin" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<LoginPage portalType="employee" />} />
           <Route path="/login/admin" element={<LoginPage portalType="admin" />} />
-          <Route path="/login/employee" element={<LoginPage portalType="employee" />} />
           <Route path="/admin/create" element={<CreateAdminPage />} />
 
           <Route path="/admin" element={<AdminRoute><AppLayout isAdmin={true} /></AdminRoute>}>

@@ -150,39 +150,6 @@ export default function Announcements() {
       return;
     }
 
-    try {
-      let targetUserIds: string[] = [];
-      if (form.target_type === 'company') {
-        const { data: allProfiles } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('is_active', true);
-        targetUserIds = ((allProfiles || []) as { id: string }[]).map(p => p.id);
-      } else if (form.target_type === 'department') {
-        const { data: deptProfiles } = await supabase
-          .from('profiles')
-          .select('id')
-          .contains('department_ids', [form.target_department_id])
-          .eq('is_active', true);
-        targetUserIds = ((deptProfiles || []) as { id: string }[]).map(p => p.id);
-      }
-      targetUserIds = targetUserIds.filter(id => id !== profile?.id);
-      if (targetUserIds.length > 0) {
-        await supabase.from('notifications').insert(
-          targetUserIds.map(userId => ({
-            user_id: userId,
-            title: form.title.trim(),
-            message: form.content.trim().slice(0, 200),
-            type: 'announcement',
-            is_read: false,
-            link: '/admin/announcements',
-          }))
-        );
-      }
-    } catch {
-      // Best-effort notifications.
-    }
-
     setSaving(false);
     setShowModal(false);
     setNotification({ type: 'success', message: `Announcement "${form.title}" published successfully.` });

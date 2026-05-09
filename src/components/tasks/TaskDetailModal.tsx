@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Task, type Subtask, type Department } from '../../lib/supabase';
-import { Button } from '../../components/ui/button';
+import { Button } from '../ui/button';
 import { Pencil, User, Trash2, List } from 'lucide-react';
+import {
+    calcEffectiveStatus,
+    calcOverdueDays,
+} from '../../lib/taskUtils';
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
 interface TaskWithDetails extends Task {
@@ -22,6 +26,7 @@ interface TaskDetailModalProps {
     departments: Department[];
     canManage: boolean;
     onRefresh: () => void;
+    onTaskDeleted?: (taskId: string) => void;
 }
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -88,13 +93,20 @@ export default function TaskDetailModal({
     departments,
     canManage,
     onRefresh,
+    onTaskDeleted,
 }: TaskDetailModalProps) {
 
     const [currentTask, setCurrentTask] = useState<TaskWithDetails | null>(task);
     const [editingTask, setEditingTask] = useState(false);
     const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
     const [addingSubtask, setAddingSubtask] = useState(false);
-    const [editForm, setEditForm] = useState({
+    const [deleting, setDeleting] = useState(false);
+    const [editForm, setEditForm] = useState<{
+        title: string;
+        description: string;
+        deadline: string;
+        status: TaskStatus;
+    }>({
         title: '',
         description: '',
         deadline: '',
@@ -102,20 +114,27 @@ export default function TaskDetailModal({
     });
 
     useEffect(() => {
+
+        // modal closing / deleted task
+        if (!task) {
+            setCurrentTask(null);
+            setEditingTask(false);
+            return;
+        }
+
         setCurrentTask(task);
 
         setEditingTask(false);
 
-        if (task) {
-            setEditForm({
-                title: task.title || '',
-                description: task.description || '',
-                deadline: task.deadline
-                    ? new Date(task.deadline).toISOString().slice(0, 10)
-                    : '',
-                status: task.status || 'Not Started',
-            });
-        }
+        setEditForm({
+            title: task.title || '',
+            description: task.description || '',
+            deadline: task.deadline
+                ? new Date(task.deadline).toISOString().slice(0, 10)
+                : '',
+            status: task.status || 'Not Started',
+        });
+
     }, [task]);
 
     const handleToggleSubtask = async (
@@ -212,12 +231,34 @@ export default function TaskDetailModal({
             .eq('id', currentTask.id);
 
         if (!error) {
-            setCurrentTask({
+
+            // CREATE NOTIFICATION
+            if (currentTask.assigned_to) {
+                await supabase
+                    .from('notifications')
+                    .insert({
+                        user_id: currentTask.assigned_to,
+                        title: 'Task Updated',
+                        message: `Task "${editForm.title}" was updated`,
+                        type: 'task',
+                        link: `/portal/tasks?task=${currentTask.id}`,
+                    });
+            }
+
+            const updatedTask = {
                 ...currentTask,
                 title: editForm.title,
                 description: editForm.description,
-                deadline: editForm.deadline,
+                deadline: editForm.deadline
+                    ? new Date(editForm.deadline).toISOString()
+                    : null,
                 status: editForm.status as any,
+            };
+
+            setCurrentTask({
+                ...updatedTask,
+                effectiveStatus: calcEffectiveStatus(updatedTask),
+                overdueByDays: calcOverdueDays(updatedTask),
             });
 
             setEditingTask(false);
@@ -227,21 +268,59 @@ export default function TaskDetailModal({
     };
 
     const handleDeleteTask = async () => {
-        if (!currentTask) return;
+        if (!currentTask?.id) return;
 
-        await supabase
-            .from('subtasks')
-            .delete()
-            .eq('task_id', currentTask.id);
+        const taskId = currentTask.id;
 
-        await supabase
-            .from('tasks')
-            .delete()
-            .eq('id', currentTask.id);
+        try {
+            setDeleting(true);
 
-        onRefresh();
+            // CLOSE MODAL FIRST
+            onClose();
 
-        onClose();
+            // CLEAR LOCAL TASK STATE
+            setCurrentTask(null);
+
+            // REMOVE FROM PARENT IMMEDIATELY
+            onTaskDeleted?.(taskId);
+
+            // SMALL DELAY TO LET REACT SETTLE
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            // delete subtasks
+            await supabase
+                .from('subtasks')
+                .delete()
+                .eq('task_id', taskId);
+
+            // delete notifications
+            const { error: notifError } = await supabase
+                .from('notifications')
+                .delete()
+                .ilike('link', `%task=${taskId}%`);
+
+            if (notifError) {
+                console.error('Notification delete failed:', notifError);
+            }
+
+            // delete task
+            const { error } = await supabase
+                .from('tasks')
+                .delete()
+                .eq('id', taskId);
+
+            if (error) {
+                console.error(error);
+            }
+
+            // refresh parent safely
+            onRefresh();
+
+        } catch (error) {
+            console.error('Delete task failed:', error);
+        } finally {
+            setDeleting(false);
+        }
     };
 
     if (!open || !currentTask) return null;
@@ -284,6 +363,7 @@ export default function TaskDetailModal({
                             <button
                                 type="button"
                                 onClick={handleDeleteTask}
+                                disabled={deleting}
                                 className="p-2 rounded hover:bg-red-100"
                             >
                                 <Trash2 size={16} className="text-red-600" />
@@ -338,7 +418,7 @@ export default function TaskDetailModal({
                                     onChange={e =>
                                         setEditForm(f => ({
                                             ...f,
-                                            status: e.target.value,
+                                            status: e.target.value as TaskStatus,
                                         }))
                                     }
                                     className="px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
@@ -427,7 +507,7 @@ export default function TaskDetailModal({
                                     />
                                 ) : (
                                     <p className="text-sm text-slate-800">
-                                        {currentTask.description}
+                                        {currentTask.description || 'No description provided'}
                                     </p>
                                 )}
                             </div>

@@ -1,8 +1,8 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import TaskDetailModal from "../admin/TaskDetailModal";
-import TasksBoard from "../admin/TasksBoard";
+import TaskDetailModal from "../../components/tasks/TaskDetailModal";
+import TasksBoard from "../../components/tasks/TasksBoard";
 import { Calendar, Plus } from 'lucide-react';
 
 // ——— Types ————————————————————————————————————————————————————————————————————
@@ -256,6 +256,17 @@ export default function MyTasks() {
     setDetailTask(task);
     setShowDetailModal(true);
   };
+
+  const handleTaskDeleted = (taskId: string) => {
+  setTasks(prev =>
+    prev.filter(t => t.id !== taskId)
+  );
+
+  if (detailTask?.id === taskId) {
+    setDetailTask(null);
+    setShowDetailModal(false);
+  }
+};
 
   // Sync detail task when tasks list updates
   useEffect(() => {
@@ -566,6 +577,7 @@ export default function MyTasks() {
         departments={departments}
         canManage={isDeptHead() && !isAdmin()}
         onRefresh={fetchTasks}
+        onTaskDeleted={handleTaskDeleted}
       />
     </div>
   );
