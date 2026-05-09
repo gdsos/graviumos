@@ -472,7 +472,7 @@ export default function TaskDetailModal({
                                         type="checkbox"
                                         checked={sub.is_completed}
                                         onChange={() => handleToggleSubtask(sub)}
-                                        className="w-4 h-4 rounded accent-slate-900 flex-shrink-0 cursor-pointer"
+                                        disabled={!canManage}
                                     />
                                     <p
                                         className={`flex-1 text-sm ${sub.is_completed ? 'line-through text-slate-600' : 'text-slate-900'}`}
