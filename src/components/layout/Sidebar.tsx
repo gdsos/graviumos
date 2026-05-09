@@ -119,14 +119,21 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
             const Icon = item.icon;
 
             return (
-              <Link key={item.path} to={item.path}>
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => {
+                  if (isMobile && !collapsed) {
+                    onToggle();
+                  }
+                }}
+               >
                 <Button
                   variant={isActive ? "secondary" : "ghost"}
-                  className={`w-full ${
-                    collapsed && !isMobile
-                      ? "justify-center px-0"
-                      : "justify-start gap-2 px-3"
-                  }`}
+                  className={`w-full ${collapsed && !isMobile
+                    ? "justify-center px-0"
+                    : "justify-start gap-2 px-3"
+                    }`}
                 >
                   <Icon size={16} />
                   {(!collapsed || isMobile) && item.label}
