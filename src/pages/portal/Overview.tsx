@@ -7,7 +7,16 @@ import {
   type Attendance,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PButton, PHeading, PInlineNotification, PTag, PText, PIcon } from '@/components/ui/porsche';
+import {
+  Bell,
+  Check,
+  Clock,
+  Info,
+  MapPin,
+  Megaphone,
+  ArrowRight,
+  ArrowLeft,
+} from 'lucide-react';
 
 // ——— Constants ——————————————————————————————————————————————————————————————
 
@@ -15,25 +24,17 @@ const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
-const STATUS_TAG_VARIANT: Record<TaskStatus, Parameters<typeof PTag>[0]['variant']> = {
-  'Not Started': 'secondary',
-  Ongoing: 'info',
-  Overdue: 'error',
-  Completed: 'success',
-};
-
-const NOTIF_TYPE_ICON: Record<string, Parameters<typeof PIcon>[0]['name']> = {
-  info: 'information',
-  task: 'list',
-  announcement: 'news',
-  approval: 'check',
-  project: 'configurate',
+const STATUS_BADGE: Record<TaskStatus, string> = {
+  'Not Started': 'bg-slate-100 text-slate-700',
+  Ongoing: 'bg-blue-100 text-blue-700',
+  Overdue: 'bg-red-100 text-red-700',
+  Completed: 'bg-green-100 text-green-700',
 };
 
 // ——— Helpers ——————————————————————————————————————————————————————————————————
 
 function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA');
 }
 
 function formatTime(iso: string | null): string {
@@ -66,9 +67,9 @@ function KpiScoreCircle({ score }: { score: number }) {
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - pct);
 
-  let ringColor = 'var(--p-color-notification-success)';
-  if (score < 5) ringColor = 'var(--p-color-notification-error)';
-  else if (score < 7.5) ringColor = 'var(--p-color-notification-warning)';
+  let ringColor = '#16a34a'; // green
+  if (score < 5) ringColor = '#dc2626'; // red
+  else if (score < 7.5) ringColor = '#d97706'; // amber
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -77,7 +78,7 @@ function KpiScoreCircle({ score }: { score: number }) {
           <circle
             cx="50" cy="50" r={radius}
             fill="none"
-            stroke="var(--p-color-contrast-low)"
+            stroke="#e2e8f0"
             strokeWidth="8"
             opacity="0.25"
           />
@@ -100,16 +101,16 @@ function KpiScoreCircle({ score }: { score: number }) {
             {score.toFixed(1)}
           </span>
           <span
-            className="text-xs text-contrast-medium mt-0.5"
+            className="text-xs text-slate-500 mt-0.5"
             style={{ fontFamily: FONT }}
           >
             / 10
           </span>
         </div>
       </div>
-      <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+      <p className="text-xs text-slate-600" style={{ fontFamily: FONT }}>
         KPI Score
-      </PText>
+      </p>
     </div>
   );
 }
@@ -122,26 +123,31 @@ function TaskSummaryCard({
   count: number;
 }) {
   const bg: Record<TaskStatus, string> = {
-    'Not Started': 'bg-surface border-contrast-low',
-    Ongoing: 'bg-info-soft border-contrast-low',
-    Overdue: 'bg-error-soft border-contrast-low',
-    Completed: 'bg-success-soft border-contrast-low',
+    'Not Started': 'bg-white border-slate-200',
+    Ongoing: 'bg-blue-50 border-slate-200',
+    Overdue: 'bg-red-50 border-slate-200',
+    Completed: 'bg-green-50 border-slate-200',
   };
 
   return (
     <div className={`rounded-xl border p-3 flex flex-col gap-1 ${bg[status]}`}>
-      <PTag variant={STATUS_TAG_VARIANT[status]} compact>
+      <span
+        className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${STATUS_BADGE[status]}`}
+      >
         {status}
-      </PTag>
+      </span>
       <span
         className="text-2xl font-bold mt-1"
-        style={{ fontFamily: FONT, color: 'var(--p-color-primary)' }}
+        style={{ fontFamily: FONT, color: '#2563eb' }}
       >
         {count}
       </span>
-      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+      <p
+        className="text-xs text-slate-500"
+        style={{ fontFamily: FONT }}
+      >
         task{count !== 1 ? 's' : ''}
-      </PText>
+      </p>
     </div>
   );
 }
@@ -185,18 +191,44 @@ export default function Overview() {
         resolve('Location not available');
         return;
       }
+
       setLocationLoading(true);
+
       navigator.geolocation.getCurrentPosition(
-        pos => {
+        async (pos) => {
           const { latitude, longitude } = pos.coords;
-          resolve(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-          setLocationLoading(false);
+
+          try {
+            const response = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+
+            const data = await response.json();
+
+            setLocationLoading(false);
+
+            // readable place name
+            resolve(
+              `${data.locality || data.city || 'Unknown area'}, ${data.principalSubdivision || data.countryName
+              }`
+            );
+          } catch (error) {
+            setLocationLoading(false);
+
+            // fallback to coordinates
+            resolve(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+          }
         },
+
         () => {
-          resolve('Location not available');
           setLocationLoading(false);
+          resolve('Location not available');
         },
-        { timeout: 6000 }
+
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        }
       );
     });
   }, []);
@@ -229,19 +261,27 @@ export default function Overview() {
 
   const handleCheckIn = async () => {
     if (!profile) return;
+    if (attendance?.check_in) return;
     setAttendanceError('');
     setCheckingIn(true);
     const loc = await resolveLocation();
     const now = new Date().toISOString();
-    const { error } = await supabase.from('attendance').insert({
-      employee_id: profile.id,
-      date: todayDateString(),
-      check_in: now,
-      status: 'Present',
-      location_stamp: loc,
-      admin_override: false,
-      notes: '',
-    });
+    const { error } = await supabase
+      .from('attendance')
+      .upsert(
+        {
+          employee_id: profile.id,
+          date: todayDateString(),
+          check_in: now,
+          status: 'Present',
+          location_stamp: loc,
+          admin_override: false,
+          notes: '',
+        },
+        {
+          onConflict: 'employee_id,date',
+        }
+      );
     setCheckingIn(false);
     if (error) {
       setAttendanceError(error.message);
@@ -274,10 +314,16 @@ export default function Overview() {
     if (!profile) return;
     (async () => {
       setTasksLoading(true);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .select('status, deadline, completed_at')
         .eq('assigned_to', profile.id);
+
+      if (error) {
+        console.error(error);
+        setTasksLoading(false);
+        return;
+      }
 
       const counts: Record<TaskStatus, number> = {
         'Not Started': 0,
@@ -362,20 +408,26 @@ export default function Overview() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
         <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">
+          <h1 className="text-3xl font-bold mb-1">
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
             {profile?.full_name?.split(' ')[0] || 'there'} 👋
-          </PHeading>
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
+          </h1>
+          <p
+            className="text-slate-500"
+            style={{ fontFamily: FONT }}
+          >
             Here's your personal workspace overview
-          </PText>
+          </p>
         </div>
         {/* Department badges */}
         <div className="flex flex-wrap gap-2">
           {userDepartments.map(dept => (
-            <PTag key={dept.id} color="background-surface">
+            <span
+              key={dept.id}
+              className="px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-700"
+            >
               {dept.code} · {dept.name}
-            </PTag>
+            </span>
           ))}
         </div>
       </div>
@@ -383,147 +435,170 @@ export default function Overview() {
       {/* —— Row 1: KPI + Attendance ———————————————————————————————————————— */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-5">
         {/* KPI Score Card */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col items-center gap-4">
-          <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center gap-4">
+          <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
             Performance Score
-          </PHeading>
+          </h3>
           <KpiScoreCircle score={profile?.kpi_score ?? 0} />
-          <PText size="x-small" color="contrast-medium" className="text-center" style={{ fontFamily: FONT }}>
+          <p
+            className="text-xs text-slate-500 text-center"
+            style={{ fontFamily: FONT }}
+          >
             {(profile?.kpi_score ?? 0) >= 8
               ? 'Excellent performance — keep it up!'
               : (profile?.kpi_score ?? 0) >= 6
               ? 'Good work — a little more to excel'
               : 'Room for improvement — reach out for support'}
-          </PText>
+          </p>
         </div>
 
         {/* Attendance Card */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4 md:col-span-1 xl:col-span-2">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4 md:col-span-1 xl:col-span-2">
           <div className="flex items-center justify-between">
-            <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
+            <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
               Today's Attendance
-            </PHeading>
-            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+            </h3>
+            <p
+              className="text-xs text-slate-500"
+              style={{ fontFamily: FONT }}
+>
               {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
-            </PText>
+            </p>
           </div>
 
           {attendanceError && (
-            <PInlineNotification
-              heading="Attendance error"
-              description={attendanceError}
-              state="error"
-              dismissButton={false}
-            />
+            <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-sm font-medium text-red-900">
+                Attendance error
+              </p>
+              <p className="text-sm text-red-700 mt-1">
+                {attendanceError}
+              </p>
+            </div>
           )}
 
           {attendanceLoading ? (
             <div className="flex items-center gap-2 py-4">
-              <PIcon name="clock" size="small" color="contrast-low" />
-              <PText color="contrast-medium" style={{ fontFamily: FONT }}>Loading attendance…</PText>
+              <Clock className="w-4 h-4 text-slate-400" />
+              <p
+                className="text-slate-500"
+                style={{ fontFamily: FONT }}
+              >
+                Loading attendance…
+              </p>
             </div>
           ) : (
             <>
               {/* Check-in / Check-out time display */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1 bg-canvas rounded-xl border border-contrast-low p-4">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
-                    Check-In
-                  </PText>
-                  <div className="flex items-center gap-2 mt-1">
-                    <PIcon
-                      name="arrow-right"
-                      size="small"
-                      color={isCheckedIn ? 'notification-success' : 'contrast-low'}
-                    />
-                    <PText
-                      size="medium"
-                      weight="semi-bold"
-                      color={isCheckedIn ? 'notification-success' : 'contrast-medium'}
+                <div className="flex flex-col gap-1 bg-slate-50 rounded-xl border border-slate-200 p-4">
+                    <p
+                      className="text-[11px] uppercase tracking-wider text-slate-500"
                       style={{ fontFamily: FONT }}
                     >
+                    Check-In
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                      <ArrowRight
+                        className={`w-4 h-4 ${isCheckedIn ? 'text-green-600' : 'text-slate-400'
+                          }`}
+                      />
+                      <p
+                        className={`text-base font-semibold ${isCheckedIn ? 'text-green-600' : 'text-slate-500'
+                          }`}
+                        style={{ fontFamily: FONT }}
+                      >
                       {isCheckedIn ? formatTime(attendance!.check_in) : '—'}
-                    </PText>
+                    </p>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1 bg-canvas rounded-xl border border-contrast-low p-4">
-                  <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
+                <div className="flex flex-col gap-1 bg-slate-50 rounded-xl border border-slate-200 p-4">
+                  <p
+                    className="text-[11px] uppercase tracking-wider text-slate-500"
+                    style={{ fontFamily: FONT }}
+                  >
                     Check-Out
-                  </PText>
+                  </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <PIcon
-                      name="arrow-left"
-                      size="small"
-                      color={isCheckedOut ? 'notification-info' : 'contrast-low'}
-                    />
-                    <PText
-                      size="medium"
-                      weight="semi-bold"
-                      color={isCheckedOut ? 'notification-info' : 'contrast-medium'}
-                      style={{ fontFamily: FONT }}
-                    >
-                      {isCheckedOut ? formatTime(attendance!.check_out) : '—'}
-                    </PText>
+                      <ArrowLeft
+                        className={`w-4 h-4 ${isCheckedOut ? 'text-blue-600' : 'text-slate-400'
+                          }`}
+                      />
+                      <p
+                        className={`text-base font-semibold ${isCheckedOut ? 'text-blue-600' : 'text-slate-500'
+                          }`}
+                        style={{ fontFamily: FONT }}
+                      >
+                        {isCheckedOut ? formatTime(attendance!.check_out) : '—'}
+                      </p>
                   </div>
                 </div>
               </div>
 
               {/* Location stamp */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-canvas border border-contrast-low">
-                <PIcon name="geo-localization" size="x-small" color="contrast-medium" />
-                <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                <MapPin className="w-4 h-4 text-slate-500" />
+                  <p
+                    className="text-xs text-slate-500"
+                    style={{ fontFamily: FONT }}
+                  >
                   {locationLoading ? 'Getting location…' : (locationStamp || attendance?.location_stamp || 'Location not available')}
-                </PText>
+                </p>
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-3 flex-wrap">
-                {attendanceComplete ? (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-success-soft border border-contrast-low">
-                    <PIcon name="check" size="small" color="notification-success" />
-                    <PText size="small" weight="semi-bold" color="notification-success" style={{ fontFamily: FONT }}>
-                      Attendance Complete
-                    </PText>
-                  </div>
-                ) : !isCheckedIn ? (
-                  <PButton
-                    icon="arrow-right"
-                    onClick={handleCheckIn}
-                    loading={checkingIn}
-                  >
-                    Check In
-                  </PButton>
-                ) : (
-                  <PButton
-                    icon="arrow-left"
-                    variant="secondary"
-                    onClick={handleCheckOut}
-                    loading={checkingOut}
-                  >
-                    Check Out
-                  </PButton>
-                )}
-              </div>
+                <div className="w-full">
+                  {attendanceComplete ? (
+                    <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-50 border border-slate-200">
+                      <Check className="w-4 h-4 text-green-600" />
+                      <p
+                        className="text-sm font-semibold text-green-600"
+                        style={{ fontFamily: FONT }}
+                      >
+                        Attendance Complete
+                      </p>
+                    </div>
+                  ) : !isCheckedIn ? (
+                    <button
+                      onClick={handleCheckIn}
+                      disabled={checkingIn}
+                      className="w-full px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium"
+                    >
+                      {checkingIn ? 'Checking...' : 'Check In'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCheckOut}
+                      disabled={checkingOut}
+                      className="w-full px-4 py-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 font-medium"
+                    >
+                      {checkingOut ? 'Checking...' : 'Check Out'}
+                    </button>
+                  )}
+                </div>
             </>
           )}
         </div>
       </div>
 
       {/* —— Row 2: Task Summary ————————————————————————————————————————————— */}
-      <div className="bg-surface rounded-2xl border border-contrast-low p-6 mb-5">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-5">
         <div className="flex items-center justify-between mb-4">
-          <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
+          <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
             My Tasks
-          </PHeading>
-          <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+          </h3>
+          <p
+            className="text-xs text-slate-500"
+            style={{ fontFamily: FONT }}
+          >
             Total: {tasksLoading ? '…' : Object.values(taskCounts).reduce((a, b) => a + b, 0)}
-          </PText>
+          </p>
         </div>
 
         {tasksLoading ? (
           <div className="flex gap-4">
             {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(s => (
-              <div key={s} className="flex-1 rounded-xl border border-contrast-low bg-canvas p-3 h-20 animate-pulse" />
+              <div key={s} className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 h-20 animate-pulse" />
             ))}
           </div>
         ) : (
@@ -538,51 +613,48 @@ export default function Overview() {
       {/* —— Row 3: Announcements + Notifications ——————————————————————————— */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Announcements */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <PIcon name="news" size="small" color="contrast-high" />
-            <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
+            <Megaphone className="w-4 h-4 text-slate-700" />
+            <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
               Announcements
-            </PHeading>
+            </h3>
           </div>
 
           {announcementsLoading ? (
             <div className="flex flex-col gap-2">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-14 rounded-lg bg-canvas animate-pulse" />
+                <div key={i} className="h-14 rounded-lg bg-slate-50 animate-pulse" />
               ))}
             </div>
           ) : announcements.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
-              <PIcon name="information" size="medium" color="contrast-low" />
-              <PText color="contrast-medium" style={{ fontFamily: FONT }}>
+              <Info className="w-5 h-5 text-slate-400" />
+              <p className="text-sm text-slate-500" style={{ fontFamily: FONT }}>
                 No announcements right now
-              </PText>
+              </p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
               {announcements.map(ann => (
                 <div
                   key={ann.id}
-                  className="rounded-xl bg-canvas border border-contrast-low px-4 py-3 flex flex-col gap-1 hover:border-contrast-medium transition-colors"
+                  className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 flex flex-col gap-1 hover:border-slate-300 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                    <p className="text-sm font-semibold" style={{ fontFamily: FONT }}>
                       {ann.title}
-                    </PText>
-                    <PTag
-                      color={ann.target_type === 'company' ? 'background-surface' : 'notification-info-soft'}
-                      compact
-                    >
+                    </p>
+                    <span className="px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-600">
                       {ann.target_type === 'company' ? 'Company' : 'Dept'}
-                    </PTag>
+                    </span>
                   </div>
-                  <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                  <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
                     {ann.content.length > 120 ? ann.content.slice(0, 120) + '…' : ann.content}
-                  </PText>
-                  <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
+                  </p>
+                  <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
                     {formatRelativeDate(ann.created_at)}
-                  </PText>
+                  </p>
                 </div>
               ))}
             </div>
@@ -590,26 +662,26 @@ export default function Overview() {
         </div>
 
         {/* Notifications */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <PIcon name="bell" size="small" color="contrast-high" />
-            <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
+            <Bell className="w-4 h-4 text-slate-700" />
+            <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
               Recent Notifications
-            </PHeading>
+            </h3>
           </div>
 
           {notifsLoading ? (
             <div className="flex flex-col gap-2">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-14 rounded-lg bg-canvas animate-pulse" />
+                <div key={i} className="h-14 rounded-lg bg-slate-50 animate-pulse" />
               ))}
             </div>
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
-              <PIcon name="bell" size="medium" color="contrast-low" />
-              <PText color="contrast-medium" style={{ fontFamily: FONT }}>
+              <Bell className="w-5 h-5 text-slate-400" />
+              <p className="text-sm text-slate-500" style={{ fontFamily: FONT }}>
                 No notifications yet
-              </PText>
+              </p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -620,33 +692,31 @@ export default function Overview() {
                   onClick={() => !notif.is_read && markRead(notif.id)}
                   className={`w-full text-left rounded-xl border px-4 py-3 flex items-start gap-3 transition-colors ${
                     notif.is_read
-                      ? 'bg-canvas border-contrast-low opacity-60'
-                      : 'bg-info-soft border-contrast-low hover:border-contrast-medium'
+                      ? 'bg-slate-50 border-slate-200 opacity-60'
+                      : 'bg-blue-50 border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex-shrink-0 mt-0.5">
-                    <PIcon
-                      name={NOTIF_TYPE_ICON[notif.type] || 'information'}
-                      size="x-small"
-                      color={notif.is_read ? 'contrast-medium' : 'notification-info'}
+                    <Bell
+                      className={`w-4 h-4 ${notif.is_read ? 'text-slate-400' : 'text-blue-500'
+                        }`}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT }}>
+                    <p className="text-sm font-semibold" style={{ fontFamily: FONT }}>
                       {notif.title}
-                    </PText>
-                    <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                    </p>
+                    <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
                       {notif.message.length > 80 ? notif.message.slice(0, 80) + '…' : notif.message}
-                    </PText>
+                    </p>
                   </div>
                   <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                    <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
+                    <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
                       {formatRelativeDate(notif.created_at)}
-                    </PText>
+                    </p>
                     {!notif.is_read && (
                       <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ background: 'var(--p-color-notification-info)' }}
+                        className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-500"
                       />
                     )}
                   </div>
