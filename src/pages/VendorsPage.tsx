@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Store, UsersRound } from 'lucide-react';
+import { Plus, RotateCcw, Store, UsersRound } from 'lucide-react';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -118,6 +118,22 @@ export default function VendorsPage() {
     setDeleteTarget(null);
   };
 
+  // For demo purposes, allow resetting to original demo data
+  const handleResetDemoData = () => {
+  const confirmed = window.confirm(
+    'Reset vendors to the original demo data? This will remove locally added vendors.'
+  );
+
+  if (!confirmed) return;
+
+  localStorage.removeItem(VENDORS_STORAGE_KEY);
+  setVendors(demoVendors);
+  setSearch('');
+  setCategory('all');
+  setStatus('all');
+  setAvailability('all');
+};
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
@@ -125,14 +141,26 @@ export default function VendorsPage() {
         title="Vendors"
         description="Global vendor directory for execution, procurement, site work, and future timeline planning."
         actions={
-          <Button
-            type="button"
-            onClick={() => setModalState({ mode: 'create', vendor: null })}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Vendor
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleResetDemoData}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset Demo
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => setModalState({ mode: 'create', vendor: null })}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Vendor
+            </Button>
+          </div>
         }
       />
 
