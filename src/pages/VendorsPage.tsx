@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { demoVendors } from '@/features/vendors/data';
 import { VendorCard } from '@/features/vendors/components/VendorCard';
 import { VendorFilters } from '@/features/vendors/components/VendorFilters';
+import { VendorFormModal } from '@/features/vendors/components/VendorFormModal';
 import type {
   Vendor,
   VendorAvailability,
@@ -17,12 +18,19 @@ import type {
   VendorStatus,
 } from '@/features/vendors/types';
 
+type VendorModalState =
+  | { mode: 'create'; vendor: null }
+  | { mode: 'edit'; vendor: Vendor }
+  | null;
+
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>(demoVendors);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<VendorCategory | 'all'>('all');
   const [status, setStatus] = useState<VendorStatus | 'all'>('all');
   const [availability, setAvailability] = useState<VendorAvailability | 'all'>('all');
+  const [modalState, setModalState] = useState<VendorModalState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
 
   const filteredVendors = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -64,18 +72,32 @@ export default function VendorsPage() {
   ).length;
   const busyVendorCount = vendors.filter(vendor => vendor.availability === 'busy').length;
 
-  const handleEditVendor = (vendor: Vendor) => {
-    window.alert(`Edit vendor coming next: ${vendor.name}`);
+  const handleSubmitVendor = (vendor: Vendor) => {
+    setVendors(currentVendors => {
+      const exists = currentVendors.some(
+        currentVendor => currentVendor.id === vendor.id
+      );
+
+      if (exists) {
+        return currentVendors.map(currentVendor =>
+          currentVendor.id === vendor.id ? vendor : currentVendor
+        );
+      }
+
+      return [vendor, ...currentVendors];
+    });
+
+    setModalState(null);
   };
 
-  const handleDeleteVendor = (vendor: Vendor) => {
-    const confirmed = window.confirm(`Delete ${vendor.name}?`);
-
-    if (!confirmed) return;
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
 
     setVendors(currentVendors =>
-      currentVendors.filter(currentVendor => currentVendor.id !== vendor.id)
+      currentVendors.filter(vendor => vendor.id !== deleteTarget.id)
     );
+
+    setDeleteTarget(null);
   };
 
   return (
@@ -87,7 +109,7 @@ export default function VendorsPage() {
         actions={
           <Button
             type="button"
-            onClick={() => window.alert('Add vendor modal coming next.')}
+            onClick={() => setModalState({ mode: 'create', vendor: null })}
             className="gap-2"
           >
             <Plus className="h-4 w-4" />
@@ -163,8 +185,10 @@ export default function VendorsPage() {
             <VendorCard
               key={vendor.id}
               vendor={vendor}
-              onEdit={handleEditVendor}
-              onDelete={handleDeleteVendor}
+              onEdit={selectedVendor =>
+                setModalState({ mode: 'edit', vendor: selectedVendor })
+              }
+              onDelete={setDeleteTarget}
             />
           ))}
         </div>
@@ -188,6 +212,50 @@ export default function VendorsPage() {
             </Button>
           }
         />
+      )}
+
+      <VendorFormModal
+        open={modalState !== null}
+        mode={modalState?.mode ?? 'create'}
+        vendor={modalState?.vendor ?? null}
+        onClose={() => setModalState(null)}
+        onSubmit={handleSubmitVendor}
+      />
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+            <h2 className="text-lg font-semibold text-foreground">
+              Delete vendor?
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              This will remove{' '}
+              <span className="font-medium text-foreground">
+                {deleteTarget.name}
+              </span>{' '}
+              from the local vendor list. This does not affect Supabase yet.
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmDelete}
+              >
+                Delete Vendor
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
