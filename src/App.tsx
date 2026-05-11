@@ -15,6 +15,7 @@ import Projects from './pages/admin/Projects';
 import Tasks from './pages/admin/Tasks';
 import People from './pages/admin/People';
 import VendorsPage from './pages/VendorsPage';
+import TimelinePage from './pages/TimelinePage';
 import Financials from './pages/admin/Financials';
 import Payroll from './pages/admin/Payroll';
 import Reports from './pages/admin/Reports';
@@ -61,6 +62,7 @@ function AppWithTheme() {
             <Route path="leads" element={<Leads />} />
             <Route path="projects" element={<Projects />} />
             <Route path="vendors" element={<VendorsPage />} />
+            <Route path="timeline" element={<TimelinePage />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="people" element={<People />} />
             <Route path="financials" element={<Financials />} />
@@ -76,6 +78,7 @@ function AppWithTheme() {
             <Route path="tasks" element={<MyTasks />} />
             <Route path="projects" element={<PortalProjects />} />
             <Route path="vendors" element={<VendorsPage />} />
+            <Route path="timeline" element={<TimelinePage />} />
             <Route path="leads" element={<PortalLeads />} />
             <Route path="financials" element={<PortalFinancials />} />
             <Route path="payroll" element={<PortalPayroll />} />
