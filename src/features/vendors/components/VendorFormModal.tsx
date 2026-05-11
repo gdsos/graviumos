@@ -32,7 +32,8 @@ interface VendorFormState {
   category: VendorCategory;
   scopeOfWork: string;
   contactPerson: string;
-  phone: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
   email: string;
   location: string;
   rating: string;
@@ -47,7 +48,8 @@ const emptyForm: VendorFormState = {
   category: 'civil',
   scopeOfWork: '',
   contactPerson: '',
-  phone: '',
+  phoneCountryCode: '+91',
+  phoneNumber: '',
   email: '',
   location: '',
   rating: '4.0',
@@ -60,6 +62,15 @@ const emptyForm: VendorFormState = {
 const inputClass =
   'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground';
 
+const phoneCountryCodes = [
+  { value: '+91', label: 'IN +91' },
+  { value: '+971', label: 'UAE +971' },
+  { value: '+966', label: 'SA +966' },
+  { value: '+974', label: 'QA +974' },
+  { value: '+965', label: 'KW +965' },
+  { value: '+968', label: 'OM +968' },
+];
+
 function createId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -68,13 +79,39 @@ function createId() {
   return `vendor-${Date.now()}`;
 }
 
+function parsePhone(phone: string) {
+  const trimmedPhone = phone.trim();
+
+  const matchedCountryCode = phoneCountryCodes.find(option =>
+    trimmedPhone.startsWith(option.value)
+  );
+
+  if (!matchedCountryCode) {
+    return {
+      phoneCountryCode: '+91',
+      phoneNumber: trimmedPhone.replace(/\D/g, '').slice(-10),
+    };
+  }
+
+  return {
+    phoneCountryCode: matchedCountryCode.value,
+    phoneNumber: trimmedPhone
+      .replace(matchedCountryCode.value, '')
+      .replace(/\D/g, '')
+      .slice(0, 10),
+  };
+}
+
 function mapVendorToForm(vendor: Vendor): VendorFormState {
+  const parsedPhone = parsePhone(vendor.phone);
+
   return {
     name: vendor.name,
     category: vendor.category,
     scopeOfWork: vendor.scopeOfWork,
     contactPerson: vendor.contactPerson,
-    phone: vendor.phone,
+    phoneCountryCode: parsedPhone.phoneCountryCode,
+    phoneNumber: parsedPhone.phoneNumber,
     email: vendor.email ?? '',
     location: vendor.location,
     rating: String(vendor.rating),
@@ -137,7 +174,7 @@ export function VendorFormModal({
       category: form.category,
       scopeOfWork: form.scopeOfWork.trim(),
       contactPerson: form.contactPerson.trim(),
-      phone: form.phone.trim(),
+      phone: `${form.phoneCountryCode} ${form.phoneNumber.trim()}`,
       email: form.email.trim() || undefined,
       location: form.location.trim(),
       rating: Number(form.rating) || 0,
@@ -219,13 +256,35 @@ export function VendorFormModal({
             </FormField>
 
             <FormField label="Phone" required>
-              <input
-                value={form.phone}
-                onChange={event => updateForm('phone', event.target.value)}
-                required
-                className={inputClass}
-                placeholder="+91..."
-              />
+              <div className="grid grid-cols-[120px_1fr] gap-2">
+                <select
+                  value={form.phoneCountryCode}
+                  onChange={event =>
+                    updateForm('phoneCountryCode', event.target.value)
+                  }
+                  className={inputClass}
+                >
+                  {phoneCountryCodes.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  value={form.phoneNumber}
+                  onChange={event => {
+                    const digitsOnly = event.target.value.replace(/\D/g, '').slice(0, 10);
+                    updateForm('phoneNumber', digitsOnly);
+                  }}
+                  required
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  className={inputClass}
+                  placeholder="10 digit number"
+                />
+              </div>
             </FormField>
 
             <FormField label="Email">

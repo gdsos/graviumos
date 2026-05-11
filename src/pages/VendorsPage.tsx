@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Store, UsersRound } from 'lucide-react';
 
 import { EmptyState } from '@/components/common/EmptyState';
@@ -22,15 +22,33 @@ type VendorModalState =
   | { mode: 'create'; vendor: null }
   | { mode: 'edit'; vendor: Vendor }
   | null;
-
+const VENDORS_STORAGE_KEY = 'gravium-os-vendors-demo';
 export default function VendorsPage() {
-  const [vendors, setVendors] = useState<Vendor[]>(demoVendors);
+  const [vendors, setVendors] = useState<Vendor[]>(() => {
+    if (typeof window === 'undefined') return demoVendors;
+
+    try {
+      const storedVendors = localStorage.getItem(VENDORS_STORAGE_KEY);
+
+      if (!storedVendors) return demoVendors;
+
+      const parsedVendors = JSON.parse(storedVendors) as Vendor[];
+
+      return Array.isArray(parsedVendors) ? parsedVendors : demoVendors;
+    } catch {
+      return demoVendors;
+    }
+  });
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<VendorCategory | 'all'>('all');
   const [status, setStatus] = useState<VendorStatus | 'all'>('all');
   const [availability, setAvailability] = useState<VendorAvailability | 'all'>('all');
   const [modalState, setModalState] = useState<VendorModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(vendors));
+  }, [vendors]);
 
   const filteredVendors = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
