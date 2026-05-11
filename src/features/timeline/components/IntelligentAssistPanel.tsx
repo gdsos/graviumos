@@ -27,25 +27,25 @@ export function IntelligentAssistPanel({
   onIgnoreAlert,
 }: IntelligentAssistPanelProps) {
   return (
-    <aside className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-      <div className="border-b border-border px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+    <aside className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+      <div className="border-b border-border px-4 py-4 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <WandSparkles className="h-4 w-4" />
           </div>
 
-          <div>
-            <h2 className="text-base font-semibold text-foreground">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-foreground">
               Intelligent Assist
             </h2>
             <p className="text-sm text-muted-foreground">
-              Payment, delay, pause, and dependency alerts.
+              Alerts and suggestions.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-3 p-4">
+      <div className="grid gap-3 p-3 sm:p-4">
         {alerts.length > 0 ? (
           alerts.map(alert => {
             const Icon = getAlertIcon(alert.severity);
@@ -53,9 +53,9 @@ export function IntelligentAssistPanel({
             return (
               <div
                 key={alert.id}
-                className="rounded-2xl border border-border bg-background p-4"
+                className="min-w-0 rounded-2xl border border-border bg-background p-4"
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <Icon className="h-4 w-4" />
@@ -82,15 +82,15 @@ export function IntelligentAssistPanel({
                   </p>
                 )}
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   {alert.canApplySuggestion && onApplySuggestion && (
                     <button
                       type="button"
                       onClick={() => onApplySuggestion(alert)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      Apply Suggestion
+                      Apply
                     </button>
                   )}
 
@@ -111,7 +111,7 @@ export function IntelligentAssistPanel({
           <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-muted-foreground" />
             <p className="mt-3 text-sm font-medium text-foreground">
-              No active timeline alerts
+              No active alerts
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               Payment gates, dependencies, and delays look clear.

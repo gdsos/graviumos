@@ -10,7 +10,7 @@ interface TimelineSummaryCardsProps {
 export function TimelineSummaryCards({ summary }: TimelineSummaryCardsProps) {
   const cards = [
     {
-      label: 'Work Packages',
+      label: 'Work',
       value: summary.totalWorkPackages,
       helper: `${summary.completedWorkPackages} completed`,
       icon: CheckCircle2,
@@ -18,23 +18,23 @@ export function TimelineSummaryCards({ summary }: TimelineSummaryCardsProps) {
     {
       label: 'Blocked',
       value: summary.blockedWorkPackages,
-      helper: 'Payment or dependency',
+      helper: 'Payment/dependency',
       icon: ShieldAlert,
     },
     {
       label: 'Delayed',
       value: summary.delayedWorkPackages,
-      helper: `${summary.projectedDelayDays} projected day(s)`,
+      helper: `${summary.projectedDelayDays} day(s)`,
       icon: AlertTriangle,
     },
     {
       label: 'Paused',
       value: summary.pausedWorkPackages,
-      helper: 'Waiting to resume',
+      helper: 'Waiting',
       icon: PauseCircle,
     },
     {
-      label: 'Payments Pending',
+      label: 'Payments',
       value: summary.pendingPaymentGates,
       helper: `${summary.receivedPaymentGates} received`,
       icon: WalletCards,
@@ -42,43 +42,45 @@ export function TimelineSummaryCards({ summary }: TimelineSummaryCardsProps) {
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
       {cards.map(card => {
         const Icon = card.icon;
 
         return (
-          <SectionCard key={card.label} className="shadow-none">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">{card.label}</p>
-                <p className="mt-1 text-3xl font-semibold text-foreground">
-                  {card.value}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {card.helper}
-                </p>
+          <SectionCard key={card.label} className="min-w-0 shadow-none">
+            <div className="min-w-0">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Icon className="h-4 w-4" />
               </div>
 
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Icon className="h-5 w-5" />
-              </div>
+              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                {card.label}
+              </p>
+
+              <p className="mt-1 text-2xl font-semibold text-foreground sm:text-3xl">
+                {card.value}
+              </p>
+
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {card.helper}
+              </p>
             </div>
           </SectionCard>
         );
       })}
 
-      <SectionCard className="shadow-none sm:col-span-2 xl:col-span-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <SectionCard className="col-span-2 min-w-0 shadow-none sm:col-span-3 xl:col-span-5">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Timeline Health</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Completion, blockers, payment gates, and projected delay are calculated from timeline engine helpers.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
+          <div className="flex w-fit items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
             <Clock className="h-4 w-4" />
-            Engine calculated
+            Engine
           </div>
         </div>
       </SectionCard>

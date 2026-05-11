@@ -43,8 +43,8 @@ export function WorkPackageCard({
     workPackage.actualStartDate || workPackage.actualEndDate;
 
   return (
-    <article className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className="min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-5">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap gap-2">
             <StatusBadge variant={getStatusVariant(workPackage.status)}>
@@ -72,18 +72,18 @@ export function WorkPackageCard({
         </div>
 
         {workPackage.manualOverrideEnabled && (
-          <StatusBadge variant="info">Manual Override</StatusBadge>
+          <StatusBadge variant="info">Override</StatusBadge>
         )}
       </div>
 
-      <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-xl border border-border bg-background p-3">
+      <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-border bg-background p-3">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Estimated
           </p>
-          <div className="flex items-center gap-2 text-foreground">
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-            <span>
+          <div className="flex min-w-0 items-center gap-2 text-foreground">
+            <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm">
               {workPackage.estimatedStartDate} → {workPackage.estimatedEndDate}
             </span>
           </div>
@@ -92,15 +92,15 @@ export function WorkPackageCard({
           </p>
         </div>
 
-        <div className="rounded-xl border border-border bg-background p-3">
+        <div className="min-w-0 rounded-xl border border-border bg-background p-3">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Actual
           </p>
           {hasActualTimeline ? (
             <>
-              <div className="flex items-center gap-2 text-foreground">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                <span>
+              <div className="flex min-w-0 items-center gap-2 text-foreground">
+                <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm">
                   {workPackage.actualStartDate ?? '—'} →{' '}
                   {workPackage.actualEndDate ?? 'In progress'}
                 </span>
@@ -115,29 +115,29 @@ export function WorkPackageCard({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-        <div className="flex items-center gap-2">
-          <UserRound className="h-4 w-4" />
-          <span>{workPackage.assigneeName}</span>
+      <div className="mt-4 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <UserRound className="h-4 w-4 shrink-0" />
+          <span className="truncate">{workPackage.assigneeName}</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link2 className="h-4 w-4" />
-          <span>
+        <div className="flex min-w-0 items-center gap-2">
+          <Link2 className="h-4 w-4 shrink-0" />
+          <span className="truncate">
             {dependencyCount} dependenc{dependencyCount === 1 ? 'y' : 'ies'}
           </span>
         </div>
 
         {vendorName && (
-          <div className="sm:col-span-2">
+          <div className="min-w-0 sm:col-span-2">
             <span className="font-medium text-foreground">Vendor:</span>{' '}
-            {vendorName}
+            <span className="text-muted-foreground">{vendorName}</span>
           </div>
         )}
       </div>
 
       {workPackage.pausePeriods.length > 0 && (
-        <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
           <div className="mb-1 flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300">
             <PauseCircle className="h-4 w-4" />
             Pause history

@@ -33,14 +33,13 @@ import type {
   WorkPackageStatus,
 } from '@/features/timeline/types';
 
-type TimelineTab = 'overview' | 'timeline' | 'work_packages' | 'payments' | 'alerts';
+type TimelineTab = 'overview' | 'work' | 'payments' | 'alerts';
 
 const tabs: Array<{ id: TimelineTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'work_packages', label: 'Work Packages' },
+  { id: 'work', label: 'Work' },
   { id: 'payments', label: 'Payments' },
-  { id: 'alerts', label: 'Intelligent Assist' },
+  { id: 'alerts', label: 'Assist' },
 ];
 
 function formatINR(amount: number) {
@@ -109,9 +108,10 @@ export default function TimelinePage() {
 
   const blockedWorkPackages = useMemo(
     () =>
-      workPackages.filter(workPackage =>
-        workPackage.status === 'blocked_by_payment' ||
-        workPackage.status === 'blocked_by_dependency'
+      workPackages.filter(
+        workPackage =>
+          workPackage.status === 'blocked_by_payment' ||
+          workPackage.status === 'blocked_by_dependency'
       ),
     [workPackages]
   );
@@ -174,131 +174,121 @@ export default function TimelinePage() {
     setActiveTab('overview');
   };
 
+  const renderCriticalWork = () => (
+    <SectionCard
+      title="Critical Open Work"
+      description="Critical items that still need attention before handover."
+    >
+      <div className="grid gap-3">
+        {criticalWorkPackages.map(workPackage => {
+          const paymentGate = getPaymentGateById(
+            paymentGates,
+            workPackage.paymentGateId
+          );
+
+          return (
+            <div
+              key={workPackage.id}
+              className="min-w-0 rounded-2xl border border-border bg-background p-4"
+            >
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">
+                    {workPackage.title}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {workPackage.estimatedStartDate} → {workPackage.estimatedEndDate}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge variant="danger">
+                    {workPackage.status.replaceAll('_', ' ')}
+                  </StatusBadge>
+
+                  {paymentGate && (
+                    <StatusBadge variant="outline">{paymentGate.title}</StatusBadge>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+
+  const renderProjectSnapshot = () => (
+    <SectionCard
+      title="Project Snapshot"
+      description="Timeline control view for the selected demo project."
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Client
+          </p>
+          <p className="mt-2 truncate text-sm font-semibold text-foreground">
+            {demoTimelineProject.clientName}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Revenue
+          </p>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {formatINR(demoTimelineProject.revenue)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Expected
+          </p>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {formatDate(demoTimelineProject.expectedHandoverDate)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Projected
+          </p>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {formatDate(demoTimelineProject.currentProjectedHandoverDate)}
+          </p>
+        </div>
+      </div>
+    </SectionCard>
+  );
+
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
-        <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-6">
             <TimelineSummaryCards summary={summary} />
-
-            <SectionCard
-              title="Project Snapshot"
-              description="Timeline control view for the selected demo project."
-            >
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-border bg-background p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Client
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">
-                    {demoTimelineProject.clientName}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-border bg-background p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Revenue
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">
-                    {formatINR(demoTimelineProject.revenue)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-border bg-background p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Expected Handover
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">
-                    {formatDate(demoTimelineProject.expectedHandoverDate)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-border bg-background p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Projected Handover
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">
-                    {formatDate(demoTimelineProject.currentProjectedHandoverDate)}
-                  </p>
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Critical Open Work"
-              description="Critical items that still need attention before handover."
-            >
-              <div className="grid gap-3">
-                {criticalWorkPackages.map(workPackage => {
-                  const paymentGate = getPaymentGateById(
-                    paymentGates,
-                    workPackage.paymentGateId
-                  );
-
-                  return (
-                    <div
-                      key={workPackage.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="font-medium text-foreground">
-                          {workPackage.title}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {workPackage.estimatedStartDate} →{' '}
-                          {workPackage.estimatedEndDate}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <StatusBadge variant="danger">
-                          {workPackage.status.replaceAll('_', ' ')}
-                        </StatusBadge>
-
-                        {paymentGate && (
-                          <StatusBadge variant="outline">
-                            {paymentGate.title}
-                          </StatusBadge>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionCard>
-          </div>
-
-          <IntelligentAssistPanel
-            alerts={alerts}
-            onApplySuggestion={handleApplySuggestion}
-            onIgnoreAlert={handleIgnoreAlert}
-          />
-        </div>
-      );
-    }
-
-    if (activeTab === 'timeline') {
-      return (
-        <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
             <PaymentGateBar
               paymentGates={paymentGates}
               onMarkReceived={handleMarkPaymentReceived}
             />
-
-            <TimelineWorkPackages workPackages={workPackages} />
+            {renderProjectSnapshot()}
+            {renderCriticalWork()}
           </div>
 
-          <IntelligentAssistPanel
-            alerts={alerts}
-            onApplySuggestion={handleApplySuggestion}
-            onIgnoreAlert={handleIgnoreAlert}
-          />
+          <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
+            <IntelligentAssistPanel
+              alerts={alerts}
+              onApplySuggestion={handleApplySuggestion}
+              onIgnoreAlert={handleIgnoreAlert}
+            />
+          </div>
         </div>
       );
     }
 
-    if (activeTab === 'work_packages') {
+    if (activeTab === 'work') {
       return <TimelineWorkPackages workPackages={workPackages} />;
     }
 
@@ -321,13 +311,13 @@ export default function TimelinePage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-5 sm:px-6 lg:px-8">
       <PageHeader
         eyebrow="Project Timeline Management"
         title={demoTimelineProject.name}
         description="Interior project execution timeline with payment gates, work packages, dependencies, pauses, and intelligent assist."
         actions={
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button
               type="button"
               variant="outline"
@@ -335,40 +325,42 @@ export default function TimelinePage() {
               className="gap-2"
             >
               <RotateCcw className="h-4 w-4" />
-              Reset Demo
+              Reset
             </Button>
 
             <Button type="button" className="gap-2">
               <CalendarClock className="h-4 w-4" />
-              Manual Override
+              Override
             </Button>
           </div>
         }
       />
 
-      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge variant={getProjectStatusVariant(demoTimelineProject.status)}>
-            {demoTimelineProject.status}
-          </StatusBadge>
+      <div className="mb-5 min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <StatusBadge variant={getProjectStatusVariant(demoTimelineProject.status)}>
+              {demoTimelineProject.status}
+            </StatusBadge>
 
-          <StatusBadge variant="outline">
-            {demoTimelineProject.projectType}
-          </StatusBadge>
+            <StatusBadge variant="outline">
+              {demoTimelineProject.projectType}
+            </StatusBadge>
 
-          <StatusBadge variant="outline">
-            {demoTimelineProject.location}
-          </StatusBadge>
-        </div>
+            {demoTimelineProject.location && (
+              <StatusBadge variant="outline">{demoTimelineProject.location}</StatusBadge>
+            )}
+          </div>
 
-        <div className="text-sm text-muted-foreground">
-          {formatDate(demoTimelineProject.startDate)} →{' '}
-          {formatDate(demoTimelineProject.currentProjectedHandoverDate)}
+          <div className="text-sm text-muted-foreground">
+            {formatDate(demoTimelineProject.startDate)} →{' '}
+            {formatDate(demoTimelineProject.currentProjectedHandoverDate)}
+          </div>
         </div>
       </div>
 
-      <div className="mb-6 overflow-x-auto border-b border-border">
-        <div className="flex min-w-max gap-2">
+      <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
+        <div className="grid grid-cols-4 gap-1">
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
 
@@ -377,10 +369,10 @@ export default function TimelinePage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`border-b-2 px-4 py-3 text-sm font-medium transition ${
+                className={`rounded-xl px-2 py-2.5 text-xs font-medium transition sm:text-sm ${
                   isActive
-                    ? 'border-foreground text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {tab.label}
@@ -391,9 +383,9 @@ export default function TimelinePage() {
       </div>
 
       {blockedWorkPackages.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+        <div className="mb-5 min-w-0 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <p className="font-medium text-amber-800 dark:text-amber-300">
                 {blockedWorkPackages.length} work package(s) need attention
               </p>
@@ -406,6 +398,7 @@ export default function TimelinePage() {
               type="button"
               variant="outline"
               onClick={() => setActiveTab('alerts')}
+              className="w-full sm:w-auto"
             >
               View Alerts
             </Button>
@@ -413,7 +406,7 @@ export default function TimelinePage() {
         </div>
       )}
 
-      {renderTabContent()}
+      <div className="min-w-0">{renderTabContent()}</div>
     </div>
   );
 }
