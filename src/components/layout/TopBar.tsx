@@ -1,4 +1,5 @@
-
+import { GraviumLogo } from '@/components/common/GraviumLogo';
+import { ThemeModeToggle } from '@/components/common/ThemeModeToggle';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -15,9 +16,8 @@ import {
 } from "../../components/ui/avatar";
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "@/auth/permissions";
-import { useTheme } from "../../contexts/ThemeContext";
 import { supabase } from "../../lib/supabase";
-import { Bell, Sun, Moon, Megaphone, LogOut, User, Settings } from "lucide-react";
+import { Bell, Megaphone, LogOut, User, Settings } from "lucide-react";
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -26,7 +26,6 @@ interface TopBarProps {
 export default function TopBar({ onMenuToggle }: TopBarProps) {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [lastSeenAnnouncement, setLastSeenAnnouncement] =
@@ -211,7 +210,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     <header className="h-15 border-b bg-background flex items-center px-4 sm:px-6">
       <div className="lg:hidden">
         <button onClick={onMenuToggle}>
-          <img src="/Logo-Icon.png" className="h-6" />
+          <GraviumLogo variant="icon" className="h-6 w-auto object-contain" />
         </button>
       </div>
 
@@ -329,9 +328,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         </DropdownMenu>
 
         {/* Theme */}
-        <Button variant="ghost" size="icon" onClick={toggleTheme}>
-          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        </Button>
+        <ThemeModeToggle />
 
         {/* Avatar */}
         <DropdownMenu>

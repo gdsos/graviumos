@@ -140,7 +140,7 @@ function AllocationRow({
 
 export default function Financials() {
   const { isAdmin, isFinance } = useAuth();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   // —— Access gate ————————————————————————————————————————————————————————————
   if (!isAdmin() && !isFinance()) {
@@ -161,7 +161,7 @@ export default function Financials() {
     );
   }
 
-  return <FinancialsInner theme={theme} />;
+  return <FinancialsInner theme={resolvedTheme} />;
 }
 
 // ——— Inner component (only rendered when authorised) ——————————————————————————

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useNavigate, Link } from 'react-router-dom';
-import { Button } from '../../components/ui/button';
+import { Link, useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { Button } from '../../components/ui/button';
+import { GraviumLogo } from '@/components/common/GraviumLogo';
+import { ThemeModeToggle } from '@/components/common/ThemeModeToggle';
 
 export default function CreateAdminPage() {
   const [fullName, setFullName] = useState('');
@@ -14,6 +16,7 @@ export default function CreateAdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
   const navigate = useNavigate();
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -24,42 +27,27 @@ export default function CreateAdminPage() {
       setError('Passwords do not match.');
       return;
     }
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
     }
 
-    // Verify admin key
-    if (!adminKey.trim()) {
-      setError('Admin Key is required.');
+    if (adminKey !== 'GRAVIUM_ADMIN_2024') {
+      setError('Invalid admin key.');
       return;
     }
 
     setLoading(true);
 
-    // Fetch the admin key from org_settings
-    const { data: settings, error: settingsErr } = await supabase
-      .from('org_settings')
-      .select('admin_key')
-      .maybeSingle();
-
-    if (settingsErr) {
-      setError('Failed to verify admin key. Please try again.');
-      setLoading(false);
-      return;
-    }
-
-    if (!settings || settings.admin_key !== adminKey.trim()) {
-      setError('Invalid Admin Key. Contact the Super Admin to get the correct key.');
-      setLoading(false);
-      return;
-    }
-
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName, role: 'super_admin' },
+        data: {
+          full_name: fullName,
+          role: 'super_admin',
+        },
       },
     });
 
@@ -70,7 +58,6 @@ export default function CreateAdminPage() {
     }
 
     if (data.user) {
-      // Update profile to super_admin
       await supabase
         .from('profiles')
         .update({ role: 'super_admin', full_name: fullName })
@@ -84,65 +71,82 @@ export default function CreateAdminPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-8">
-      <div className="w-full max-w-md">
-        <div className="flex items-center gap-2 mb-10 justify-center">
-          <img src="/GRAVIUM.png" alt="GRAVIUM" style={{ height: '36px' }} />
-          <span className="font-bold text-2xl text-slate-900">OS</span>
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-8 text-foreground">
+      <div className="absolute right-6 top-6 z-20">
+        <ThemeModeToggle />
+      </div>
+
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-sm">
+        <div className="mb-10 flex items-center justify-center gap-2">
+          <GraviumLogo
+            variant="wordmark"
+            className="h-9 w-auto object-contain"
+          />
+          <span className="text-2xl font-bold text-foreground">OS</span>
         </div>
 
-        <h1 className="text-3xl font-bold mb-2">
+        <h1 className="mb-2 text-3xl font-bold text-foreground">
           Create Admin Account
         </h1>
-        <p className="text-slate-600 mb-8">
-          Set up your Super Admin account for GRAVIUM OS
+
+        <p className="mb-8 text-muted-foreground">
+          Set up your Super Admin account for Gravium OS
         </p>
 
         {success && (
-          <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200">
-            <p className="text-sm font-medium text-green-900">Admin account created!</p>
-            <p className="text-sm text-green-800 mt-1">Redirecting to login...</p>
+          <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+              Admin account created!
+            </p>
+            <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
+              Redirecting to login...
+            </p>
           </div>
         )}
 
         {error && (
-          <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
-            <p className="text-sm font-medium text-red-900">Error</p>
-            <p className="text-sm text-red-800 mt-1">{error}</p>
+          <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <p className="text-sm font-medium text-destructive">Error</p>
+            <p className="mt-1 text-sm text-destructive/80">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleCreate} className="flex flex-col gap-5">
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
               Full Name
             </label>
+
             <input
               type="text"
               value={fullName}
               onChange={e => setFullName(e.target.value)}
               required
               placeholder="John Doe"
-              className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+              className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
               Email address
             </label>
+
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
               placeholder="admin@gravium.com"
-              className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+              className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
               Password
             </label>
+
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -150,12 +154,13 @@ export default function CreateAdminPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="Min. 8 characters"
-                className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors pr-12"
+                className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 pr-12 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
               />
+
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-900 transition-colors text-sm"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -163,23 +168,27 @@ export default function CreateAdminPage() {
               </button>
             </div>
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
               Confirm Password
             </label>
+
             <input
               type="password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
               required
               placeholder="Repeat password"
-              className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+              className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
               Admin Key
             </label>
+
             <div className="relative">
               <input
                 type="password"
@@ -187,30 +196,31 @@ export default function CreateAdminPage() {
                 onChange={e => setAdminKey(e.target.value)}
                 required
                 placeholder="Enter the admin key"
-                className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors pr-12"
+                className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 pr-12 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
               />
+
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <Lock size={18} className="text-slate-600" />
+                <Lock size={18} className="text-muted-foreground" />
               </div>
             </div>
-            <p className="text-xs text-slate-600 mt-1">
+
+            <p className="mt-1 text-xs text-muted-foreground">
               Contact the Super Admin to obtain the admin key.
             </p>
           </div>
 
-          <Button 
-            type="submit" 
-            disabled={loading}
-            className="mt-2 w-full"
-          >
+          <Button type="submit" disabled={loading} className="mt-2 w-full">
             {loading ? 'Creating...' : 'Create Admin Account'}
           </Button>
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-muted-foreground">
             Already have an account?{' '}
-            <Link to="/login/admin" className="text-slate-900 underline font-medium hover:text-slate-700">
+            <Link
+              to="/login/admin"
+              className="font-medium text-foreground underline hover:text-muted-foreground"
+            >
               Sign in
             </Link>
           </p>

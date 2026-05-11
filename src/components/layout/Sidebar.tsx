@@ -1,3 +1,4 @@
+import { GraviumLogo } from '@/components/common/GraviumLogo';
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { useAuth } from "../../contexts/AuthContext";
@@ -103,10 +104,10 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
           className="flex items-center border-b p-4 cursor-pointer"
         >
           {collapsed ? (
-            <img src="/Logo-Icon.png" alt="Logo" className="h-7 mx-auto" />
+            <GraviumLogo variant="icon" className="h-7 w-auto mx-auto object-contain" />
           ) : (
             <div className="flex items-center gap-2">
-              <img src="/GRAVIUM.png" alt="Gravium" className="h-7" />
+              <GraviumLogo variant="wordmark" className="h-7 w-auto object-contain" />
               <span className="font-semibold tracking-tight">OS</span>
             </div>
           )}
