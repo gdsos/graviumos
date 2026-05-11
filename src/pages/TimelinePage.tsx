@@ -1,6 +1,6 @@
 ﻿import { useMemo, useState } from 'react';
 import { CalendarClock, RotateCcw } from 'lucide-react';
-
+import { NextActionsPanel } from '@/features/timeline/components/NextActionsPanel';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -266,24 +266,72 @@ export default function TimelinePage() {
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0 space-y-6">
-            <TimelineSummaryCards summary={summary} />
-            <PaymentGateBar
-              paymentGates={paymentGates}
-              onMarkReceived={handleMarkPaymentReceived}
-            />
-            {renderProjectSnapshot()}
-            {renderCriticalWork()}
-          </div>
+        <div className="grid min-w-0 gap-6">
+          <NextActionsPanel
+            workPackages={workPackages}
+            paymentGates={paymentGates}
+            onGoToPayments={() => setActiveTab('payments')}
+            onGoToWork={() => setActiveTab('work')}
+            onGoToAlerts={() => setActiveTab('alerts')}
+          />
 
-          <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
-            <IntelligentAssistPanel
-              alerts={alerts}
-              onApplySuggestion={handleApplySuggestion}
-              onIgnoreAlert={handleIgnoreAlert}
-            />
-          </div>
+          <TimelineSummaryCards summary={summary} />
+
+          <PaymentGateBar
+            paymentGates={paymentGates}
+            onMarkReceived={handleMarkPaymentReceived}
+          />
+
+          {alerts.length > 0 && (
+            <SectionCard
+              title="Intelligent Assist Preview"
+              description={`${alerts.length} alert(s) found. Showing only the most important actions here. Open Assist for the full explanation.`}
+              actions={
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveTab('alerts')}
+                >
+                  View All Alerts
+                </Button>
+              }
+            >
+              <div className="grid gap-3">
+                {alerts.slice(0, 2).map(alert => (
+                  <div
+                    key={alert.id}
+                    className="rounded-2xl border border-border bg-background p-4"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {alert.title}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {alert.description}
+                        </p>
+                      </div>
+
+                      <StatusBadge
+                        variant={
+                          alert.severity === 'danger'
+                            ? 'danger'
+                            : alert.severity === 'warning'
+                              ? 'warning'
+                              : 'info'
+                        }
+                      >
+                        {alert.severity}
+                      </StatusBadge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {renderProjectSnapshot()}
+          {renderCriticalWork()}
         </div>
       );
     }
