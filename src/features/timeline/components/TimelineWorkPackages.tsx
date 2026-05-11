@@ -1,7 +1,8 @@
-﻿import { PackageCheck } from 'lucide-react';
+﻿import { PackageCheck, ShieldAlert, Sparkles, CheckCircle2 } from 'lucide-react';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { SectionCard } from '@/components/common/SectionCard';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { demoVendors } from '@/features/vendors/data';
 import { WorkPackageCard } from './WorkPackageCard';
 import type { WorkPackage } from '../types';
@@ -14,6 +15,66 @@ function getVendorName(vendorId?: string) {
   if (!vendorId) return undefined;
 
   return demoVendors.find(vendor => vendor.id === vendorId)?.name;
+}
+
+function isNeedsAttention(workPackage: WorkPackage) {
+  return (
+    workPackage.status === 'blocked_by_payment' ||
+    workPackage.status === 'blocked_by_dependency' ||
+    workPackage.status === 'delayed' ||
+    workPackage.status === 'paused'
+  );
+}
+
+function isCompleted(workPackage: WorkPackage) {
+  return workPackage.status === 'completed';
+}
+
+function isActiveOrUpcoming(workPackage: WorkPackage) {
+  return !isNeedsAttention(workPackage) && !isCompleted(workPackage);
+}
+
+function WorkPackageGroup({
+  title,
+  description,
+  workPackages,
+  icon: Icon,
+  badgeVariant,
+}: {
+  title: string;
+  description: string;
+  workPackages: WorkPackage[];
+  icon: typeof ShieldAlert;
+  badgeVariant: 'danger' | 'warning' | 'info' | 'success' | 'muted';
+}) {
+  if (workPackages.length === 0) return null;
+
+  return (
+    <SectionCard
+      title={title}
+      description={description}
+      actions={
+        <StatusBadge variant={badgeVariant}>
+          {workPackages.length}
+        </StatusBadge>
+      }
+    >
+      <div className="mb-4 flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+        <Icon className="h-4 w-4" />
+        <span>{description}</span>
+      </div>
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        {workPackages.map(workPackage => (
+          <WorkPackageCard
+            key={workPackage.id}
+            workPackage={workPackage}
+            vendorName={getVendorName(workPackage.vendorId)}
+          />
+        ))}
+      </div>
+    </SectionCard>
+  );
 }
 
 export function TimelineWorkPackages({
@@ -29,20 +90,35 @@ export function TimelineWorkPackages({
     );
   }
 
+  const needsAttention = workPackages.filter(isNeedsAttention);
+  const activeOrUpcoming = workPackages.filter(isActiveOrUpcoming);
+  const completed = workPackages.filter(isCompleted);
+
   return (
-    <SectionCard
-      title="Work Packages"
-      description="Estimated and actual timelines, dependencies, vendors, pauses, and blockers."
-    >
-      <div className="grid gap-4 lg:grid-cols-2">
-        {workPackages.map(workPackage => (
-          <WorkPackageCard
-            key={workPackage.id}
-            workPackage={workPackage}
-            vendorName={getVendorName(workPackage.vendorId)}
-          />
-        ))}
-      </div>
-    </SectionCard>
+    <div className="grid min-w-0 gap-6">
+      <WorkPackageGroup
+        title="Needs Attention"
+        description="Blocked, delayed, or paused work that needs action before the timeline can move smoothly."
+        workPackages={needsAttention}
+        icon={ShieldAlert}
+        badgeVariant="danger"
+      />
+
+      <WorkPackageGroup
+        title="Active / Upcoming"
+        description="Work that is ready, in progress, or not yet started."
+        workPackages={activeOrUpcoming}
+        icon={Sparkles}
+        badgeVariant="info"
+      />
+
+      <WorkPackageGroup
+        title="Completed"
+        description="Finished work packages that are no longer blocking the current timeline."
+        workPackages={completed}
+        icon={CheckCircle2}
+        badgeVariant="success"
+      />
+    </div>
   );
 }
