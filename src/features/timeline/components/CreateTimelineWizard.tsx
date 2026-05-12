@@ -103,6 +103,25 @@ const customScopeExamples = [
   'Custom Wall Cladding',
 ];
 
+type RepeatedAreaType = 'bedroom' | 'bathroom';
+
+const repeatedAreaOptions: Array<{
+  value: RepeatedAreaType;
+  label: string;
+  areaTemplateId: string;
+}> = [
+  {
+    value: 'bedroom',
+    label: 'Bedroom',
+    areaTemplateId: 'area-bedroom',
+  },
+  {
+    value: 'bathroom',
+    label: 'Bathroom',
+    areaTemplateId: 'area-bathroom',
+  },
+];
+
 const paymentGateOptions: Array<{
   value: NonNullable<SelectedScopeItem['paymentGateType']>;
   label: string;
@@ -188,6 +207,25 @@ function createCustomArea(name: string): SelectedArea {
   };
 }
 
+function createRepeatedArea({
+  name,
+  areaType,
+  areaTemplateId,
+}: {
+  name: string;
+  areaType: RepeatedAreaType;
+  areaTemplateId: string;
+}): SelectedArea {
+  return {
+    id: createId(`repeated-${areaType}`),
+    areaTemplateId,
+    type: areaType,
+    name,
+    isCustom: true,
+    notes: 'Repeated room generated during timeline creation.',
+  };
+}
+
 function getAreaName(selectedAreas: SelectedArea[], areaId: string) {
   return selectedAreas.find(area => area.id === areaId)?.name ?? 'Selected Area';
 }
@@ -225,6 +263,9 @@ export function CreateTimelineWizard({
   );
   const [customAreas, setCustomAreas] = useState<SelectedArea[]>([]);
   const [customAreaName, setCustomAreaName] = useState('');
+  const [repeatedAreaType, setRepeatedAreaType] =
+    useState<RepeatedAreaType>('bedroom');
+  const [repeatedAreaCount, setRepeatedAreaCount] = useState('2');
   const [customScopeItems, setCustomScopeItems] = useState<SelectedScopeItem[]>([]);
   const [vendorAssignments, setVendorAssignments] = useState<Record<string, string>>({});
   const [costEstimateSummary, setCostEstimateSummary] =
@@ -340,6 +381,8 @@ export function CreateTimelineWizard({
     setSelectedAreaTemplateIds(getTemplateAreaIds(templateId));
     setCustomAreas([]);
     setCustomAreaName('');
+    setRepeatedAreaType('bedroom');
+    setRepeatedAreaCount('2');
     setCustomScopeItems([]);
     setVendorAssignments({});
     setCostEstimateSummary(null);
@@ -371,6 +414,25 @@ export function CreateTimelineWizard({
 
     setCustomAreas(current => [...current, createCustomArea(trimmedName)]);
     setCustomAreaName('');
+  };
+
+  const handleAddRepeatedAreas = () => {
+    const count = Math.max(1, Math.min(10, Number(repeatedAreaCount) || 1));
+    const selectedOption = repeatedAreaOptions.find(
+      option => option.value === repeatedAreaType
+    );
+
+    if (!selectedOption) return;
+
+    const newAreas = Array.from({ length: count }, (_, index) =>
+      createRepeatedArea({
+        name: `${selectedOption.label} ${index + 1}`,
+        areaType: selectedOption.value,
+        areaTemplateId: selectedOption.areaTemplateId,
+      })
+    );
+
+    setCustomAreas(current => [...current, ...newAreas]);
   };
 
   const handleRemoveCustomArea = (areaId: string) => {
@@ -614,6 +676,50 @@ export function CreateTimelineWizard({
             <Plus className="h-4 w-4" />
             Add Area
           </Button>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <p className="text-sm font-medium text-foreground">
+            Add repeated rooms
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Use this for projects with multiple bedrooms or bathrooms. Each generated
+            room can later have its own scope.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_120px_auto]">
+            <select
+              value={repeatedAreaType}
+              onChange={event =>
+                setRepeatedAreaType(event.target.value as RepeatedAreaType)
+              }
+              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            >
+              {repeatedAreaOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={repeatedAreaCount}
+              onChange={event => setRepeatedAreaCount(event.target.value)}
+              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            />
+
+            <Button
+              type="button"
+              onClick={handleAddRepeatedAreas}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Rooms
+            </Button>
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
