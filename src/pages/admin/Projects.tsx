@@ -187,6 +187,13 @@ export default function Projects() {
   function calcFinancials(proj: Project) {
   const grossRevenue = proj.revenue || 0;
 
+  // ─── CASH FLOW ─────────────────────────────────────────────────────────
+
+  const totalCashReceived = cashReceived.reduce(
+    (sum, c) => sum + (c.amount || 0),
+    0
+  );
+
   // ─── GST CALCULATION (FIXED - YOUR FINAL VERSION) ───────────────────────
 
   const gstOnRevenue = grossRevenue * 0.18;
@@ -224,14 +231,7 @@ export default function Projects() {
 
   const commission = netRevenue * 0.025;
 
-  // ─── CASH FLOW ─────────────────────────────────────────────────────────
-
-  const totalCashReceived = cashReceived.reduce(
-    (sum, c) => sum + (c.amount || 0),
-    0
-  );
-
-  const outstanding = netRevenue - totalCashReceived;
+  const outstanding = grossRevenue - totalCashReceived;
 
   // ─── FINAL RETURN ───────────────────────────────────────────────────────
 
