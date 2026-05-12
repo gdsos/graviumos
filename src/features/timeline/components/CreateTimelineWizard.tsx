@@ -7,6 +7,7 @@ import {
   Plus,
   Play,
   Sparkles,
+  Store,
   Trash2,
 } from 'lucide-react';
 
@@ -14,7 +15,10 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
-import { vendorCategoryLabels } from '@/features/vendors/data';
+import {
+  demoVendors,
+  vendorCategoryLabels,
+} from '@/features/vendors/data';
 
 import {
   areaTemplates,
@@ -37,7 +41,7 @@ interface CreateTimelineWizardProps {
   onClose?: () => void;
 }
 
-type WizardStep = 'template' | 'areas' | 'scope' | 'review';
+type WizardStep = 'template' | 'areas' | 'scope' | 'vendors' | 'review';
 
 const wizardSteps: Array<{ id: WizardStep; label: string; description: string }> = [
   {
@@ -54,6 +58,11 @@ const wizardSteps: Array<{ id: WizardStep; label: string; description: string }>
     id: 'scope',
     label: 'Scope',
     description: 'Review scope items',
+  },
+  {
+    id: 'vendors',
+    label: 'Vendors',
+    description: 'Assign vendor teams',
   },
   {
     id: 'review',
@@ -169,6 +178,16 @@ function getAreaName(selectedAreas: SelectedArea[], areaId: string) {
   return selectedAreas.find(area => area.id === areaId)?.name ?? 'Selected Area';
 }
 
+function getMatchingVendors(scopeItem: SelectedScopeItem) {
+  if (!scopeItem.vendorCategory) return [];
+
+  return demoVendors.filter(
+    vendor =>
+      vendor.category === scopeItem.vendorCategory &&
+      vendor.status === 'active'
+  );
+}
+
 export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   const initialTemplateId = getInitialTemplateId();
 
@@ -180,6 +199,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   const [customAreas, setCustomAreas] = useState<SelectedArea[]>([]);
   const [customAreaName, setCustomAreaName] = useState('');
   const [customScopeItems, setCustomScopeItems] = useState<SelectedScopeItem[]>([]);
+  const [vendorAssignments, setVendorAssignments] = useState<Record<string, string>>({});
   const [customScopeForm, setCustomScopeForm] = useState<CustomScopeForm>({
     areaId: '',
     name: '',
@@ -230,9 +250,24 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   );
 
   const selectedScopeItems = useMemo(
-    () => [...standardScopeItems, ...customScopeItems],
-    [customScopeItems, standardScopeItems]
+    () =>
+      [...standardScopeItems, ...customScopeItems].map(scopeItem => ({
+        ...scopeItem,
+        selectedVendorId: vendorAssignments[scopeItem.id],
+      })),
+    [customScopeItems, standardScopeItems, vendorAssignments]
   );
+
+  const vendorRequiredScopeItems = selectedScopeItems.filter(
+    scopeItem => scopeItem.vendorRequired
+  );
+
+  const assignedVendorCount = vendorRequiredScopeItems.filter(
+    scopeItem => Boolean(scopeItem.selectedVendorId)
+  ).length;
+
+  const unassignedVendorCount =
+    vendorRequiredScopeItems.length - assignedVendorCount;
 
   const draft: TimelineCreationDraft | null = useMemo(() => {
     if (!selectedTemplate) return null;
@@ -263,9 +298,6 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   }, [draft]);
 
   const currentStepIndex = getStepIndex(activeStep);
-  const vendorRequiredCount = selectedScopeItems.filter(
-    scopeItem => scopeItem.vendorRequired
-  ).length;
   const customAreaCount = selectedAreas.filter(area => area.isCustom).length;
   const customScopeCount = selectedScopeItems.filter(scopeItem => scopeItem.isCustom).length;
 
@@ -275,6 +307,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     setCustomAreas([]);
     setCustomAreaName('');
     setCustomScopeItems([]);
+    setVendorAssignments({});
     setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
     setActiveStep('areas');
   };
@@ -354,6 +387,27 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     setCustomScopeItems(current =>
       current.filter(scopeItem => scopeItem.id !== scopeItemId)
     );
+
+    setVendorAssignments(current => {
+      const nextAssignments = { ...current };
+      delete nextAssignments[scopeItemId];
+      return nextAssignments;
+    });
+  };
+
+  const handleAssignVendor = (scopeItemId: string, vendorId: string) => {
+    setVendorAssignments(current => {
+      if (!vendorId) {
+        const nextAssignments = { ...current };
+        delete nextAssignments[scopeItemId];
+        return nextAssignments;
+      }
+
+      return {
+        ...current,
+        [scopeItemId]: vendorId,
+      };
+    });
   };
 
   const goNext = () => {
@@ -756,6 +810,124 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     </div>
   );
 
+  const renderVendorsStep = () => (
+    <div className="grid gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+        <p className="text-sm font-medium text-foreground">
+          Assign vendors to required scope items
+        </p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Vendor assignment is optional while drafting, but vendor-required scope
+          items should be assigned before publishing an execution timeline.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <StatusBadge variant="outline">
+            {vendorRequiredScopeItems.length} vendor-required
+          </StatusBadge>
+          <StatusBadge variant={unassignedVendorCount > 0 ? 'warning' : 'success'}>
+            {unassignedVendorCount} unassigned
+          </StatusBadge>
+        </div>
+      </div>
+
+      {vendorRequiredScopeItems.length > 0 ? (
+        <div className="grid gap-3">
+          {vendorRequiredScopeItems.map(scopeItem => {
+            const matchingVendors = getMatchingVendors(scopeItem);
+            const assignedVendor = demoVendors.find(
+              vendor => vendor.id === scopeItem.selectedVendorId
+            );
+
+            return (
+              <div
+                key={scopeItem.id}
+                className="rounded-2xl border border-border bg-background p-4"
+              >
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-foreground">{scopeItem.name}</p>
+                      {scopeItem.isCustom && <StatusBadge variant="info">Custom</StatusBadge>}
+                    </div>
+
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {getAreaName(selectedAreas, scopeItem.areaId)} ·{' '}
+                      {scopeItem.durationDays} day(s)
+                    </p>
+
+                    {scopeItem.vendorCategory && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Required category:{' '}
+                        {vendorCategoryLabels[scopeItem.vendorCategory]}
+                      </p>
+                    )}
+                  </div>
+
+                  <StatusBadge variant={assignedVendor ? 'success' : 'warning'}>
+                    {assignedVendor ? 'Assigned' : 'Unassigned'}
+                  </StatusBadge>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+                  <select
+                    value={scopeItem.selectedVendorId ?? ''}
+                    onChange={event =>
+                      handleAssignVendor(scopeItem.id, event.target.value)
+                    }
+                    className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  >
+                    <option value="">Assign later</option>
+                    {matchingVendors.map(vendor => (
+                      <option key={vendor.id} value={vendor.id}>
+                        {vendor.name} · {vendor.location} · {vendor.rating.toFixed(1)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
+                    <Store className="h-4 w-4" />
+                    {matchingVendors.length} match
+                    {matchingVendors.length === 1 ? '' : 'es'}
+                  </div>
+                </div>
+
+                {assignedVendor && (
+                  <div className="mt-3 rounded-xl border border-border bg-muted/30 p-3">
+                    <p className="text-sm font-medium text-foreground">
+                      {assignedVendor.name}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {assignedVendor.contactPerson} · {assignedVendor.phone} ·{' '}
+                      {assignedVendor.location}
+                    </p>
+                  </div>
+                )}
+
+                {matchingVendors.length === 0 && (
+                  <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+                    No active vendor found for this category. Add a matching vendor
+                    in the Vendors page or assign later.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-center">
+          <Store className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="mt-3 text-sm font-medium text-foreground">
+            No vendor-required scope items
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add vendor-required scope items in the Scope step to assign vendors.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   const renderReviewStep = () => (
     <div className="grid gap-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -821,7 +993,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
           </div>
           <p className="text-sm text-muted-foreground">Vendor Assignments</p>
           <p className="mt-1 text-base font-semibold text-foreground">
-            {vendorRequiredCount} required later
+            {assignedVendorCount} assigned · {unassignedVendorCount} pending
           </p>
         </div>
       </div>
@@ -832,6 +1004,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     if (activeStep === 'template') return renderTemplateStep();
     if (activeStep === 'areas') return renderAreasStep();
     if (activeStep === 'scope') return renderScopeStep();
+    if (activeStep === 'vendors') return renderVendorsStep();
     return renderReviewStep();
   };
 
@@ -848,7 +1021,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
             </h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
               Build a timeline from project type, areas, scope items, payment gates,
-              and generated work packages.
+              vendors, and generated work packages.
             </p>
           </div>
 
@@ -861,7 +1034,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
       </div>
 
       <div className="border-b border-border p-3 sm:p-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {wizardSteps.map((step, index) => {
             const isActive = activeStep === step.id;
             const isCompleted = index < currentStepIndex;
@@ -879,7 +1052,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
                       : 'border-border bg-background text-muted-foreground hover:bg-muted'
                 }`}
               >
-                <span className="block text-xs font-medium sm:text-sm">
+                <span className="block text-[11px] font-medium sm:text-sm">
                   {step.label}
                 </span>
                 <span className="mt-1 hidden text-xs opacity-75 lg:block">
@@ -947,3 +1120,4 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     </section>
   );
 }
+
