@@ -50,13 +50,25 @@ interface CreateTimelineWizardProps {
   }) => void;
 }
 
-type WizardStep = 'template' | 'areas' | 'scope' | 'vendors' | 'estimate' | 'review';
+type WizardStep =
+  | 'template'
+  | 'basics'
+  | 'areas'
+  | 'scope'
+  | 'vendors'
+  | 'estimate'
+  | 'review';
 
 const wizardSteps: Array<{ id: WizardStep; label: string; description: string }> = [
   {
     id: 'template',
     label: 'Template',
     description: 'Choose project timeline type',
+  },
+  {
+    id: 'basics',
+    label: 'Basics',
+    description: 'Set project details',
   },
   {
     id: 'areas',
@@ -414,7 +426,7 @@ export function CreateTimelineWizard({
     setCostEstimateSummary(null);
     setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
     setMaxUnlockedStepIndex(1);
-    setActiveStep('areas');
+    setActiveStep('basics');
   };
 
   const handleToggleArea = (areaTemplateId: string) => {
@@ -1227,6 +1239,23 @@ export function CreateTimelineWizard({
     </SectionCard>
   );
 
+  const renderBasicsStep = () => (
+    <div className="grid gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+        <p className="text-sm font-medium text-foreground">
+          Set timeline basics
+        </p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          These values are manually editable for now. Later, the approved Cost
+          Estimate can prefill project value, execution value, start date, and
+          related timeline inputs.
+        </p>
+      </div>
+
+      {renderTimelineBasicsCard()}
+    </div>
+  );
+
   const renderEstimateReviewCard = () => {
     if (!costEstimateSummary) return null;
 
@@ -1286,7 +1315,6 @@ export function CreateTimelineWizard({
   };
   const renderReviewStep = () => (
     <div className="grid gap-5">
-      {renderTimelineBasicsCard()}
       {renderEstimateReviewCard()}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
@@ -1360,6 +1388,7 @@ export function CreateTimelineWizard({
 
   const renderActiveStep = () => {
     if (activeStep === 'template') return renderTemplateStep();
+    if (activeStep === 'basics') return renderBasicsStep();
     if (activeStep === 'areas') return renderAreasStep();
     if (activeStep === 'scope') return renderScopeStep();
     if (activeStep === 'vendors') return renderVendorsStep();
@@ -1404,7 +1433,7 @@ export function CreateTimelineWizard({
       </div>
 
       <div className="border-b border-border px-3 py-2 sm:p-4">
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-6 sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-7 sm:overflow-visible sm:px-0 sm:pb-0">
           {wizardSteps.map((step, index) => {
             const isActive = activeStep === step.id;
             const isCompleted = index < currentStepIndex;
