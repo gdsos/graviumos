@@ -4,8 +4,10 @@ import {
   ArrowRight,
   CheckCircle2,
   Layers3,
+  Plus,
   Play,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 import { SectionCard } from '@/components/common/SectionCard';
@@ -23,6 +25,7 @@ import {
 import { generateTimelineFromDraft } from '../generator';
 
 import type {
+  AreaType,
   SelectedArea,
   SelectedScopeItem,
   TimelineCreationDraft,
@@ -43,7 +46,7 @@ const wizardSteps: Array<{ id: WizardStep; label: string; description: string }>
   {
     id: 'areas',
     label: 'Areas',
-    description: 'Review rooms and zones',
+    description: 'Select rooms and zones',
   },
   {
     id: 'scope',
@@ -57,6 +60,15 @@ const wizardSteps: Array<{ id: WizardStep; label: string; description: string }>
   },
 ];
 
+const customAreaExamples = [
+  'Prayer Room',
+  'Majlis',
+  'Pooja Room',
+  'Home Office',
+  'Library',
+  'Kids Play Area',
+];
+
 function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -65,22 +77,27 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}`;
 }
 
-function createSelectedAreas(templateId: string): SelectedArea[] {
+function getInitialTemplateId() {
+  return timelineTemplates[0]?.id ?? '';
+}
+
+function getTemplateAreaIds(templateId: string) {
+  const template = timelineTemplates.find(item => item.id === templateId);
+  return template?.areaTemplateIds ?? [];
+}
+
+function formatTemplateCategories(templateId: string) {
   const template = timelineTemplates.find(item => item.id === templateId);
 
-  if (!template) return [];
+  if (!template) return '';
 
-  return template.areaTemplateIds
-    .map(areaTemplateId => areaTemplates.find(area => area.id === areaTemplateId))
-    .filter(Boolean)
-    .map(areaTemplate => ({
-      id: createId('area'),
-      areaTemplateId: areaTemplate!.id,
-      type: areaTemplate!.type,
-      name: areaTemplate!.name,
-      isCustom: areaTemplate!.isCustom,
-      notes: areaTemplate!.description,
-    }));
+  return template.projectCategories
+    .map(category => projectCategoryLabels[category])
+    .join(', ');
+}
+
+function getStepIndex(step: WizardStep) {
+  return wizardSteps.findIndex(item => item.id === step);
 }
 
 function createSelectedScopeItems(selectedAreas: SelectedArea[]): SelectedScopeItem[] {
@@ -90,7 +107,7 @@ function createSelectedScopeItems(selectedAreas: SelectedArea[]): SelectedScopeI
     const scopeItems = getDefaultScopeItemsForArea(area.areaTemplateId);
 
     return scopeItems.map(scopeItem => ({
-      id: createId('scope'),
+      id: `scope-${area.id}-${scopeItem.id}`,
       areaId: area.id,
       scopeItemTemplateId: scopeItem.id,
       name: scopeItem.name,
@@ -108,35 +125,55 @@ function createSelectedScopeItems(selectedAreas: SelectedArea[]): SelectedScopeI
   });
 }
 
-function formatTemplateCategories(templateId: string) {
-  const template = timelineTemplates.find(item => item.id === templateId);
-
-  if (!template) return '';
-
-  return template.projectCategories
-    .map(category => projectCategoryLabels[category])
-    .join(', ');
-}
-
-function getStepIndex(step: WizardStep) {
-  return wizardSteps.findIndex(item => item.id === step);
+function createCustomArea(name: string): SelectedArea {
+  return {
+    id: createId('custom-area'),
+    type: 'custom' as AreaType,
+    name,
+    isCustom: true,
+    notes: 'Custom room or area added manually during timeline creation.',
+  };
 }
 
 export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
+  const initialTemplateId = getInitialTemplateId();
+
   const [activeStep, setActiveStep] = useState<WizardStep>('template');
-  const [selectedTemplateId, setSelectedTemplateId] = useState(
-    timelineTemplates[0]?.id ?? ''
+  const [selectedTemplateId, setSelectedTemplateId] = useState(initialTemplateId);
+  const [selectedAreaTemplateIds, setSelectedAreaTemplateIds] = useState<string[]>(
+    () => getTemplateAreaIds(initialTemplateId)
   );
+  const [customAreas, setCustomAreas] = useState<SelectedArea[]>([]);
+  const [customAreaName, setCustomAreaName] = useState('');
 
   const selectedTemplate = useMemo(
     () => timelineTemplates.find(template => template.id === selectedTemplateId),
     [selectedTemplateId]
   );
 
-  const selectedAreas = useMemo(
-    () => createSelectedAreas(selectedTemplateId),
-    [selectedTemplateId]
-  );
+  const availableAreaTemplates = useMemo(() => {
+    if (!selectedTemplate) return [];
+
+    return selectedTemplate.areaTemplateIds
+      .map(areaTemplateId => areaTemplates.find(area => area.id === areaTemplateId))
+      .filter(Boolean);
+  }, [selectedTemplate]);
+
+  const selectedAreas = useMemo<SelectedArea[]>(() => {
+    const standardAreas = selectedAreaTemplateIds
+      .map(areaTemplateId => areaTemplates.find(area => area.id === areaTemplateId))
+      .filter(Boolean)
+      .map(areaTemplate => ({
+        id: `area-${areaTemplate!.id}`,
+        areaTemplateId: areaTemplate!.id,
+        type: areaTemplate!.type,
+        name: areaTemplate!.name,
+        isCustom: areaTemplate!.isCustom,
+        notes: areaTemplate!.description,
+      }));
+
+    return [...standardAreas, ...customAreas];
+  }, [customAreas, selectedAreaTemplateIds]);
 
   const selectedScopeItems = useMemo(
     () => createSelectedScopeItems(selectedAreas),
@@ -175,6 +212,38 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   const vendorRequiredCount = selectedScopeItems.filter(
     scopeItem => scopeItem.vendorRequired
   ).length;
+  const customAreaCount = selectedAreas.filter(area => area.isCustom).length;
+
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setSelectedAreaTemplateIds(getTemplateAreaIds(templateId));
+    setCustomAreas([]);
+    setCustomAreaName('');
+    setActiveStep('areas');
+  };
+
+  const handleToggleArea = (areaTemplateId: string) => {
+    setSelectedAreaTemplateIds(current => {
+      if (current.includes(areaTemplateId)) {
+        return current.filter(id => id !== areaTemplateId);
+      }
+
+      return [...current, areaTemplateId];
+    });
+  };
+
+  const handleAddCustomArea = () => {
+    const trimmedName = customAreaName.trim();
+
+    if (!trimmedName) return;
+
+    setCustomAreas(current => [...current, createCustomArea(trimmedName)]);
+    setCustomAreaName('');
+  };
+
+  const handleRemoveCustomArea = (areaId: string) => {
+    setCustomAreas(current => current.filter(area => area.id !== areaId));
+  };
 
   const goNext = () => {
     const nextStep = wizardSteps[currentStepIndex + 1];
@@ -195,10 +264,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
           <button
             key={template.id}
             type="button"
-            onClick={() => {
-              setSelectedTemplateId(template.id);
-              setActiveStep('areas');
-            }}
+            onClick={() => handleSelectTemplate(template.id)}
             className={`rounded-2xl border p-4 text-left transition ${
               isSelected
                 ? 'border-foreground bg-primary text-primary-foreground'
@@ -238,57 +304,191 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   );
 
   const renderAreasStep = () => (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {selectedAreas.map(area => (
-        <div
-          key={area.id}
-          className="rounded-2xl border border-border bg-background p-4"
-        >
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="font-medium text-foreground">{area.name}</p>
-            {area.isCustom && <StatusBadge variant="info">Custom</StatusBadge>}
-          </div>
+    <div className="grid gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+        <p className="text-sm font-medium text-foreground">
+          Select areas / rooms
+        </p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Choose only the rooms or zones included in this project. Custom rooms
+          like Prayer Room, Majlis, Home Office, or special-purpose areas can be
+          added below.
+        </p>
+      </div>
 
-          {area.notes && (
-            <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
-              {area.notes}
-            </p>
-          )}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {availableAreaTemplates.map(area => {
+          if (!area) return null;
+
+          const isSelected = selectedAreaTemplateIds.includes(area.id);
+
+          return (
+            <button
+              key={area.id}
+              type="button"
+              onClick={() => handleToggleArea(area.id)}
+              className={`rounded-2xl border p-4 text-left transition ${
+                isSelected
+                  ? 'border-foreground bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-foreground hover:bg-muted'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium">{area.name}</p>
+                  {area.description && (
+                    <p
+                      className={`mt-1 line-clamp-3 text-sm leading-6 ${
+                        isSelected
+                          ? 'text-primary-foreground/75'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {area.description}
+                    </p>
+                  )}
+                </div>
+
+                {isSelected && <CheckCircle2 className="h-5 w-5 shrink-0" />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-background p-4">
+        <p className="text-sm font-medium text-foreground">Add custom area</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Use this for custom rooms like Prayer Room, Majlis, Pooja Room, Library,
+          Gym, or any special client requirement.
+        </p>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <input
+            value={customAreaName}
+            onChange={event => setCustomAreaName(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleAddCustomArea();
+              }
+            }}
+            placeholder="e.g. Prayer Room"
+            className="min-h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+          />
+
+          <Button
+            type="button"
+            onClick={handleAddCustomArea}
+            className="gap-2"
+            disabled={!customAreaName.trim()}
+          >
+            <Plus className="h-4 w-4" />
+            Add Area
+          </Button>
         </div>
-      ))}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {customAreaExamples.map(example => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setCustomAreaName(example)}
+              className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedAreas.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {selectedAreas.map(area => (
+            <div
+              key={area.id}
+              className="rounded-2xl border border-border bg-background p-4"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="font-medium text-foreground">{area.name}</p>
+
+                {area.isCustom ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCustomArea(area.id)}
+                    className="rounded-full border border-destructive/30 p-1.5 text-destructive transition hover:bg-destructive/10"
+                    aria-label="Remove custom area"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <StatusBadge variant="outline">Selected</StatusBadge>
+                )}
+              </div>
+
+              {area.notes && (
+                <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
+                  {area.notes}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
   const renderScopeStep = () => (
     <div className="grid gap-3">
-      {selectedScopeItems.map(scopeItem => (
-        <div
-          key={scopeItem.id}
-          className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="min-w-0">
-            <p className="font-medium text-foreground">{scopeItem.name}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {scopeItem.durationDays} day(s) ·{' '}
-              {scopeItem.department.replaceAll('_', ' ')}
-            </p>
+      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+        <p className="text-sm font-medium text-foreground">
+          Scope generated from selected areas
+        </p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Standard scope items are generated automatically. Custom scope items will
+          be added in the next version of this wizard.
+        </p>
+      </div>
 
-            {scopeItem.vendorCategory && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Vendor category: {scopeItem.vendorCategory.replaceAll('_', ' ')}
+      {selectedScopeItems.length > 0 ? (
+        selectedScopeItems.map(scopeItem => (
+          <div
+            key={scopeItem.id}
+            className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">{scopeItem.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {scopeItem.durationDays} day(s) ·{' '}
+                {scopeItem.department.replaceAll('_', ' ')}
               </p>
-            )}
-          </div>
 
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge variant={scopeItem.vendorRequired ? 'warning' : 'muted'}>
-              {scopeItem.vendorRequired ? 'Vendor Required' : 'No Vendor'}
-            </StatusBadge>
+              {scopeItem.vendorCategory && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Vendor category: {scopeItem.vendorCategory.replaceAll('_', ' ')}
+                </p>
+              )}
+            </div>
 
-            <StatusBadge variant="outline">{scopeItem.phase}</StatusBadge>
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge variant={scopeItem.vendorRequired ? 'warning' : 'muted'}>
+                {scopeItem.vendorRequired ? 'Vendor Required' : 'No Vendor'}
+              </StatusBadge>
+
+              <StatusBadge variant="outline">{scopeItem.phase}</StatusBadge>
+            </div>
           </div>
+        ))
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-center">
+          <p className="text-sm font-medium text-foreground">
+            No scope items yet
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Select at least one standard area or add custom scope items in the next step.
+          </p>
         </div>
-      ))}
+      )}
     </div>
   );
 
@@ -301,6 +501,9 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
           </p>
           <p className="mt-2 text-2xl font-semibold text-foreground">
             {selectedAreas.length}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {customAreaCount} custom
           </p>
         </div>
 
