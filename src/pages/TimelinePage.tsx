@@ -459,22 +459,26 @@ export default function TimelinePage() {
         eyebrow="Project Timeline Management"
         title={demoTimelineProject.name}
         description={
-          hasTimeline
-            ? 'Interior project execution timeline with payment gates, work packages, dependencies, pauses, and intelligent assist.'
-            : 'Create one active timeline for this project before using dashboard, work packages, payments, or Intelligent Assist.'
+          showCreateWizard
+            ? hasTimeline
+              ? 'Edit the active project timeline. Dashboard, payment gates, and operational actions are hidden while editing.'
+              : 'Create the first active timeline for this project. Dashboard, payment gates, and operational actions will appear after creation.'
+            : hasTimeline
+              ? 'Interior project execution timeline with payment gates, work packages, dependencies, pauses, and intelligent assist.'
+              : 'Create one active timeline for this project before using dashboard, work packages, payments, or Intelligent Assist.'
         }
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <Button
-              type="button"
-              onClick={() => setShowCreateWizard(true)}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              {hasTimeline ? 'Edit Timeline' : 'Create Timeline'}
-            </Button>
+          hasTimeline ? (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button
+                type="button"
+                onClick={() => setShowCreateWizard(true)}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Edit Timeline
+              </Button>
 
-            {hasTimeline && (
               <Button
                 type="button"
                 variant="outline"
@@ -484,15 +488,13 @@ export default function TimelinePage() {
                 <RotateCcw className="h-4 w-4" />
                 Reset
               </Button>
-            )}
 
-            {hasTimeline && (
               <Button type="button" className="gap-2">
                 <CalendarClock className="h-4 w-4" />
                 Override
               </Button>
-            )}
-          </div>
+            </div>
+          ) : null
         }
       />
 
@@ -603,3 +605,4 @@ export default function TimelinePage() {
     </div>
   );
 }
+
