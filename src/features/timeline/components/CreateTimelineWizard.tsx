@@ -1286,6 +1286,28 @@ export function CreateTimelineWizard({
         description="Commercial summary generated from scope pricing, service charge, misc charge, and GST."
         className="shadow-none"
       >
+        <div className="mb-4 rounded-2xl border border-border bg-background p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                Approval Status
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Execution timeline creation is available only after the Cost
+                Estimate is approved.
+              </p>
+            </div>
+
+            <StatusBadge
+              variant={isCostEstimateApproved ? 'success' : 'warning'}
+            >
+              {isCostEstimateApproved
+                ? 'Cost Estimate Approved'
+                : 'Approval Required'}
+            </StatusBadge>
+          </div>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
