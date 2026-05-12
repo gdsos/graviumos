@@ -14,6 +14,8 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
+import { vendorCategoryLabels } from '@/features/vendors/data';
+
 import {
   areaTemplates,
   getDefaultScopeItemsForArea,
@@ -69,6 +71,34 @@ const customAreaExamples = [
   'Kids Play Area',
 ];
 
+const customScopeExamples = [
+  'CNC Arabesque Wall Panel',
+  'Islamic Arch Feature',
+  'Floor Mat / Carpet Zone',
+  'Custom Storage Cabinet',
+  'Decorative Niche Lighting',
+  'Custom Wall Cladding',
+];
+
+const paymentGateOptions: Array<{
+  value: NonNullable<SelectedScopeItem['paymentGateType']>;
+  label: string;
+}> = [
+  { value: 'procurement_start', label: 'Procurement Start' },
+  { value: 'major_site_execution', label: 'Major Site Execution' },
+  { value: 'final_installation', label: 'Final Installation' },
+  { value: 'handover', label: 'Handover' },
+];
+
+type CustomScopeForm = {
+  areaId: string;
+  name: string;
+  durationDays: string;
+  vendorRequired: boolean;
+  vendorCategory: NonNullable<SelectedScopeItem['vendorCategory']>;
+  paymentGateType: NonNullable<SelectedScopeItem['paymentGateType']>;
+};
+
 function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -100,7 +130,7 @@ function getStepIndex(step: WizardStep) {
   return wizardSteps.findIndex(item => item.id === step);
 }
 
-function createSelectedScopeItems(selectedAreas: SelectedArea[]): SelectedScopeItem[] {
+function createStandardScopeItems(selectedAreas: SelectedArea[]): SelectedScopeItem[] {
   return selectedAreas.flatMap(area => {
     if (!area.areaTemplateId) return [];
 
@@ -135,6 +165,10 @@ function createCustomArea(name: string): SelectedArea {
   };
 }
 
+function getAreaName(selectedAreas: SelectedArea[], areaId: string) {
+  return selectedAreas.find(area => area.id === areaId)?.name ?? 'Selected Area';
+}
+
 export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   const initialTemplateId = getInitialTemplateId();
 
@@ -145,6 +179,15 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   );
   const [customAreas, setCustomAreas] = useState<SelectedArea[]>([]);
   const [customAreaName, setCustomAreaName] = useState('');
+  const [customScopeItems, setCustomScopeItems] = useState<SelectedScopeItem[]>([]);
+  const [customScopeForm, setCustomScopeForm] = useState<CustomScopeForm>({
+    areaId: '',
+    name: '',
+    durationDays: '4',
+    vendorRequired: true,
+    vendorCategory: 'carpentry',
+    paymentGateType: 'major_site_execution',
+  });
 
   const selectedTemplate = useMemo(
     () => timelineTemplates.find(template => template.id === selectedTemplateId),
@@ -175,9 +218,20 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     return [...standardAreas, ...customAreas];
   }, [customAreas, selectedAreaTemplateIds]);
 
-  const selectedScopeItems = useMemo(
-    () => createSelectedScopeItems(selectedAreas),
+  const resolvedCustomScopeAreaId = selectedAreas.some(
+    area => area.id === customScopeForm.areaId
+  )
+    ? customScopeForm.areaId
+    : selectedAreas[0]?.id ?? '';
+
+  const standardScopeItems = useMemo(
+    () => createStandardScopeItems(selectedAreas),
     [selectedAreas]
+  );
+
+  const selectedScopeItems = useMemo(
+    () => [...standardScopeItems, ...customScopeItems],
+    [customScopeItems, standardScopeItems]
   );
 
   const draft: TimelineCreationDraft | null = useMemo(() => {
@@ -213,18 +267,27 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     scopeItem => scopeItem.vendorRequired
   ).length;
   const customAreaCount = selectedAreas.filter(area => area.isCustom).length;
+  const customScopeCount = selectedScopeItems.filter(scopeItem => scopeItem.isCustom).length;
 
   const handleSelectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
     setSelectedAreaTemplateIds(getTemplateAreaIds(templateId));
     setCustomAreas([]);
     setCustomAreaName('');
+    setCustomScopeItems([]);
+    setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
     setActiveStep('areas');
   };
 
   const handleToggleArea = (areaTemplateId: string) => {
+    const generatedAreaId = `area-${areaTemplateId}`;
+
     setSelectedAreaTemplateIds(current => {
       if (current.includes(areaTemplateId)) {
+        setCustomScopeItems(scopeItems =>
+          scopeItems.filter(scopeItem => scopeItem.areaId !== generatedAreaId)
+        );
+
         return current.filter(id => id !== areaTemplateId);
       }
 
@@ -243,6 +306,54 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
 
   const handleRemoveCustomArea = (areaId: string) => {
     setCustomAreas(current => current.filter(area => area.id !== areaId));
+    setCustomScopeItems(current =>
+      current.filter(scopeItem => scopeItem.areaId !== areaId)
+    );
+  };
+
+  const handleAddCustomScopeItem = () => {
+    const trimmedName = customScopeForm.name.trim();
+
+    if (!trimmedName || !resolvedCustomScopeAreaId) return;
+
+    const durationDays = Math.max(1, Number(customScopeForm.durationDays) || 1);
+
+    const customScopeItem: SelectedScopeItem = {
+      id: createId('custom-scope'),
+      areaId: resolvedCustomScopeAreaId,
+      name: trimmedName,
+      description: `Custom scope item for ${getAreaName(
+        selectedAreas,
+        resolvedCustomScopeAreaId
+      )}.`,
+      isCustom: true,
+      phase: 'execution',
+      department: customScopeForm.vendorRequired
+        ? 'procurement_logistics'
+        : 'design_execution',
+      durationDays,
+      priority: 'medium',
+      vendorRequired: customScopeForm.vendorRequired,
+      vendorCategory: customScopeForm.vendorRequired
+        ? customScopeForm.vendorCategory
+        : undefined,
+      paymentGateType: customScopeForm.paymentGateType,
+      dependencyRules: ['custom'],
+      notes: 'Added manually in timeline creation wizard.',
+    };
+
+    setCustomScopeItems(current => [...current, customScopeItem]);
+    setCustomScopeForm(current => ({
+      ...current,
+      name: '',
+      durationDays: '4',
+    }));
+  };
+
+  const handleRemoveCustomScopeItem = (scopeItemId: string) => {
+    setCustomScopeItems(current =>
+      current.filter(scopeItem => scopeItem.id !== scopeItemId)
+    );
   };
 
   const goNext = () => {
@@ -439,53 +550,206 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   );
 
   const renderScopeStep = () => (
-    <div className="grid gap-3">
+    <div className="grid gap-5">
       <div className="rounded-2xl border border-border bg-muted/30 p-4">
         <p className="text-sm font-medium text-foreground">
           Scope generated from selected areas
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Standard scope items are generated automatically. Custom scope items will
-          be added in the next version of this wizard.
+          Standard scope items are generated automatically. Add custom items for
+          special rooms, client-specific details, CNC work, custom panels, mats,
+          or unique execution requirements.
         </p>
       </div>
 
-      {selectedScopeItems.length > 0 ? (
-        selectedScopeItems.map(scopeItem => (
-          <div
-            key={scopeItem.id}
-            className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+      <div className="rounded-2xl border border-border bg-background p-4">
+        <p className="text-sm font-medium text-foreground">Add custom scope item</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Add special work items under any selected area.
+        </p>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.2fr_120px]">
+          <select
+            value={resolvedCustomScopeAreaId}
+            onChange={event =>
+              setCustomScopeForm(current => ({
+                ...current,
+                areaId: event.target.value,
+              }))
+            }
+            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
           >
-            <div className="min-w-0">
-              <p className="font-medium text-foreground">{scopeItem.name}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {scopeItem.durationDays} day(s) ·{' '}
-                {scopeItem.department.replaceAll('_', ' ')}
-              </p>
+            {selectedAreas.map(area => (
+              <option key={area.id} value={area.id}>
+                {area.name}
+              </option>
+            ))}
+          </select>
 
-              {scopeItem.vendorCategory && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Vendor category: {scopeItem.vendorCategory.replaceAll('_', ' ')}
+          <input
+            value={customScopeForm.name}
+            onChange={event =>
+              setCustomScopeForm(current => ({
+                ...current,
+                name: event.target.value,
+              }))
+            }
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleAddCustomScopeItem();
+              }
+            }}
+            placeholder="e.g. CNC Arabesque Wall Panel"
+            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+          />
+
+          <input
+            type="number"
+            min="1"
+            value={customScopeForm.durationDays}
+            onChange={event =>
+              setCustomScopeForm(current => ({
+                ...current,
+                durationDays: event.target.value,
+              }))
+            }
+            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            placeholder="Days"
+          />
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
+          <select
+            value={customScopeForm.vendorCategory}
+            onChange={event =>
+              setCustomScopeForm(current => ({
+                ...current,
+                vendorCategory: event.target.value as CustomScopeForm['vendorCategory'],
+              }))
+            }
+            disabled={!customScopeForm.vendorRequired}
+            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:opacity-50"
+          >
+            {Object.entries(vendorCategoryLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={customScopeForm.paymentGateType}
+            onChange={event =>
+              setCustomScopeForm(current => ({
+                ...current,
+                paymentGateType: event.target.value as CustomScopeForm['paymentGateType'],
+              }))
+            }
+            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition"
+          >
+            {paymentGateOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <label className="flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={customScopeForm.vendorRequired}
+              onChange={event =>
+                setCustomScopeForm(current => ({
+                  ...current,
+                  vendorRequired: event.target.checked,
+                }))
+              }
+            />
+            Vendor required
+          </label>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {customScopeExamples.map(example => (
+            <button
+              key={example}
+              type="button"
+              onClick={() =>
+                setCustomScopeForm(current => ({ ...current, name: example }))
+              }
+              className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleAddCustomScopeItem}
+          disabled={!customScopeForm.name.trim() || !resolvedCustomScopeAreaId}
+          className="mt-4 gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Add Custom Scope
+        </Button>
+      </div>
+
+      {selectedScopeItems.length > 0 ? (
+        <div className="grid gap-3">
+          {selectedScopeItems.map(scopeItem => (
+            <div
+              key={scopeItem.id}
+              className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-foreground">{scopeItem.name}</p>
+                  {scopeItem.isCustom && <StatusBadge variant="info">Custom</StatusBadge>}
+                </div>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {getAreaName(selectedAreas, scopeItem.areaId)} ·{' '}
+                  {scopeItem.durationDays} day(s) ·{' '}
+                  {scopeItem.department.replaceAll('_', ' ')}
                 </p>
-              )}
-            </div>
 
-            <div className="flex flex-wrap gap-2">
-              <StatusBadge variant={scopeItem.vendorRequired ? 'warning' : 'muted'}>
-                {scopeItem.vendorRequired ? 'Vendor Required' : 'No Vendor'}
-              </StatusBadge>
+                {scopeItem.vendorCategory && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Vendor category: {scopeItem.vendorCategory.replaceAll('_', ' ')}
+                  </p>
+                )}
+              </div>
 
-              <StatusBadge variant="outline">{scopeItem.phase}</StatusBadge>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge variant={scopeItem.vendorRequired ? 'warning' : 'muted'}>
+                  {scopeItem.vendorRequired ? 'Vendor Required' : 'No Vendor'}
+                </StatusBadge>
+
+                <StatusBadge variant="outline">{scopeItem.phase}</StatusBadge>
+
+                {scopeItem.isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCustomScopeItem(scopeItem.id)}
+                    className="rounded-full border border-destructive/30 p-1.5 text-destructive transition hover:bg-destructive/10"
+                    aria-label="Remove custom scope item"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-center">
           <p className="text-sm font-medium text-foreground">
             No scope items yet
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Select at least one standard area or add custom scope items in the next step.
+            Select at least one standard area or add custom scope items.
           </p>
         </div>
       )}
@@ -513,6 +777,9 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
           </p>
           <p className="mt-2 text-2xl font-semibold text-foreground">
             {selectedScopeItems.length}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {customScopeCount} custom
           </p>
         </div>
 
