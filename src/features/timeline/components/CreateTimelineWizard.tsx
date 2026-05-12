@@ -423,6 +423,10 @@ export function CreateTimelineWizard({
     activeStep === 'estimate' &&
     requiresApprovedCostEstimate &&
     !isCostEstimateApproved;
+  const shouldShowEstimateApprovalNotice =
+    requiresApprovedCostEstimate &&
+    !isCostEstimateApproved &&
+    (activeStep === 'estimate' || activeStep === 'review');
 
   const handleSelectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -1513,39 +1517,49 @@ export function CreateTimelineWizard({
         </SectionCard>
       </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={goBack}
-          disabled={currentStepIndex === 0}
-          className="w-full gap-2 sm:w-auto"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
-
-        {activeStep === 'review' ? (
-          <Button
-            type="button"
-            onClick={handleUseDraft}
-            disabled={!canUseDraft}
-            className="w-full gap-2 sm:w-auto"
-          >
-            <Play className="h-4 w-4" />
-            Use This Draft
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            onClick={goNext}
-            disabled={isContinueDisabled}
-            className="w-full gap-2 sm:w-auto"
-          >
-            Continue
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+      <div className="sticky bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
+        {shouldShowEstimateApprovalNotice && (
+          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-muted-foreground">
+            Approve the Cost Estimate before creating an execution timeline. If
+            the estimate revenue does not match the project revenue, update the
+            revenue or continue editing the estimate first.
+          </div>
         )}
+
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={goBack}
+            disabled={currentStepIndex === 0}
+            className="w-full gap-2 sm:w-auto"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+
+          {activeStep === 'review' ? (
+            <Button
+              type="button"
+              onClick={handleUseDraft}
+              disabled={!canUseDraft}
+              className="w-full gap-2 sm:w-auto"
+            >
+              <Play className="h-4 w-4" />
+              Use This Draft
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={goNext}
+              disabled={isContinueDisabled}
+              className="w-full gap-2 sm:w-auto"
+            >
+              Continue
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </section>
   );
