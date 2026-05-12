@@ -163,6 +163,17 @@ export default function TimelinePage() {
     setIgnoredAlertIds(current => [...current, alert.id]);
   };
 
+  const handleUseTimelineDraft = (generatedTimeline: {
+    paymentGates: PaymentGate[];
+    workPackages: WorkPackage[];
+  }) => {
+    setPaymentGates(generatedTimeline.paymentGates);
+    setWorkPackages(generatedTimeline.workPackages);
+    setIgnoredAlertIds([]);
+    setShowCreateWizard(false);
+    setActiveTab('overview');
+  };
+
   const handleResetTimeline = () => {
     const confirmed = window.confirm(
       'Reset timeline demo data? This will restore original payment gates, work packages, and alerts.'
@@ -420,7 +431,10 @@ export default function TimelinePage() {
 
       {showCreateWizard && (
         <div className="mb-6">
-          <CreateTimelineWizard onClose={() => setShowCreateWizard(false)} />
+          <CreateTimelineWizard
+            onClose={() => setShowCreateWizard(false)}
+            onUseDraft={handleUseTimelineDraft}
+          />
         </div>
       )}
 
@@ -475,4 +489,5 @@ export default function TimelinePage() {
     </div>
   );
 }
+
 

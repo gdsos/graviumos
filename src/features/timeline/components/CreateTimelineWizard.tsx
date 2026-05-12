@@ -40,8 +40,14 @@ import type {
   TimelineCreationDraft,
 } from '../scopeTypes';
 
+import type { PaymentGate, WorkPackage } from '../types';
+
 interface CreateTimelineWizardProps {
   onClose?: () => void;
+  onUseDraft?: (generatedTimeline: {
+    paymentGates: PaymentGate[];
+    workPackages: WorkPackage[];
+  }) => void;
 }
 
 type WizardStep = 'template' | 'areas' | 'scope' | 'vendors' | 'estimate' | 'review';
@@ -204,7 +210,10 @@ function getMatchingVendors(scopeItem: SelectedScopeItem) {
   );
 }
 
-export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
+export function CreateTimelineWizard({
+  onClose,
+  onUseDraft,
+}: CreateTimelineWizardProps) {
   const initialTemplateId = getInitialTemplateId();
 
   const [activeStep, setActiveStep] = useState<WizardStep>('template');
@@ -303,11 +312,16 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
       selectedAreas,
       selectedScopeItems,
       designValue: 150000,
-      executionValue: 3145473,
+      executionValue: costEstimateSummary?.estimatedGrossRevenue ?? 3145473,
       startDate: new Date().toISOString().slice(0, 10),
       notes: 'Preview draft generated from scope template.',
     };
-  }, [selectedAreas, selectedScopeItems, selectedTemplate]);
+  }, [
+    costEstimateSummary?.estimatedGrossRevenue,
+    selectedAreas,
+    selectedScopeItems,
+    selectedTemplate,
+  ]);
 
   const generatedTimeline = useMemo(() => {
     if (!draft) return null;
@@ -427,6 +441,13 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
         [scopeItemId]: vendorId,
       };
     });
+  };
+
+  const handleUseDraft = () => {
+    if (!generatedTimeline) return;
+
+    onUseDraft?.(generatedTimeline);
+    onClose?.();
   };
 
   const goNext = () => {
@@ -1192,7 +1213,12 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
         </Button>
 
         {activeStep === 'review' ? (
-          <Button type="button" className="gap-2">
+          <Button
+            type="button"
+            onClick={handleUseDraft}
+            disabled={!generatedTimeline}
+            className="gap-2"
+          >
             <Play className="h-4 w-4" />
             Use This Draft
           </Button>
@@ -1206,6 +1232,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     </section>
   );
 }
+
 
 
 
