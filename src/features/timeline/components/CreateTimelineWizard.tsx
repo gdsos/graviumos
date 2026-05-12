@@ -653,7 +653,7 @@ export function CreateTimelineWizard({
           Gym, or any special client requirement.
         </p>
 
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
           <input
             value={customAreaName}
             onChange={event => setCustomAreaName(event.target.value)}
@@ -670,7 +670,7 @@ export function CreateTimelineWizard({
           <Button
             type="button"
             onClick={handleAddCustomArea}
-            className="gap-2"
+            className="w-full gap-2 sm:w-auto"
             disabled={!customAreaName.trim()}
           >
             <Plus className="h-4 w-4" />
@@ -678,7 +678,7 @@ export function CreateTimelineWizard({
           </Button>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="mt-4 rounded-2xl border border-border bg-muted/20 p-4">
           <p className="text-sm font-medium text-foreground">
             Add repeated rooms
           </p>
@@ -714,7 +714,7 @@ export function CreateTimelineWizard({
             <Button
               type="button"
               onClick={handleAddRepeatedAreas}
-              className="gap-2"
+              className="w-full gap-2 sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               Add Rooms
@@ -912,7 +912,7 @@ export function CreateTimelineWizard({
           type="button"
           onClick={handleAddCustomScopeItem}
           disabled={!customScopeForm.name.trim() || !resolvedCustomScopeAreaId}
-          className="mt-4 gap-2"
+          className="mt-4 w-full gap-2 sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Add Custom Scope
@@ -1247,10 +1247,10 @@ export function CreateTimelineWizard({
   return (
     <section
       ref={wizardTopRef}
-      className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
+      className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
     >
-      <div className="border-b border-border px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
               Timeline Creation
@@ -1258,22 +1258,22 @@ export function CreateTimelineWizard({
             <h2 className="mt-1 text-xl font-semibold text-foreground">
               Create Timeline Wizard
             </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground sm:block">
               Build a timeline from project type, areas, scope items, payment gates,
               vendors, and generated work packages.
             </p>
           </div>
 
           {onClose && (
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
               Close
             </Button>
           )}
         </div>
       </div>
 
-      <div className="border-b border-border p-3 sm:p-4">
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <div className="border-b border-border px-3 py-2 sm:p-4">
+        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-6 sm:overflow-visible sm:px-0 sm:pb-0">
           {wizardSteps.map((step, index) => {
             const isActive = activeStep === step.id;
             const isCompleted = index < currentStepIndex;
@@ -1284,7 +1284,7 @@ export function CreateTimelineWizard({
                 type="button"
                 onClick={() => handleStepClick(step.id, index)}
                 disabled={index > maxUnlockedStepIndex}
-                className={`rounded-2xl border px-2 py-3 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`min-w-[112px] rounded-2xl border px-3 py-2.5 text-center transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-0 sm:px-2 sm:py-3 ${
                   isActive
                     ? 'border-foreground bg-primary text-primary-foreground'
                     : isCompleted
@@ -1305,13 +1305,13 @@ export function CreateTimelineWizard({
       </div>
 
       {selectedTemplate && (
-        <div className="border-b border-border px-4 py-3 sm:px-5">
+        <div className="border-b border-border px-4 py-2.5 sm:px-5 sm:py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">
                 {selectedTemplate.name}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="line-clamp-2 text-xs text-muted-foreground sm:line-clamp-none">
                 {selectedTemplate.description}
               </p>
             </div>
@@ -1323,7 +1323,7 @@ export function CreateTimelineWizard({
         </div>
       )}
 
-      <div className="p-4 sm:p-5">
+      <div className="p-3 sm:p-5">
         <SectionCard
           title={wizardSteps[currentStepIndex]?.label ?? 'Step'}
           description={wizardSteps[currentStepIndex]?.description}
@@ -1333,13 +1333,13 @@ export function CreateTimelineWizard({
         </SectionCard>
       </div>
 
-      <div className="flex flex-col-reverse gap-3 border-t border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
         <Button
           type="button"
           variant="outline"
           onClick={goBack}
           disabled={currentStepIndex === 0}
-          className="gap-2"
+          className="w-full gap-2 sm:w-auto"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -1350,13 +1350,13 @@ export function CreateTimelineWizard({
             type="button"
             onClick={handleUseDraft}
             disabled={!generatedTimeline}
-            className="gap-2"
+            className="w-full gap-2 sm:w-auto"
           >
             <Play className="h-4 w-4" />
             Use This Draft
           </Button>
         ) : (
-          <Button type="button" onClick={goNext} className="gap-2">
+          <Button type="button" onClick={goNext} className="w-full gap-2 sm:w-auto">
             Continue
             <ArrowRight className="h-4 w-4" />
           </Button>
