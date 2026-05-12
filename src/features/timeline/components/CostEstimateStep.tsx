@@ -20,7 +20,10 @@ import type { SelectedArea, SelectedScopeItem } from '../scopeTypes';
 interface CostEstimateStepProps {
   selectedAreas: SelectedArea[];
   selectedScopeItems: SelectedScopeItem[];
+  targetProjectRevenue?: number;
   onSummaryChange?: (summary: CostEstimateSummary) => void;
+  onTargetProjectRevenueChange?: (revenue: number) => void;
+  onApprovalChange?: (isApproved: boolean) => void;
 }
 
 function formatINR(amount: number) {
@@ -46,7 +49,10 @@ function getDefaultCogsAmount(scopeItem: SelectedScopeItem) {
 export function CostEstimateStep({
   selectedAreas,
   selectedScopeItems,
+  targetProjectRevenue: externalTargetProjectRevenue,
   onSummaryChange,
+  onTargetProjectRevenueChange,
+  onApprovalChange,
 }: CostEstimateStepProps) {
   const [lineItemAmounts, setLineItemAmounts] = useState<Record<string, number>>({});
   const [serviceChargePercent, setServiceChargePercent] = useState(
@@ -55,7 +61,10 @@ export function CostEstimateStep({
   const [miscChargePercent, setMiscChargePercent] = useState(
     DEFAULT_MISC_CHARGE_PERCENT
   );
-  const [targetProjectRevenue, setTargetProjectRevenue] = useState(3145473);
+  const [targetProjectRevenue, setTargetProjectRevenue] = useState(
+    externalTargetProjectRevenue ?? 3145473
+  );
+  const [isApproved, setIsApproved] = useState(false);
 
   const lineItems: CostEstimateLineItem[] = useMemo(
     () =>
@@ -89,6 +98,28 @@ export function CostEstimateStep({
     onSummaryChange?.(summary);
   }, [onSummaryChange, summary]);
 
+  useEffect(() => {
+    if (externalTargetProjectRevenue === undefined) return;
+
+    setTargetProjectRevenue(externalTargetProjectRevenue);
+  }, [externalTargetProjectRevenue]);
+
+  useEffect(() => {
+    setIsApproved(false);
+    onApprovalChange?.(false);
+  }, [
+    lineItemAmounts,
+    miscChargePercent,
+    onApprovalChange,
+    selectedScopeItems,
+    serviceChargePercent,
+    targetProjectRevenue,
+  ]);
+
+  useEffect(() => {
+    onApprovalChange?.(isApproved);
+  }, [isApproved, onApprovalChange]);
+
   const handleUpdateRevenue = () => {
     const confirmed = window.confirm(
       `This will overwrite the current project revenue from ${formatINR(
@@ -101,6 +132,13 @@ export function CostEstimateStep({
     if (!confirmed) return;
 
     setTargetProjectRevenue(summary.estimatedGrossRevenue);
+    onTargetProjectRevenueChange?.(summary.estimatedGrossRevenue);
+  };
+
+  const handleApproveEstimate = () => {
+    if (!summary.isRevenueMatched) return;
+
+    setIsApproved(true);
   };
 
   return (
@@ -213,9 +251,11 @@ export function CostEstimateStep({
               type="number"
               min="0"
               value={targetProjectRevenue}
-              onChange={event =>
-                setTargetProjectRevenue(Number(event.target.value))
-              }
+              onChange={event => {
+                const nextRevenue = Number(event.target.value);
+                setTargetProjectRevenue(nextRevenue);
+                onTargetProjectRevenueChange?.(nextRevenue);
+              }}
               className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
             <span className="text-xs text-muted-foreground">
@@ -304,7 +344,22 @@ export function CostEstimateStep({
             </p>
           </div>
 
-          {!summary.isRevenueMatched && (
+          {summary.isRevenueMatched ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {isApproved ? (
+                <StatusBadge variant="success">Estimate Approved</StatusBadge>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleApproveEstimate}
+                  className="gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Approve Cost Estimate
+                </Button>
+              )}
+            </div>
+          ) : (
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button type="button" variant="outline">
                 Continue Editing

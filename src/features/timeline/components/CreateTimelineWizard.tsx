@@ -290,6 +290,7 @@ export function CreateTimelineWizard({
   const [vendorAssignments, setVendorAssignments] = useState<Record<string, string>>({});
   const [costEstimateSummary, setCostEstimateSummary] =
     useState<CostEstimateSummary | null>(null);
+  const [isCostEstimateApproved, setIsCostEstimateApproved] = useState(false);
   const [timelineDraftInput, setTimelineDraftInput] = useState<TimelineDraftInput>({
     projectName: 'Villa, Athani',
     clientName: 'Rafeek Muhammed Ali',
@@ -413,6 +414,15 @@ export function CreateTimelineWizard({
   const currentStepIndex = getStepIndex(activeStep);
   const customAreaCount = selectedAreas.filter(area => area.isCustom).length;
   const customScopeCount = selectedScopeItems.filter(scopeItem => scopeItem.isCustom).length;
+  const requiresApprovedCostEstimate =
+    selectedTemplate?.defaultTimelineMode !== 'design_only';
+  const canUseDraft =
+    Boolean(generatedTimeline) &&
+    (!requiresApprovedCostEstimate || isCostEstimateApproved);
+  const isContinueDisabled =
+    activeStep === 'estimate' &&
+    requiresApprovedCostEstimate &&
+    !isCostEstimateApproved;
 
   const handleSelectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -424,6 +434,7 @@ export function CreateTimelineWizard({
     setCustomScopeItems([]);
     setVendorAssignments({});
     setCostEstimateSummary(null);
+    setIsCostEstimateApproved(false);
     setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
     setMaxUnlockedStepIndex(1);
     setActiveStep('basics');
@@ -538,6 +549,17 @@ export function CreateTimelineWizard({
     setTimelineDraftInput(current => ({
       ...current,
       [field]: value,
+    }));
+
+    if (field === 'executionValue') {
+      setIsCostEstimateApproved(false);
+    }
+  };
+
+  const handleCostEstimateRevenueChange = (revenue: number) => {
+    setTimelineDraftInput(current => ({
+      ...current,
+      executionValue: String(revenue),
     }));
   };
 
@@ -1392,7 +1414,10 @@ export function CreateTimelineWizard({
         <CostEstimateStep
           selectedAreas={selectedAreas}
           selectedScopeItems={selectedScopeItems}
+          targetProjectRevenue={Number(timelineDraftInput.executionValue) || 0}
           onSummaryChange={setCostEstimateSummary}
+          onTargetProjectRevenueChange={handleCostEstimateRevenueChange}
+          onApprovalChange={setIsCostEstimateApproved}
         />
       );
     }
@@ -1504,14 +1529,19 @@ export function CreateTimelineWizard({
           <Button
             type="button"
             onClick={handleUseDraft}
-            disabled={!generatedTimeline}
+            disabled={!canUseDraft}
             className="w-full gap-2 sm:w-auto"
           >
             <Play className="h-4 w-4" />
             Use This Draft
           </Button>
         ) : (
-          <Button type="button" onClick={goNext} className="w-full gap-2 sm:w-auto">
+          <Button
+            type="button"
+            onClick={goNext}
+            disabled={isContinueDisabled}
+            className="w-full gap-2 sm:w-auto"
+          >
             Continue
             <ArrowRight className="h-4 w-4" />
           </Button>
