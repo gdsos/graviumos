@@ -15,6 +15,8 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
+import { CostEstimateStep } from './CostEstimateStep';
+
 import {
   demoVendors,
   vendorCategoryLabels,
@@ -41,7 +43,7 @@ interface CreateTimelineWizardProps {
   onClose?: () => void;
 }
 
-type WizardStep = 'template' | 'areas' | 'scope' | 'vendors' | 'review';
+type WizardStep = 'template' | 'areas' | 'scope' | 'vendors' | 'estimate' | 'review';
 
 const wizardSteps: Array<{ id: WizardStep; label: string; description: string }> = [
   {
@@ -63,6 +65,11 @@ const wizardSteps: Array<{ id: WizardStep; label: string; description: string }>
     id: 'vendors',
     label: 'Vendors',
     description: 'Assign vendor teams',
+  },
+  {
+    id: 'estimate',
+    label: 'Estimate',
+    description: 'Validate project revenue',
   },
   {
     id: 'review',
@@ -1005,6 +1012,14 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     if (activeStep === 'areas') return renderAreasStep();
     if (activeStep === 'scope') return renderScopeStep();
     if (activeStep === 'vendors') return renderVendorsStep();
+    if (activeStep === 'estimate') {
+      return (
+        <CostEstimateStep
+          selectedAreas={selectedAreas}
+          selectedScopeItems={selectedScopeItems}
+        />
+      );
+    }
     return renderReviewStep();
   };
 
@@ -1034,7 +1049,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
       </div>
 
       <div className="border-b border-border p-3 sm:p-4">
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {wizardSteps.map((step, index) => {
             const isActive = activeStep === step.id;
             const isCompleted = index < currentStepIndex;
@@ -1120,4 +1135,5 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     </section>
   );
 }
+
 
