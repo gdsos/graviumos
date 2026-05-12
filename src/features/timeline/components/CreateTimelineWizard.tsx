@@ -141,6 +141,14 @@ type CustomScopeForm = {
   paymentGateType: NonNullable<SelectedScopeItem['paymentGateType']>;
 };
 
+type TimelineDraftInput = {
+  projectName: string;
+  clientName: string;
+  startDate: string;
+  designValue: string;
+  executionValue: string;
+};
+
 function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -270,6 +278,13 @@ export function CreateTimelineWizard({
   const [vendorAssignments, setVendorAssignments] = useState<Record<string, string>>({});
   const [costEstimateSummary, setCostEstimateSummary] =
     useState<CostEstimateSummary | null>(null);
+  const [timelineDraftInput, setTimelineDraftInput] = useState<TimelineDraftInput>({
+    projectName: 'Villa, Athani',
+    clientName: 'Rafeek Muhammed Ali',
+    startDate: new Date().toISOString().slice(0, 10),
+    designValue: '150000',
+    executionValue: '3145473',
+  });
   const [customScopeForm, setCustomScopeForm] = useState<CustomScopeForm>({
     areaId: '',
     name: '',
@@ -342,10 +357,13 @@ export function CreateTimelineWizard({
   const draft: TimelineCreationDraft | null = useMemo(() => {
     if (!selectedTemplate) return null;
 
+    const manualDesignValue = Number(timelineDraftInput.designValue) || 0;
+    const manualExecutionValue = Number(timelineDraftInput.executionValue) || 0;
+
     return {
       id: createId('timeline-draft'),
-      projectName: 'Villa, Athani',
-      clientName: 'Rafeek Muhammed Ali',
+      projectName: timelineDraftInput.projectName.trim() || 'Untitled Project',
+      clientName: timelineDraftInput.clientName.trim() || 'Client',
       projectCategory: selectedTemplate.projectCategories[0],
       timelineMode: selectedTemplate.defaultTimelineMode,
       conversionStatus: selectedTemplate.supportsConversionToExecution
@@ -354,16 +372,24 @@ export function CreateTimelineWizard({
       selectedTemplateId: selectedTemplate.id,
       selectedAreas,
       selectedScopeItems,
-      designValue: 150000,
-      executionValue: costEstimateSummary?.estimatedGrossRevenue ?? 3145473,
-      startDate: new Date().toISOString().slice(0, 10),
-      notes: 'Preview draft generated from scope template.',
+      designValue: manualDesignValue,
+      executionValue:
+        costEstimateSummary?.estimatedGrossRevenue ?? manualExecutionValue,
+      startDate:
+        timelineDraftInput.startDate || new Date().toISOString().slice(0, 10),
+      notes:
+        'Preview draft generated from scope template. Timeline basics are currently editable manually and can later be fetched from approved Cost Estimate data.',
     };
   }, [
     costEstimateSummary?.estimatedGrossRevenue,
     selectedAreas,
     selectedScopeItems,
     selectedTemplate,
+    timelineDraftInput.clientName,
+    timelineDraftInput.designValue,
+    timelineDraftInput.executionValue,
+    timelineDraftInput.projectName,
+    timelineDraftInput.startDate,
   ]);
 
   const generatedTimeline = useMemo(() => {
@@ -491,6 +517,16 @@ export function CreateTimelineWizard({
       delete nextAssignments[scopeItemId];
       return nextAssignments;
     });
+  };
+
+  const handleTimelineDraftInputChange = (
+    field: keyof TimelineDraftInput,
+    value: string
+  ) => {
+    setTimelineDraftInput(current => ({
+      ...current,
+      [field]: value,
+    }));
   };
 
   const handleAssignVendor = (scopeItemId: string, vendorId: string) => {
@@ -1097,6 +1133,100 @@ export function CreateTimelineWizard({
     </div>
   );
 
+  const renderTimelineBasicsCard = () => (
+    <SectionCard
+      title="Timeline Basics"
+      description="Manual timeline inputs for now. Later these can be fetched from the approved Cost Estimate."
+      className="shadow-none"
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="min-w-0 xl:col-span-2">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Project Name
+          </label>
+          <input
+            value={timelineDraftInput.projectName}
+            onChange={event =>
+              handleTimelineDraftInputChange('projectName', event.target.value)
+            }
+            className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+            placeholder="Project name"
+          />
+        </div>
+
+        <div className="min-w-0 xl:col-span-2">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Client Name
+          </label>
+          <input
+            value={timelineDraftInput.clientName}
+            onChange={event =>
+              handleTimelineDraftInputChange('clientName', event.target.value)
+            }
+            className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+            placeholder="Client name"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Start Date
+          </label>
+          <input
+            type="date"
+            value={timelineDraftInput.startDate}
+            onChange={event =>
+              handleTimelineDraftInputChange('startDate', event.target.value)
+            }
+            className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Design Value
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={timelineDraftInput.designValue}
+            onChange={event =>
+              handleTimelineDraftInputChange('designValue', event.target.value)
+            }
+            className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            placeholder="0"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Execution Value
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={
+              costEstimateSummary?.estimatedGrossRevenue
+                ? String(costEstimateSummary.estimatedGrossRevenue)
+                : timelineDraftInput.executionValue
+            }
+            onChange={event =>
+              handleTimelineDraftInputChange('executionValue', event.target.value)
+            }
+            disabled={Boolean(costEstimateSummary?.estimatedGrossRevenue)}
+            className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+            placeholder="0"
+          />
+          {costEstimateSummary?.estimatedGrossRevenue && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Using estimated gross revenue from Cost Estimate.
+            </p>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+
   const renderEstimateReviewCard = () => {
     if (!costEstimateSummary) return null;
 
@@ -1156,6 +1286,7 @@ export function CreateTimelineWizard({
   };
   const renderReviewStep = () => (
     <div className="grid gap-5">
+      {renderTimelineBasicsCard()}
       {renderEstimateReviewCard()}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
