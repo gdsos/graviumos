@@ -642,15 +642,13 @@ export function CreateTimelineWizard({
   );
 
   const renderAreasStep = () => (
-    <div className="grid gap-5">
-      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+    <div className="grid gap-4 sm:gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">
           Select areas / rooms
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Choose only the rooms or zones included in this project. Custom rooms
-          like Prayer Room, Majlis, Home Office, or special-purpose areas can be
-          added below.
+          Choose rooms included in this project. Add repeated bedrooms/bathrooms or custom rooms below.
         </p>
       </div>
 
@@ -665,7 +663,7 @@ export function CreateTimelineWizard({
               key={area.id}
               type="button"
               onClick={() => handleToggleArea(area.id)}
-              className={`rounded-2xl border p-4 text-left transition ${
+              className={`rounded-2xl border p-3 text-left transition sm:p-4 ${
                 isSelected
                   ? 'border-foreground bg-primary text-primary-foreground'
                   : 'border-border bg-background text-foreground hover:bg-muted'
@@ -694,7 +692,7 @@ export function CreateTimelineWizard({
         })}
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">Add custom area</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Use this for custom rooms like Prayer Room, Majlis, Pooja Room, Library,
@@ -726,7 +724,7 @@ export function CreateTimelineWizard({
           </Button>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-border bg-muted/20 p-4">
+        <div className="mt-4 rounded-2xl border border-border bg-muted/20 p-3 sm:p-4">
           <p className="text-sm font-medium text-foreground">
             Add repeated rooms
           </p>
@@ -789,7 +787,7 @@ export function CreateTimelineWizard({
           {selectedAreas.map(area => (
             <div
               key={area.id}
-              className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4"
+              className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-3 sm:p-4"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="font-medium text-foreground">{area.name}</p>
@@ -821,19 +819,17 @@ export function CreateTimelineWizard({
   );
 
   const renderScopeStep = () => (
-    <div className="grid gap-5">
-      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+    <div className="grid gap-4 sm:gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">
           Scope generated from selected areas
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Standard scope items are generated automatically. Add custom items for
-          special rooms, client-specific details, CNC work, custom panels, mats,
-          or unique execution requirements.
+          Standard scope is generated automatically. Add custom work for client-specific execution requirements.
         </p>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">Add custom scope item</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Add special work items under any selected area.
@@ -972,7 +968,7 @@ export function CreateTimelineWizard({
           {selectedScopeItems.map(scopeItem => (
             <div
               key={scopeItem.id}
-              className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1028,14 +1024,13 @@ export function CreateTimelineWizard({
   );
 
   const renderVendorsStep = () => (
-    <div className="grid gap-5">
-      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+    <div className="grid gap-4 sm:gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">
           Assign vendors to required scope items
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Vendor assignment is optional while drafting, but vendor-required scope
-          items should be assigned before publishing an execution timeline.
+          Assign now or leave pending while drafting. Required vendors should be assigned before publishing.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1059,9 +1054,9 @@ export function CreateTimelineWizard({
             return (
               <div
                 key={scopeItem.id}
-                className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4"
+                className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-3 sm:p-4"
               >
-                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="mb-3 flex flex-col gap-3 lg:mb-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-foreground">{scopeItem.name}</p>
