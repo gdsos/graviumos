@@ -734,7 +734,7 @@ export const timelineTemplates: TimelineTemplate[] = [
     projectCategories: ['design_only'],
     defaultTimelineMode: 'design_only',
     supportsConversionToExecution: true,
-    areaTemplateIds: ['area-full-house', 'area-living-room', 'area-kitchen', 'area-bedroom', 'area-custom'],
+    areaTemplateIds: ['area-full-house', 'area-living-room', 'area-kitchen', 'area-bedroom'],
     paymentTemplate: designPaymentTemplate,
   },
   {
@@ -744,7 +744,7 @@ export const timelineTemplates: TimelineTemplate[] = [
     projectCategories: ['new_home_interior'],
     defaultTimelineMode: 'design_execution',
     supportsConversionToExecution: false,
-    areaTemplateIds: ['area-full-house', 'area-living-room', 'area-kitchen', 'area-bedroom', 'area-prayer-room', 'area-custom'],
+    areaTemplateIds: ['area-full-house', 'area-living-room', 'area-kitchen', 'area-bedroom', 'area-prayer-room'],
     paymentTemplate: [...designPaymentTemplate, ...executionPaymentTemplate],
   },
   {
@@ -754,7 +754,7 @@ export const timelineTemplates: TimelineTemplate[] = [
     projectCategories: ['renovation'],
     defaultTimelineMode: 'design_execution',
     supportsConversionToExecution: false,
-    areaTemplateIds: ['area-living-room', 'area-kitchen', 'area-bedroom', 'area-bathroom', 'area-custom'],
+    areaTemplateIds: ['area-living-room', 'area-kitchen', 'area-bedroom', 'area-bathroom'],
     paymentTemplate: [...designPaymentTemplate, ...executionPaymentTemplate],
   },
   {
@@ -764,7 +764,7 @@ export const timelineTemplates: TimelineTemplate[] = [
     projectCategories: ['exterior'],
     defaultTimelineMode: 'execution_only',
     supportsConversionToExecution: false,
-    areaTemplateIds: ['area-exterior', 'area-custom'],
+    areaTemplateIds: ['area-exterior'],
     paymentTemplate: executionPaymentTemplate,
   },
   {
@@ -774,7 +774,7 @@ export const timelineTemplates: TimelineTemplate[] = [
     projectCategories: ['room_specific'],
     defaultTimelineMode: 'design_execution',
     supportsConversionToExecution: false,
-    areaTemplateIds: ['area-living-room', 'area-kitchen', 'area-bedroom', 'area-prayer-room', 'area-custom'],
+    areaTemplateIds: ['area-living-room', 'area-kitchen', 'area-bedroom', 'area-prayer-room'],
     paymentTemplate: [...designPaymentTemplate, ...executionPaymentTemplate],
   },
   {
@@ -784,7 +784,7 @@ export const timelineTemplates: TimelineTemplate[] = [
     projectCategories: ['execution_only'],
     defaultTimelineMode: 'execution_only',
     supportsConversionToExecution: false,
-    areaTemplateIds: ['area-full-house', 'area-living-room', 'area-kitchen', 'area-bedroom', 'area-exterior', 'area-custom'],
+    areaTemplateIds: ['area-full-house', 'area-living-room', 'area-kitchen', 'area-bedroom', 'area-exterior'],
     paymentTemplate: executionPaymentTemplate,
   },
 ];
@@ -822,3 +822,4 @@ export function getDefaultScopeItemsForArea(areaTemplateId: string) {
     .map(scopeItemId => getScopeItemTemplateById(scopeItemId))
     .filter(Boolean) as ScopeItemTemplate[];
 }
+
