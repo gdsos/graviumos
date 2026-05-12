@@ -584,7 +584,7 @@ export function CreateTimelineWizard({
         })}
       </div>
 
-      <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
         <p className="text-sm font-medium text-foreground">Add custom area</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Use this for custom rooms like Prayer Room, Majlis, Pooja Room, Library,
@@ -635,7 +635,7 @@ export function CreateTimelineWizard({
           {selectedAreas.map(area => (
             <div
               key={area.id}
-              className="rounded-2xl border border-border bg-background p-4"
+              className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="font-medium text-foreground">{area.name}</p>
@@ -679,7 +679,7 @@ export function CreateTimelineWizard({
         </p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
         <p className="text-sm font-medium text-foreground">Add custom scope item</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Add special work items under any selected area.
@@ -694,7 +694,7 @@ export function CreateTimelineWizard({
                 areaId: event.target.value,
               }))
             }
-            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="min-h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
           >
             {selectedAreas.map(area => (
               <option key={area.id} value={area.id}>
@@ -731,7 +731,7 @@ export function CreateTimelineWizard({
                 durationDays: event.target.value,
               }))
             }
-            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="min-h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             placeholder="Days"
           />
         </div>
@@ -833,7 +833,7 @@ export function CreateTimelineWizard({
                 </p>
 
                 {scopeItem.vendorCategory && (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 break-words text-xs text-muted-foreground">
                     Vendor category: {scopeItem.vendorCategory.replaceAll('_', ' ')}
                   </p>
                 )}
@@ -905,7 +905,7 @@ export function CreateTimelineWizard({
             return (
               <div
                 key={scopeItem.id}
-                className="rounded-2xl border border-border bg-background p-4"
+                className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4"
               >
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
@@ -920,7 +920,7 @@ export function CreateTimelineWizard({
                     </p>
 
                     {scopeItem.vendorCategory && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 break-words text-xs text-muted-foreground">
                         Required category:{' '}
                         {vendorCategoryLabels[scopeItem.vendorCategory]}
                       </p>
@@ -932,13 +932,13 @@ export function CreateTimelineWizard({
                   </StatusBadge>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+                <div className="grid min-w-0 gap-3">
                   <select
                     value={scopeItem.selectedVendorId ?? ''}
                     onChange={event =>
                       handleAssignVendor(scopeItem.id, event.target.value)
                     }
-                    className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    className="min-h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   >
                     <option value="">Assign later</option>
                     {matchingVendors.map(vendor => (
@@ -948,7 +948,7 @@ export function CreateTimelineWizard({
                     ))}
                   </select>
 
-                  <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
+                  <div className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
                     <Store className="h-4 w-4" />
                     {matchingVendors.length} match
                     {matchingVendors.length === 1 ? '' : 'es'}
@@ -956,11 +956,11 @@ export function CreateTimelineWizard({
                 </div>
 
                 {assignedVendor && (
-                  <div className="mt-3 rounded-xl border border-border bg-muted/30 p-3">
+                  <div className="mt-3 min-w-0 overflow-hidden rounded-xl border border-border bg-muted/30 p-3">
                     <p className="text-sm font-medium text-foreground">
                       {assignedVendor.name}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 break-words text-xs text-muted-foreground">
                       {assignedVendor.contactPerson} · {assignedVendor.phone} ·{' '}
                       {assignedVendor.location}
                     </p>
@@ -1001,7 +1001,7 @@ export function CreateTimelineWizard({
         className="shadow-none"
       >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               COGS Subtotal
             </p>
@@ -1010,7 +1010,7 @@ export function CreateTimelineWizard({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Gross Revenue
             </p>
@@ -1019,7 +1019,7 @@ export function CreateTimelineWizard({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Current Revenue
             </p>
@@ -1028,7 +1028,7 @@ export function CreateTimelineWizard({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Revenue Status
             </p>
@@ -1052,31 +1052,31 @@ export function CreateTimelineWizard({
     <div className="grid gap-5">
       {renderEstimateReviewCard()}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Areas
           </p>
           <p className="mt-2 text-2xl font-semibold text-foreground">
             {selectedAreas.length}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 break-words text-xs text-muted-foreground">
             {customAreaCount} custom
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Scope Items
           </p>
           <p className="mt-2 text-2xl font-semibold text-foreground">
             {selectedScopeItems.length}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 break-words text-xs text-muted-foreground">
             {customScopeCount} custom
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Payment Gates
           </p>
@@ -1085,7 +1085,7 @@ export function CreateTimelineWizard({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Work Packages
           </p>
@@ -1096,7 +1096,7 @@ export function CreateTimelineWizard({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <Layers3 className="h-5 w-5" />
           </div>
@@ -1108,7 +1108,7 @@ export function CreateTimelineWizard({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-4">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <Sparkles className="h-5 w-5" />
           </div>
@@ -1259,6 +1259,7 @@ export function CreateTimelineWizard({
     </section>
   );
 }
+
 
 
 
