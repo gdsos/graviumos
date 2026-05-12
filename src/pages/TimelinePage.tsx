@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Plus, RotateCcw } from 'lucide-react';
 import { NextActionsPanel } from '@/features/timeline/components/NextActionsPanel';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -33,6 +33,36 @@ import type {
   WorkPackage,
   WorkPackageStatus,
 } from '@/features/timeline/types';
+
+const TIMELINE_STORAGE_KEY = 'gravium-os-timeline-demo';
+
+type StoredTimelineState = {
+  paymentGates: PaymentGate[];
+  workPackages: WorkPackage[];
+};
+
+function getStoredTimelineState(): StoredTimelineState | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const storedTimeline = localStorage.getItem(TIMELINE_STORAGE_KEY);
+
+    if (!storedTimeline) return null;
+
+    const parsedTimeline = JSON.parse(storedTimeline) as StoredTimelineState;
+
+    if (
+      Array.isArray(parsedTimeline.paymentGates) &&
+      Array.isArray(parsedTimeline.workPackages)
+    ) {
+      return parsedTimeline;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 type TimelineTab = 'overview' | 'work' | 'payments' | 'alerts';
 
@@ -82,10 +112,29 @@ function getNextStatusAfterPaymentUnlock(
 
 export default function TimelinePage() {
   const [activeTab, setActiveTab] = useState<TimelineTab>('overview');
-  const [paymentGates, setPaymentGates] = useState<PaymentGate[]>(demoPaymentGates);
-  const [workPackages, setWorkPackages] = useState<WorkPackage[]>(demoWorkPackages);
+  const [paymentGates, setPaymentGates] = useState<PaymentGate[]>(() => {
+    const storedTimeline = getStoredTimelineState();
+
+    return storedTimeline?.paymentGates ?? demoPaymentGates;
+  });
+
+  const [workPackages, setWorkPackages] = useState<WorkPackage[]>(() => {
+    const storedTimeline = getStoredTimelineState();
+
+    return storedTimeline?.workPackages ?? demoWorkPackages;
+  });
   const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(
+      TIMELINE_STORAGE_KEY,
+      JSON.stringify({
+        paymentGates,
+        workPackages,
+      })
+    );
+  }, [paymentGates, workPackages]);
 
   const summary = useMemo(
     () => calculateTimelineSummary(workPackages, paymentGates),
@@ -489,5 +538,6 @@ export default function TimelinePage() {
     </div>
   );
 }
+
 
 
