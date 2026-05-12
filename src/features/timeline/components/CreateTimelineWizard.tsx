@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -214,9 +214,11 @@ export function CreateTimelineWizard({
   onClose,
   onUseDraft,
 }: CreateTimelineWizardProps) {
+  const wizardTopRef = useRef<HTMLElement | null>(null);
   const initialTemplateId = getInitialTemplateId();
 
   const [activeStep, setActiveStep] = useState<WizardStep>('template');
+  const [maxUnlockedStepIndex, setMaxUnlockedStepIndex] = useState(0);
   const [selectedTemplateId, setSelectedTemplateId] = useState(initialTemplateId);
   const [selectedAreaTemplateIds, setSelectedAreaTemplateIds] = useState<string[]>(
     () => getTemplateAreaIds(initialTemplateId)
@@ -342,6 +344,7 @@ export function CreateTimelineWizard({
     setVendorAssignments({});
     setCostEstimateSummary(null);
     setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
+    setMaxUnlockedStepIndex(1);
     setActiveStep('areas');
   };
 
@@ -450,14 +453,34 @@ export function CreateTimelineWizard({
     onClose?.();
   };
 
+  useEffect(() => {
+    wizardTopRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }, [activeStep]);
+
   const goNext = () => {
     const nextStep = wizardSteps[currentStepIndex + 1];
-    if (nextStep) setActiveStep(nextStep.id);
+
+    if (!nextStep) return;
+
+    const nextStepIndex = currentStepIndex + 1;
+
+    setMaxUnlockedStepIndex(current => Math.max(current, nextStepIndex));
+    setActiveStep(nextStep.id);
   };
 
   const goBack = () => {
     const previousStep = wizardSteps[currentStepIndex - 1];
+
     if (previousStep) setActiveStep(previousStep.id);
+  };
+
+  const handleStepClick = (step: WizardStep, stepIndex: number) => {
+    if (stepIndex > maxUnlockedStepIndex) return;
+
+    setActiveStep(step);
   };
 
   const renderTemplateStep = () => (
@@ -1116,7 +1139,10 @@ export function CreateTimelineWizard({
   };
 
   return (
-    <section className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+    <section
+      ref={wizardTopRef}
+      className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
+    >
       <div className="border-b border-border px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1150,8 +1176,9 @@ export function CreateTimelineWizard({
               <button
                 key={step.id}
                 type="button"
-                onClick={() => setActiveStep(step.id)}
-                className={`rounded-2xl border px-2 py-3 text-center transition ${
+                onClick={() => handleStepClick(step.id, index)}
+                disabled={index > maxUnlockedStepIndex}
+                className={`rounded-2xl border px-2 py-3 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   isActive
                     ? 'border-foreground bg-primary text-primary-foreground'
                     : isCompleted
