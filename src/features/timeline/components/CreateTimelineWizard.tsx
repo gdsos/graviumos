@@ -31,6 +31,7 @@ import {
 } from '../scopeTemplates';
 
 import { generateTimelineFromDraft } from '../generator';
+import type { CostEstimateSummary } from '../estimate';
 
 import type {
   AreaType,
@@ -185,6 +186,14 @@ function getAreaName(selectedAreas: SelectedArea[], areaId: string) {
   return selectedAreas.find(area => area.id === areaId)?.name ?? 'Selected Area';
 }
 
+function formatINR(amount: number) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function getMatchingVendors(scopeItem: SelectedScopeItem) {
   if (!scopeItem.vendorCategory) return [];
 
@@ -207,6 +216,8 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
   const [customAreaName, setCustomAreaName] = useState('');
   const [customScopeItems, setCustomScopeItems] = useState<SelectedScopeItem[]>([]);
   const [vendorAssignments, setVendorAssignments] = useState<Record<string, string>>({});
+  const [costEstimateSummary, setCostEstimateSummary] =
+    useState<CostEstimateSummary | null>(null);
   const [customScopeForm, setCustomScopeForm] = useState<CustomScopeForm>({
     areaId: '',
     name: '',
@@ -315,6 +326,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     setCustomAreaName('');
     setCustomScopeItems([]);
     setVendorAssignments({});
+    setCostEstimateSummary(null);
     setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
     setActiveStep('areas');
   };
@@ -935,8 +947,66 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     </div>
   );
 
+  const renderEstimateReviewCard = () => {
+    if (!costEstimateSummary) return null;
+
+    return (
+      <SectionCard
+        title="Cost Estimate Validation"
+        description="Commercial summary generated from scope pricing, service charge, misc charge, and GST."
+        className="shadow-none"
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              COGS Subtotal
+            </p>
+            <p className="mt-2 text-xl font-semibold text-foreground">
+              {formatINR(costEstimateSummary.cogsSubtotal)}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Gross Revenue
+            </p>
+            <p className="mt-2 text-xl font-semibold text-foreground">
+              {formatINR(costEstimateSummary.estimatedGrossRevenue)}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Current Revenue
+            </p>
+            <p className="mt-2 text-xl font-semibold text-foreground">
+              {formatINR(costEstimateSummary.targetProjectRevenue)}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Revenue Status
+            </p>
+            <div className="mt-2">
+              <StatusBadge
+                variant={
+                  costEstimateSummary.isRevenueMatched ? 'success' : 'warning'
+                }
+              >
+                {costEstimateSummary.isRevenueMatched
+                  ? 'Matched'
+                  : `${formatINR(Math.abs(costEstimateSummary.revenueDifference))} difference`}
+              </StatusBadge>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+    );
+  };
   const renderReviewStep = () => (
     <div className="grid gap-5">
+      {renderEstimateReviewCard()}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-border bg-background p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -1017,6 +1087,7 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
         <CostEstimateStep
           selectedAreas={selectedAreas}
           selectedScopeItems={selectedScopeItems}
+          onSummaryChange={setCostEstimateSummary}
         />
       );
     }
@@ -1135,5 +1206,6 @@ export function CreateTimelineWizard({ onClose }: CreateTimelineWizardProps) {
     </section>
   );
 }
+
 
 

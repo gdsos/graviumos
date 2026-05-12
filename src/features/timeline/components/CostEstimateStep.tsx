@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calculator, CheckCircle2, RefreshCcw } from 'lucide-react';
 
 import { SectionCard } from '@/components/common/SectionCard';
@@ -12,6 +12,7 @@ import {
   DEFAULT_SERVICE_CHARGE_PERCENT,
   formatEstimateDifferenceLabel,
   type CostEstimateLineItem,
+  type CostEstimateSummary,
 } from '../estimate';
 
 import type { SelectedArea, SelectedScopeItem } from '../scopeTypes';
@@ -19,6 +20,7 @@ import type { SelectedArea, SelectedScopeItem } from '../scopeTypes';
 interface CostEstimateStepProps {
   selectedAreas: SelectedArea[];
   selectedScopeItems: SelectedScopeItem[];
+  onSummaryChange?: (summary: CostEstimateSummary) => void;
 }
 
 function formatINR(amount: number) {
@@ -44,6 +46,7 @@ function getDefaultCogsAmount(scopeItem: SelectedScopeItem) {
 export function CostEstimateStep({
   selectedAreas,
   selectedScopeItems,
+  onSummaryChange,
 }: CostEstimateStepProps) {
   const [lineItemAmounts, setLineItemAmounts] = useState<Record<string, number>>({});
   const [serviceChargePercent, setServiceChargePercent] = useState(
@@ -81,6 +84,10 @@ export function CostEstimateStep({
       }),
     [lineItems, miscChargePercent, serviceChargePercent, targetProjectRevenue]
   );
+
+  useEffect(() => {
+    onSummaryChange?.(summary);
+  }, [onSummaryChange, summary]);
 
   const handleUpdateRevenue = () => {
     const confirmed = window.confirm(
@@ -333,3 +340,4 @@ export function CostEstimateStep({
     </div>
   );
 }
+
