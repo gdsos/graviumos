@@ -1,5 +1,5 @@
 ﻿import { useMemo, useState } from 'react';
-import { CalendarClock, RotateCcw } from 'lucide-react';
+import { CalendarClock, Plus, RotateCcw } from 'lucide-react';
 import { NextActionsPanel } from '@/features/timeline/components/NextActionsPanel';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
@@ -25,6 +25,7 @@ import { IntelligentAssistPanel } from '@/features/timeline/components/Intellige
 import { PaymentGateBar } from '@/features/timeline/components/PaymentGateBar';
 import { TimelineSummaryCards } from '@/features/timeline/components/TimelineSummaryCards';
 import { TimelineWorkPackages } from '@/features/timeline/components/TimelineWorkPackages';
+import { CreateTimelineWizard } from '@/features/timeline/components/CreateTimelineWizard';
 
 import type {
   PaymentGate,
@@ -84,6 +85,7 @@ export default function TimelinePage() {
   const [paymentGates, setPaymentGates] = useState<PaymentGate[]>(demoPaymentGates);
   const [workPackages, setWorkPackages] = useState<WorkPackage[]>(demoWorkPackages);
   const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
 
   const summary = useMemo(
     () => calculateTimelineSummary(workPackages, paymentGates),
@@ -368,6 +370,15 @@ export default function TimelinePage() {
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button
               type="button"
+              onClick={() => setShowCreateWizard(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Timeline
+            </Button>
+
+            <Button
+              type="button"
               variant="outline"
               onClick={handleResetTimeline}
               className="gap-2"
@@ -406,6 +417,12 @@ export default function TimelinePage() {
           </div>
         </div>
       </div>
+
+      {showCreateWizard && (
+        <div className="mb-6">
+          <CreateTimelineWizard onClose={() => setShowCreateWizard(false)} />
+        </div>
+      )}
 
       <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
         <div className="grid grid-cols-4 gap-1">
@@ -458,3 +475,4 @@ export default function TimelinePage() {
     </div>
   );
 }
+
