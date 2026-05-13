@@ -678,7 +678,7 @@ export function CreateTimelineWizard({
   };
 
   const renderTemplateStep = () => (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
       {timelineTemplates.map(template => {
         const isSelected = selectedTemplateId === template.id;
 
@@ -687,7 +687,7 @@ export function CreateTimelineWizard({
             key={template.id}
             type="button"
             onClick={() => handleSelectTemplate(template.id)}
-            className={`rounded-2xl border p-4 text-left transition ${
+            className={`min-w-[280px] snap-start rounded-2xl border p-3 text-left text-sm transition sm:min-w-0 sm:p-4 ${
               isSelected
                 ? 'border-foreground bg-primary text-primary-foreground'
                 : 'border-border bg-background text-foreground hover:bg-muted'
@@ -736,7 +736,7 @@ export function CreateTimelineWizard({
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-3 [&::-webkit-scrollbar]:hidden">
         {availableAreaTemplates.map(area => {
           if (!area) return null;
 
@@ -747,7 +747,7 @@ export function CreateTimelineWizard({
               key={area.id}
               type="button"
               onClick={() => handleToggleArea(area.id)}
-              className={`rounded-2xl border p-3 text-left transition sm:p-4 ${
+              className={`min-w-[190px] snap-start rounded-2xl border p-3 text-left transition sm:min-w-0 sm:p-4 ${
                 isSelected
                   ? 'border-foreground bg-primary text-primary-foreground'
                   : 'border-border bg-background text-foreground hover:bg-muted'
@@ -867,11 +867,11 @@ export function CreateTimelineWizard({
       </div>
 
       {selectedAreas.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-3 [&::-webkit-scrollbar]:hidden">
           {selectedAreas.map(area => (
             <div
               key={area.id}
-              className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-3 sm:p-4"
+              className="min-w-[220px] snap-start overflow-hidden rounded-2xl border border-border bg-background p-3 sm:min-w-0 sm:p-4"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="font-medium text-foreground">{area.name}</p>
@@ -1048,11 +1048,11 @@ export function CreateTimelineWizard({
       </div>
 
       {selectedScopeItems.length > 0 ? (
-        <div className="grid gap-3">
+        <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
           {selectedScopeItems.map(scopeItem => (
             <div
               key={scopeItem.id}
-              className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+              className="flex min-w-[280px] snap-start flex-col gap-3 rounded-2xl border border-border bg-background p-3 sm:min-w-0 sm:flex-row sm:items-center sm:justify-between sm:p-4"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1128,7 +1128,7 @@ export function CreateTimelineWizard({
       </div>
 
       {vendorRequiredScopeItems.length > 0 ? (
-        <div className="grid gap-3">
+        <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
           {vendorRequiredScopeItems.map(scopeItem => {
             const matchingVendors = getMatchingVendors(scopeItem);
             const assignedVendor = demoVendors.find(
@@ -1138,7 +1138,7 @@ export function CreateTimelineWizard({
             return (
               <div
                 key={scopeItem.id}
-                className="min-w-0 overflow-hidden rounded-2xl border border-border bg-background p-3 sm:p-4"
+                className="min-w-[300px] snap-start overflow-hidden rounded-2xl border border-border bg-background p-3 sm:min-w-0 sm:p-4"
               >
                 <div className="mb-3 flex flex-col gap-3 lg:mb-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
@@ -1339,8 +1339,8 @@ export function CreateTimelineWizard({
   );
 
   const renderBasicsStep = () => (
-    <div className="grid gap-5">
-      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+    <div className="grid gap-4 sm:gap-5">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">
           Set timeline basics
         </p>
@@ -1614,7 +1614,7 @@ export function CreateTimelineWizard({
         <SectionCard
           title={wizardSteps[currentStepIndex]?.label ?? 'Step'}
           description={wizardSteps[currentStepIndex]?.description}
-          className="shadow-none"
+          className="rounded-none border-x-0 shadow-none sm:rounded-2xl sm:border-x"
         >
           {renderActiveStep()}
         </SectionCard>
