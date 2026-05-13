@@ -1,5 +1,6 @@
 import type {
   CostEstimateArea,
+  CostEstimateItemPreset,
   CostEstimateLineItem,
   CostEstimateProject,
   CostEstimateUnit,
@@ -39,6 +40,65 @@ export const defaultCostEstimateUnits: CostEstimateUnit[] = [
   { id: 'set', label: 'Set', shortLabel: 'set' },
   { id: 'lump-sum', label: 'Lump Sum', shortLabel: 'lump sum' },
 ];
+
+export const demoCostEstimateItemPresets: CostEstimateItemPreset[] = [
+  {
+    id: 'preset-tv-unit',
+    name: 'TV Unit',
+    category: 'carpentry',
+    defaultUnitLabel: 'sqft',
+    purchaseRatePerUnit: 520,
+    markupPercent: 35,
+    sellingRatePerUnit: 700,
+    defaultDescription:
+      'Design, supply, and installation of TV unit using approved board, laminate, fittings, finishing, and site installation.',
+  },
+  {
+    id: 'preset-wall-panel',
+    name: 'Wall Panel',
+    category: 'carpentry',
+    defaultUnitLabel: 'sqft',
+    purchaseRatePerUnit: 420,
+    markupPercent: 30,
+    sellingRatePerUnit: 550,
+    defaultDescription:
+      'Design, supply, and installation of decorative wall panel with approved finish, required backing, fittings, and site installation.',
+  },
+  {
+    id: 'preset-wardrobe',
+    name: 'Wardrobe',
+    category: 'carpentry',
+    defaultUnitLabel: 'sqft',
+    purchaseRatePerUnit: 680,
+    markupPercent: 35,
+    sellingRatePerUnit: 920,
+    defaultDescription:
+      'Design, supply, and installation of wardrobe with internal partitions, shutters, hardware, finishing, and site installation.',
+  },
+  {
+    id: 'preset-kitchen-cabinets',
+    name: 'Kitchen Cabinets',
+    category: 'carpentry',
+    defaultUnitLabel: 'set',
+    purchaseRatePerUnit: 220000,
+    markupPercent: 27,
+    sellingRatePerUnit: 280000,
+    defaultDescription:
+      'Design, supply, and installation of kitchen cabinets with required hardware, shutters, internal partitions, finishing, and site installation.',
+  },
+  {
+    id: 'preset-false-ceiling',
+    name: 'False Ceiling',
+    category: 'civil',
+    defaultUnitLabel: 'sqft',
+    purchaseRatePerUnit: 95,
+    markupPercent: 35,
+    sellingRatePerUnit: 130,
+    defaultDescription:
+      'Supply and installation of false ceiling work including framework, boards, finishing, and site execution as per approved design.',
+  },
+];
+
 
 export const demoCostEstimateAreas: CostEstimateArea[] = [
   { id: 'estimate-area-living', name: 'Living Room', type: 'living_room' },

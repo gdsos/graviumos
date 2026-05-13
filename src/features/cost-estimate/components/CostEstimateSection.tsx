@@ -16,12 +16,14 @@ import {
 import {
   defaultCostEstimateUnits,
   demoCostEstimateAreas,
+  demoCostEstimateItemPresets,
   demoCostEstimateLineItems,
   demoCostEstimateProjects,
 } from '../data';
 
 import type {
   CostEstimateArea,
+  CostEstimateItemPreset,
   CostEstimateLineItem,
   CostEstimateProject,
   CostEstimateStatus,
@@ -45,6 +47,8 @@ function createId(prefix: string) {
 }
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
+const CUSTOM_ITEM_PRESET_ID = 'custom-item';
+const ADD_NEW_ITEM_PRESET_ID = 'add-new-item';
 
 function getAreaName(areas: CostEstimateArea[], areaId: string) {
   return areas.find(area => area.id === areaId)?.name ?? 'Selected Area';
@@ -53,7 +57,11 @@ function getAreaName(areas: CostEstimateArea[], areaId: string) {
 function getProjectLabel(project?: CostEstimateProject) {
   if (!project) return 'Unassigned Draft';
 
-  return `${project.name} ? ${project.clientName}`;
+  return `${project.name} - ${project.clientName}`;
+}
+
+function calculateSellingRate(purchaseRate: number, markupPercent: number) {
+  return Math.round(purchaseRate * (1 + markupPercent / 100));
 }
 
 function createDefaultDescription({
@@ -81,6 +89,9 @@ export function CostEstimateSection() {
     demoCostEstimateLineItems
   );
   const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
+  const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
+    demoCostEstimateItemPresets
+  );
   const [serviceChargePercent, setServiceChargePercent] = useState(
     DEFAULT_SERVICE_CHARGE_PERCENT
   );
@@ -90,6 +101,13 @@ export function CostEstimateSection() {
   const [targetProjectRevenue, setTargetProjectRevenue] = useState(950000);
   const [newAreaName, setNewAreaName] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
+  const [newItemPresetId, setNewItemPresetId] = useState(CUSTOM_ITEM_PRESET_ID);
+  const [isNewItemPresetFormOpen, setIsNewItemPresetFormOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetUnit, setNewPresetUnit] = useState('sqft');
+  const [newPresetPurchaseRate, setNewPresetPurchaseRate] = useState('500');
+  const [newPresetMarkupPercent, setNewPresetMarkupPercent] = useState('35');
+  const [newPresetDescription, setNewPresetDescription] = useState('');
   const [newLineItemAreaId, setNewLineItemAreaId] = useState(
     demoCostEstimateAreas[0]?.id ?? ''
   );
@@ -177,6 +195,73 @@ export function CostEstimateSection() {
     setStatus('draft');
   };
 
+  const handleItemPresetChange = (presetId: string) => {
+    if (presetId === ADD_NEW_ITEM_PRESET_ID) {
+      setIsNewItemPresetFormOpen(true);
+      setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
+      return;
+    }
+
+    setNewItemPresetId(presetId);
+
+    if (presetId === CUSTOM_ITEM_PRESET_ID) return;
+
+    const preset = itemPresets.find(currentPreset => currentPreset.id === presetId);
+
+    if (!preset) return;
+
+    setNewLineItemName(preset.name);
+    setNewLineItemUnit(preset.defaultUnitLabel);
+    setNewLineItemRate(String(preset.sellingRatePerUnit));
+    setNewLineItemDescription(preset.defaultDescription);
+  };
+
+  const handleAddItemPreset = () => {
+    const trimmedName = newPresetName.trim();
+    const purchaseRatePerUnit = Math.max(
+      0,
+      Number(newPresetPurchaseRate) || 0
+    );
+    const markupPercent = Math.max(0, Number(newPresetMarkupPercent) || 0);
+
+    if (!trimmedName) return;
+
+    const sellingRatePerUnit = calculateSellingRate(
+      purchaseRatePerUnit,
+      markupPercent
+    );
+
+    const newPreset: CostEstimateItemPreset = {
+      id: createId('estimate-item-preset'),
+      name: trimmedName,
+      category: 'custom',
+      defaultUnitLabel: newPresetUnit,
+      purchaseRatePerUnit,
+      markupPercent,
+      sellingRatePerUnit,
+      defaultDescription:
+        newPresetDescription.trim() ||
+        createDefaultDescription({
+          areaName: 'selected area',
+          itemName: trimmedName,
+          quantity: 1,
+          unitLabel: newPresetUnit,
+        }),
+    };
+
+    setItemPresets(current => [...current, newPreset]);
+    setNewItemPresetId(newPreset.id);
+    setNewLineItemName(newPreset.name);
+    setNewLineItemUnit(newPreset.defaultUnitLabel);
+    setNewLineItemRate(String(newPreset.sellingRatePerUnit));
+    setNewLineItemDescription(newPreset.defaultDescription);
+    setNewPresetName('');
+    setNewPresetPurchaseRate('500');
+    setNewPresetMarkupPercent('35');
+    setNewPresetDescription('');
+    setIsNewItemPresetFormOpen(false);
+  };
+
   const handleAddCustomUnit = () => {
     const trimmedUnit = newUnitName.trim();
 
@@ -219,6 +304,7 @@ export function CostEstimateSection() {
         remarks: newLineItemRemarks.trim() || undefined,
       },
     ]);
+    setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
     setNewLineItemName('');
     setNewLineItemDescription('');
     setNewLineItemQuantity('1');
@@ -506,15 +592,27 @@ export function CostEstimateSection() {
               </Button>
             </div>
 
-            <div className="mt-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {areas.map(area => (
+            <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+              {groupedAreas.map(group => (
                 <div
-                  key={area.id}
-                  className="min-w-[180px] rounded-2xl border border-border bg-muted/30 p-3"
+                  key={group.area.id}
+                  className="grid gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px]"
                 >
-                  <p className="font-medium text-foreground">{area.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {area.type.replaceAll('_', ' ')}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {group.area.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {group.area.type.replaceAll('_', ' ')}
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground sm:text-right">
+                    {group.lineItems.length} item(s)
+                  </p>
+
+                  <p className="text-sm font-semibold text-foreground sm:text-right">
+                    {formatINR(group.total)}
                   </p>
                 </div>
               ))}
@@ -542,12 +640,126 @@ export function CostEstimateSection() {
                 ))}
               </select>
 
+              <select
+                value={newItemPresetId}
+                onChange={event => handleItemPresetChange(event.target.value)}
+                className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              >
+                <option value={CUSTOM_ITEM_PRESET_ID}>
+                  Custom item / type manually
+                </option>
+                {itemPresets.map(preset => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name} - {preset.defaultUnitLabel} @{' '}
+                    {formatINR(preset.sellingRatePerUnit)}
+                  </option>
+                ))}
+                <option value={ADD_NEW_ITEM_PRESET_ID}>+ Add New Item</option>
+              </select>
+
               <input
                 value={newLineItemName}
-                onChange={event => setNewLineItemName(event.target.value)}
-                placeholder="e.g. Wardrobe"
+                onChange={event => {
+                  setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
+                  setNewLineItemName(event.target.value);
+                }}
+                placeholder="Type item name or select preset"
                 className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
               />
+
+              {isNewItemPresetFormOpen && (
+                <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                  <p className="text-sm font-medium text-foreground">
+                    Add New Item Preset
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    This is temporary here. Later, item presets will move to
+                    Procurement &gt; Items.
+                  </p>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <input
+                      value={newPresetName}
+                      onChange={event => setNewPresetName(event.target.value)}
+                      placeholder="Item name"
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                    />
+
+                    <select
+                      value={newPresetUnit}
+                      onChange={event => setNewPresetUnit(event.target.value)}
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    >
+                      {units.map(unit => (
+                        <option key={unit.id} value={unit.shortLabel}>
+                          {unit.shortLabel}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={newPresetPurchaseRate}
+                      onChange={event =>
+                        setNewPresetPurchaseRate(event.target.value)
+                      }
+                      placeholder="Purchase rate"
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                    />
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={newPresetMarkupPercent}
+                      onChange={event =>
+                        setNewPresetMarkupPercent(event.target.value)
+                      }
+                      placeholder="Markup %"
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                    />
+                  </div>
+
+                  <textarea
+                    value={newPresetDescription}
+                    onChange={event => setNewPresetDescription(event.target.value)}
+                    placeholder="Default description optional"
+                    rows={2}
+                    className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                  />
+
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Selling rate preview:{' '}
+                      <span className="font-semibold text-foreground">
+                        {formatINR(
+                          calculateSellingRate(
+                            Number(newPresetPurchaseRate) || 0,
+                            Number(newPresetMarkupPercent) || 0
+                          )
+                        )}
+                      </span>
+                    </p>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsNewItemPresetFormOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleAddItemPreset}
+                        disabled={!newPresetName.trim()}
+                      >
+                        Save Item
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <textarea
                 value={newLineItemDescription || previewDescription}
@@ -603,7 +815,7 @@ export function CostEstimateSection() {
                   className="gap-2"
                 >
                   <Plus className="h-4 w-4" />
-                  Add Unit
+                  Save Unit
                 </Button>
               </div>
 

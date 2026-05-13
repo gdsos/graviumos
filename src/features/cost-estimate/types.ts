@@ -21,6 +21,17 @@ export interface CostEstimateProject {
   hasCostEstimate?: boolean;
 }
 
+export interface CostEstimateItemPreset {
+  id: string;
+  name: string;
+  category: 'carpentry' | 'civil' | 'electrical' | 'plumbing' | 'painting' | 'decor' | 'custom';
+  defaultUnitLabel: string;
+  purchaseRatePerUnit: number;
+  markupPercent: number;
+  sellingRatePerUnit: number;
+  defaultDescription: string;
+}
+
 export interface CostEstimateLineItem {
   id: string;
   areaId: string;
