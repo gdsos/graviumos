@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calculator, CheckCircle2, RefreshCcw } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2 } from 'lucide-react';
 
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -65,8 +65,6 @@ export function CostEstimateStep({
     externalTargetProjectRevenue ?? 3145473
   );
   const [isApproved, setIsApproved] = useState(false);
-  const [isRevenueUpdateModalOpen, setIsRevenueUpdateModalOpen] =
-    useState(false);
 
   const lineItems: CostEstimateLineItem[] = useMemo(
     () =>
@@ -121,16 +119,6 @@ export function CostEstimateStep({
   useEffect(() => {
     onApprovalChange?.(isApproved);
   }, [isApproved, onApprovalChange]);
-
-  const handleUpdateRevenue = () => {
-    setTargetProjectRevenue(summary.estimatedGrossRevenue);
-    onTargetProjectRevenueChange?.(summary.estimatedGrossRevenue);
-    setIsRevenueUpdateModalOpen(false);
-  };
-
-  const handleContinueEditing = () => {
-    setIsRevenueUpdateModalOpen(false);
-  };
 
   const handleApproveEstimate = () => {
     if (!summary.isRevenueMatched) return;
@@ -357,23 +345,9 @@ export function CostEstimateStep({
               )}
             </div>
           ) : (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleContinueEditing}
-              >
-                Continue Editing
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => setIsRevenueUpdateModalOpen(true)}
-                className="gap-2"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Update Revenue
-              </Button>
+            <div className="rounded-xl border border-amber-500/20 bg-background/60 px-3 py-2 text-xs leading-5 text-muted-foreground">
+              Click Continue below to resolve the mismatch before moving to
+              Review.
             </div>
           )}
         </div>
@@ -394,72 +368,6 @@ export function CostEstimateStep({
         </p>
       </div>
 
-      {isRevenueUpdateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-4 sm:items-center">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-xl sm:p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-
-              <div className="min-w-0">
-                <p className="text-base font-semibold text-foreground">
-                  Update project revenue?
-                </p>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  This will overwrite the current project revenue with the
-                  generated cost estimate gross revenue.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-background p-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Current Revenue
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {formatINR(targetProjectRevenue)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  New Revenue
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {formatINR(summary.estimatedGrossRevenue)}
-                </p>
-              </div>
-            </div>
-
-            <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-muted-foreground">
-              Payment gates, project financials, execution timeline value, and
-              reports may be affected by this overwrite.
-            </p>
-
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsRevenueUpdateModalOpen(false)}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="button"
-                onClick={handleUpdateRevenue}
-                className="w-full gap-2 sm:w-auto"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Confirm Update Revenue
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
@@ -291,6 +292,10 @@ export function CreateTimelineWizard({
   const [costEstimateSummary, setCostEstimateSummary] =
     useState<CostEstimateSummary | null>(null);
   const [isCostEstimateApproved, setIsCostEstimateApproved] = useState(false);
+  const [isRevenueMismatchModalOpen, setIsRevenueMismatchModalOpen] =
+    useState(false);
+  const [isRevenueOverwriteWarningVisible, setIsRevenueOverwriteWarningVisible] =
+    useState(false);
   const [timelineDraftInput, setTimelineDraftInput] = useState<TimelineDraftInput>({
     projectName: 'Villa, Athani',
     clientName: 'Rafeek Muhammed Ali',
@@ -419,9 +424,12 @@ export function CreateTimelineWizard({
   const canUseDraft =
     Boolean(generatedTimeline) &&
     (!requiresApprovedCostEstimate || isCostEstimateApproved);
+  const hasRevenueMismatch =
+    Boolean(costEstimateSummary) && !costEstimateSummary?.isRevenueMatched;
   const isContinueDisabled =
     activeStep === 'estimate' &&
     requiresApprovedCostEstimate &&
+    !hasRevenueMismatch &&
     !isCostEstimateApproved;
   const shouldShowEstimateApprovalNotice =
     requiresApprovedCostEstimate &&
@@ -439,6 +447,8 @@ export function CreateTimelineWizard({
     setVendorAssignments({});
     setCostEstimateSummary(null);
     setIsCostEstimateApproved(false);
+    setIsRevenueMismatchModalOpen(false);
+    setIsRevenueOverwriteWarningVisible(false);
     setCustomScopeForm(current => ({ ...current, areaId: '', name: '' }));
     setMaxUnlockedStepIndex(1);
     setActiveStep('basics');
@@ -567,6 +577,14 @@ export function CreateTimelineWizard({
     }));
   };
 
+  const handleConfirmRevenueUpdate = () => {
+    if (!costEstimateSummary) return;
+
+    handleCostEstimateRevenueChange(costEstimateSummary.estimatedGrossRevenue);
+    setIsRevenueMismatchModalOpen(false);
+    setIsRevenueOverwriteWarningVisible(false);
+  };
+
   const handleAssignVendor = (scopeItemId: string, vendorId: string) => {
     setVendorAssignments(current => {
       if (!vendorId) {
@@ -597,6 +615,16 @@ export function CreateTimelineWizard({
   }, [activeStep]);
 
   const goNext = () => {
+    if (
+      activeStep === 'estimate' &&
+      requiresApprovedCostEstimate &&
+      hasRevenueMismatch
+    ) {
+      setIsRevenueMismatchModalOpen(true);
+      setIsRevenueOverwriteWarningVisible(false);
+      return;
+    }
+
     const nextStep = wizardSteps[currentStepIndex + 1];
 
     if (!nextStep) return;
@@ -1538,6 +1566,88 @@ export function CreateTimelineWizard({
           {renderActiveStep()}
         </SectionCard>
       </div>
+
+      {isRevenueMismatchModalOpen && costEstimateSummary && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-xl sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-foreground">
+                  Revenue mismatch detected
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  The estimated gross revenue does not match the current project
+                  revenue. Resolve this before moving to Review.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-background p-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Current Revenue
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {formatINR(costEstimateSummary.targetProjectRevenue)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Estimate Revenue
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {formatINR(costEstimateSummary.estimatedGrossRevenue)}
+                </p>
+              </div>
+            </div>
+
+            {isRevenueOverwriteWarningVisible && (
+              <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                This will overwrite the current project revenue. Payment gates,
+                project financials, execution timeline value, and reports may
+                be affected.
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsRevenueMismatchModalOpen(false);
+                  setIsRevenueOverwriteWarningVisible(false);
+                }}
+                className="w-full sm:w-auto"
+              >
+                Continue Editing
+              </Button>
+
+              {isRevenueOverwriteWarningVisible ? (
+                <Button
+                  type="button"
+                  onClick={handleConfirmRevenueUpdate}
+                  className="w-full gap-2 sm:w-auto"
+                >
+                  Confirm Update Revenue
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setIsRevenueOverwriteWarningVisible(true)}
+                  className="w-full gap-2 sm:w-auto"
+                >
+                  Update Revenue
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="sticky bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
         {shouldShowEstimateApprovalNotice && (
