@@ -152,6 +152,7 @@ export function CostEstimateSection() {
     quantity: Number(newLineItemQuantity) || 0,
     unitLabel: newLineItemUnit,
   });
+  const shouldShowLineItemDetails = newLineItemName.trim().length > 0;
 
   const availableProjectsForNewEstimate = demoCostEstimateProjects.filter(
     project => !project.hasCostEstimate || project.id === selectedProjectId
@@ -998,18 +999,15 @@ export function CostEstimateSection() {
                         </div>
                       )}
 
-                      <details className="rounded-xl border border-border bg-muted/20 p-2">
-                        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                          More details
-                        </summary>
-
-                        <div className="mt-2 grid gap-2">
+                      {shouldShowLineItemDetails && (
+                        <div className="grid gap-2">
                           <textarea
                             value={newLineItemDescription || previewDescription}
                             onChange={event =>
                               setNewLineItemDescription(event.target.value)
                             }
                             rows={2}
+                            placeholder="Description"
                             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                           />
 
@@ -1022,7 +1020,7 @@ export function CostEstimateSection() {
                             className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                           />
                         </div>
-                      </details>
+                      )}
                     </div>
 
                     <input
