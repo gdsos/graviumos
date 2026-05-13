@@ -61,7 +61,11 @@ export function calculateCostEstimateSummary({
 export function formatEstimateDifferenceLabel(revenueDifference: number) {
   if (revenueDifference === 0) return 'Matched';
 
+  const formattedDifference = `\u20B9${Math.abs(
+    revenueDifference
+  ).toLocaleString('en-IN')}`;
+
   return revenueDifference > 0
-    ? `Estimate is higher by ?${Math.abs(revenueDifference).toLocaleString('en-IN')}`
-    : `Estimate is lower by ?${Math.abs(revenueDifference).toLocaleString('en-IN')}`;
+    ? `Estimate is higher by ${formattedDifference}`
+    : `Estimate is lower by ${formattedDifference}`;
 }
