@@ -375,9 +375,9 @@ export function CostEstimateSection() {
         </StatusBadge>
       }
     >
-      <div className="grid gap-5">
+      <div className="grid gap-4 sm:gap-5">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="rounded-2xl border border-border bg-muted/30 p-4">
+          <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
             <p className="text-sm font-medium text-foreground">
               Future source of truth
             </p>
@@ -387,7 +387,7 @@ export function CostEstimateSection() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
             <p className="text-sm font-medium text-foreground">
               Estimate Project
             </p>
@@ -429,8 +429,8 @@ export function CostEstimateSection() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-background p-4">
+        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4 [&>div]:min-w-[170px] sm:[&>div]:min-w-0 [&::-webkit-scrollbar]:hidden">
+          <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal</p>
             <p className="mt-2 text-xl font-semibold text-foreground">
               {formatINR(summary.cogsSubtotal)}
@@ -512,7 +512,7 @@ export function CostEstimateSection() {
         </div>
 
         <div
-          className={`rounded-2xl border p-4 ${
+          className={`rounded-2xl border p-3 sm:p-4 ${
             summary.isRevenueMatched
               ? 'border-emerald-500/20 bg-emerald-500/10'
               : 'border-amber-500/20 bg-amber-500/10'
@@ -682,9 +682,9 @@ export function CostEstimateSection() {
               </div>
 
               {activeLineItemAreaId === group.area.id && (
-                <div className="border-b border-border bg-card/60 p-4">
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_110px_110px_140px_auto]">
-                    <div className="grid gap-3">
+                <div className="border-b border-border bg-card/60 p-3 sm:p-4">
+                  <div className="grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1fr)_110px_110px_140px_auto]">
+                    <div className="grid gap-2 sm:gap-3">
                       <div className="relative">
                         <input
                           value={newLineItemName}
@@ -838,21 +838,31 @@ export function CostEstimateSection() {
                         </div>
                       )}
 
-                      <textarea
-                        value={newLineItemDescription || previewDescription}
-                        onChange={event =>
-                          setNewLineItemDescription(event.target.value)
-                        }
-                        rows={2}
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                      />
+                      <details className="rounded-xl border border-border bg-muted/20 p-2">
+                        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                          More details
+                        </summary>
 
-                      <input
-                        value={newLineItemRemarks}
-                        onChange={event => setNewLineItemRemarks(event.target.value)}
-                        placeholder="Remarks optional"
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                      />
+                        <div className="mt-2 grid gap-2">
+                          <textarea
+                            value={newLineItemDescription || previewDescription}
+                            onChange={event =>
+                              setNewLineItemDescription(event.target.value)
+                            }
+                            rows={2}
+                            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                          />
+
+                          <input
+                            value={newLineItemRemarks}
+                            onChange={event =>
+                              setNewLineItemRemarks(event.target.value)
+                            }
+                            placeholder="Remarks optional"
+                            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                          />
+                        </div>
+                      </details>
                     </div>
 
                     <input
@@ -948,11 +958,11 @@ export function CostEstimateSection() {
               )}
 
               {group.lineItems.length > 0 ? (
-                <div className="grid gap-3 p-4">
+                <div className="grid gap-3 p-3 sm:p-4">
                   {group.lineItems.map(lineItem => (
                     <div
                       key={lineItem.id}
-                      className="grid gap-3 rounded-2xl border border-border bg-card p-4 xl:grid-cols-[minmax(0,1fr)_120px_120px_150px_auto]"
+                      className="grid gap-3 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_120px_150px_auto]"
                     >
                       <div className="min-w-0">
                         <p className="font-medium text-foreground">{lineItem.name}</p>
