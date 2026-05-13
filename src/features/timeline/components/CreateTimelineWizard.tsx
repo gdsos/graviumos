@@ -63,8 +63,8 @@ type WizardStep =
 const wizardSteps: Array<{ id: WizardStep; label: string; description: string }> = [
   {
     id: 'template',
-    label: 'Template',
-    description: 'Choose project timeline type',
+    label: 'Strategy',
+    description: 'Choose timeline generation strategy',
   },
   {
     id: 'basics',
@@ -74,12 +74,12 @@ const wizardSteps: Array<{ id: WizardStep; label: string; description: string }>
   {
     id: 'areas',
     label: 'Areas',
-    description: 'Select rooms and zones',
+    description: 'Temporary room setup',
   },
   {
     id: 'scope',
     label: 'Scope',
-    description: 'Review scope items',
+    description: 'Temporary scope review',
   },
   {
     id: 'vendors',
@@ -678,7 +678,19 @@ export function CreateTimelineWizard({
   };
 
   const renderTemplateStep = () => (
-    <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
+    <div className="grid gap-4">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
+        <p className="text-sm font-medium text-foreground">
+          Choose timeline strategy
+        </p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          For now, this still uses existing templates to generate temporary
+          planning data. Later, this step will decide how to convert an approved
+          Cost Estimate into a timeline.
+        </p>
+      </div>
+
+      <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-1 [scrollbar-width:none] lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
       {timelineTemplates.map(template => {
         const isSelected = selectedTemplateId === template.id;
 
@@ -722,6 +734,7 @@ export function CreateTimelineWizard({
           </button>
         );
       })}
+      </div>
     </div>
   );
 
@@ -729,10 +742,11 @@ export function CreateTimelineWizard({
     <div className="grid gap-4 sm:gap-5">
       <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">
-          Select areas / rooms
+Temporary areas / rooms
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Choose rooms included in this project. Add repeated bedrooms/bathrooms or custom rooms below.
+          Temporary room setup for timeline testing. In the final workflow,
+          execution areas should come from the approved Cost Estimate.
         </p>
       </div>
 
@@ -906,10 +920,12 @@ export function CreateTimelineWizard({
     <div className="grid gap-4 sm:gap-5">
       <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
         <p className="text-sm font-medium text-foreground">
-          Scope generated from selected areas
+Temporary scope generated from selected areas
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Standard scope is generated automatically. Add custom work for client-specific execution requirements.
+          Standard scope is generated for timeline testing. In the final
+          workflow, execution scope differences should be finalized inside Cost
+          Estimate and then converted into work packages.
         </p>
       </div>
 
@@ -1227,7 +1243,7 @@ export function CreateTimelineWizard({
   const renderTimelineBasicsCard = () => (
     <SectionCard
       title="Timeline Basics"
-      description="Manual timeline inputs for now. Later these can be fetched from the approved Cost Estimate."
+      description="Manual timeline inputs for now. Execution revenue will be sourced from the approved Cost Estimate."
       className="rounded-none border-x-0 shadow-none sm:rounded-2xl sm:border-x"
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -1345,9 +1361,9 @@ export function CreateTimelineWizard({
           Set timeline basics
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          These values are manually editable for now. Later, the approved Cost
-          Estimate can prefill project value, execution value, start date, and
-          related timeline inputs.
+          These values are manually editable for now. Execution revenue is locked
+          for execution-related timelines because it should come from the approved
+          Cost Estimate.
         </p>
       </div>
 
@@ -1543,8 +1559,8 @@ export function CreateTimelineWizard({
               Create Timeline Wizard
             </h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
-              Build a timeline from project type, areas, scope items, payment gates,
-              vendors, and generated work packages.
+              Set up the timeline strategy and temporary planning inputs. Execution
+              scope and revenue will later come from the approved Cost Estimate.
             </p>
           </div>
 
