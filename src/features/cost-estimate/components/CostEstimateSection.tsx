@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Plus, RefreshCcw, Trash2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  FilePlus2,
+  Plus,
+  RefreshCcw,
+  Save,
+  Trash2,
+} from 'lucide-react';
 
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -82,6 +89,11 @@ function createDefaultDescription({
 
 export function CostEstimateSection() {
   const [status, setStatus] = useState<CostEstimateStatus>('draft');
+  const [hasSavedEstimate, setHasSavedEstimate] = useState(false);
+  const [isEditingEstimate, setIsEditingEstimate] = useState(true);
+  const [estimateVersion, setEstimateVersion] = useState(1);
+  const [isRevisionDraft, setIsRevisionDraft] = useState(false);
+  const [supersededVersions, setSupersededVersions] = useState<number[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState(UNASSIGNED_PROJECT_ID);
   const [areas, setAreas] = useState<CostEstimateArea[]>(demoCostEstimateAreas);
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
@@ -147,6 +159,32 @@ export function CostEstimateSection() {
   const selectedProject =
     demoCostEstimateProjects.find(project => project.id === selectedProjectId) ??
     undefined;
+  const isEstimateApproved = status === 'approved';
+  const isEstimateReadOnly = isEstimateApproved && !isEditingEstimate;
+  const estimateStatusLabel =
+    status === 'approved'
+      ? `Approved - v${estimateVersion} Active`
+      : isRevisionDraft
+        ? `Revision Draft - v${estimateVersion}${hasSavedEstimate ? ' Saved' : ''}`
+        : hasSavedEstimate
+          ? 'Draft - Saved'
+          : 'Draft';
+  const saveButtonLabel = isRevisionDraft
+    ? hasSavedEstimate
+      ? 'Saved Revision'
+      : 'Save Revision'
+    : hasSavedEstimate
+      ? 'Saved'
+      : 'Save Draft';
+  const deleteButtonLabel = isRevisionDraft ? 'Delete Revision' : 'Delete Draft';
+  const approvalButtonLabel =
+    status === 'approved'
+      ? 'Approved'
+      : !hasSavedEstimate
+        ? 'Save Draft First'
+        : isRevisionDraft
+          ? 'Approve Revision'
+          : 'Approve Estimate';
 
   const groupedAreas = areas.map(area => {
     const areaLineItems = lineItems.filter(lineItem => lineItem.areaId === area.id);
@@ -166,9 +204,65 @@ export function CostEstimateSection() {
     preset.name.toLowerCase().includes(newLineItemName.trim().toLowerCase())
   );
 
+  const markEstimateDirty = () => {
+    setStatus('draft');
+    setHasSavedEstimate(false);
+    setIsEditingEstimate(true);
+  };
+
+  const handleSaveDraft = () => {
+    setHasSavedEstimate(true);
+    setIsEditingEstimate(true);
+    setStatus('draft');
+  };
+
+  const handleDeleteDraft = () => {
+    const confirmed = window.confirm(
+      'Delete this draft estimate? This will reset the current estimate data.'
+    );
+
+    if (!confirmed) return;
+
+    setStatus('draft');
+    setHasSavedEstimate(false);
+    setIsEditingEstimate(true);
+    setEstimateVersion(1);
+    setIsRevisionDraft(false);
+    setSupersededVersions([]);
+    setSelectedProjectId(UNASSIGNED_PROJECT_ID);
+    setAreas(demoCostEstimateAreas);
+    setLineItems(demoCostEstimateLineItems);
+    setServiceChargePercent(DEFAULT_SERVICE_CHARGE_PERCENT);
+    setMiscChargePercent(DEFAULT_MISC_CHARGE_PERCENT);
+    setTargetProjectRevenue(950000);
+    setNewAreaName('');
+    setNewLineItemAreaId(demoCostEstimateAreas[0]?.id ?? '');
+    setActiveLineItemAreaId(demoCostEstimateAreas[0]?.id ?? '');
+    setNewLineItemName('');
+    setNewLineItemDescription('');
+    setNewLineItemQuantity('1');
+    setNewLineItemUnit('sqft');
+    setNewLineItemRate('500');
+    setNewLineItemRemarks('');
+  };
+
+  const handleCreateRevision = () => {
+    const confirmed = window.confirm(
+      'Create a new draft revision from this approved estimate? The current approved estimate will remain active until this revision is approved.'
+    );
+
+    if (!confirmed) return;
+
+    setStatus('draft');
+    setIsEditingEstimate(true);
+    setHasSavedEstimate(false);
+    setIsRevisionDraft(true);
+    setEstimateVersion(currentVersion => currentVersion + 1);
+  };
+
   const handleProjectSelectionChange = (projectId: string) => {
     setSelectedProjectId(projectId);
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleAddArea = () => {
@@ -184,7 +278,7 @@ export function CostEstimateSection() {
     setAreas(current => [...current, newArea]);
     setNewLineItemAreaId(current => current || newArea.id);
     setNewAreaName('');
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleAddRepeatedRoom = (type: 'bedroom' | 'bathroom') => {
@@ -199,7 +293,7 @@ export function CostEstimateSection() {
         type,
       },
     ]);
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleStartAreaLineItem = (areaId: string) => {
@@ -333,7 +427,7 @@ export function CostEstimateSection() {
     setNewLineItemQuantity('1');
     setNewLineItemRate('500');
     setNewLineItemRemarks('');
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleUpdateLineItem = (
@@ -345,37 +439,90 @@ export function CostEstimateSection() {
         lineItem.id === lineItemId ? { ...lineItem, ...updates } : lineItem
       )
     );
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleRemoveLineItem = (lineItemId: string) => {
     setLineItems(current =>
       current.filter(lineItem => lineItem.id !== lineItemId)
     );
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleUpdateRevenue = () => {
     setTargetProjectRevenue(summary.estimatedGrossRevenue);
-    setStatus('draft');
+    markEstimateDirty();
   };
 
   const handleApproveEstimate = () => {
-    if (!summary.isRevenueMatched) return;
+    if (!summary.isRevenueMatched || !hasSavedEstimate) return;
+
+    if (isRevisionDraft && estimateVersion > 1) {
+      setSupersededVersions(currentVersions => [
+        ...new Set([...currentVersions, estimateVersion - 1]),
+      ]);
+    }
+
     setStatus('approved');
+    setHasSavedEstimate(true);
+    setIsRevisionDraft(false);
+    setIsEditingEstimate(false);
   };
 
   return (
     <SectionCard
-      title="Cost Estimate"
+      title={
+        <div className="flex items-center gap-2">
+          <span>Cost Estimate</span>
+          <StatusBadge variant={status === 'approved' ? 'success' : 'warning'}>
+            {estimateStatusLabel}
+          </StatusBadge>
+        </div>
+      }
       description="Project-level estimate source for execution scope, COGS, pricing, GST, and future timeline generation."
       actions={
-        <StatusBadge variant={status === 'approved' ? 'success' : 'warning'}>
-          {status === 'approved' ? 'Approved Estimate' : 'Draft Estimate'}
-        </StatusBadge>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {status === 'approved' ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCreateRevision}
+              className="gap-2"
+            >
+              <FilePlus2 className="h-4 w-4" />
+              Create Revision
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSaveDraft}
+                disabled={hasSavedEstimate}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {saveButtonLabel}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDeleteDraft}
+                className="gap-2 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteButtonLabel}
+              </Button>
+            </>
+          )}
+        </div>
       }
     >
-      <div className="grid gap-4 sm:gap-5">
+      <fieldset
+        disabled={isEstimateReadOnly}
+        className="grid gap-4 disabled:opacity-75 sm:gap-5"
+      >
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
             <p className="text-sm font-medium text-foreground">
@@ -429,6 +576,15 @@ export function CostEstimateSection() {
           </div>
         </div>
 
+        {supersededVersions.length > 0 && (
+          <div className="rounded-2xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            Superseded versions:{' '}
+            <span className="font-medium text-foreground">
+              {supersededVersions.map(version => `v${version}`).join(', ')}
+            </span>
+          </div>
+        )}
+
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4 [&>div]:min-w-[170px] sm:[&>div]:min-w-0 [&::-webkit-scrollbar]:hidden">
           <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal</p>
@@ -468,9 +624,9 @@ export function CostEstimateSection() {
               value={serviceChargePercent}
               onChange={event => {
                 setServiceChargePercent(Number(event.target.value));
-                setStatus('draft');
+                markEstimateDirty();
               }}
-              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
             <span className="text-xs text-muted-foreground">Allowed: 10-20%</span>
           </label>
@@ -484,9 +640,9 @@ export function CostEstimateSection() {
               value={miscChargePercent}
               onChange={event => {
                 setMiscChargePercent(Number(event.target.value));
-                setStatus('draft');
+                markEstimateDirty();
               }}
-              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
             <span className="text-xs text-muted-foreground">Allowed: 10-15%</span>
           </label>
@@ -501,9 +657,9 @@ export function CostEstimateSection() {
               value={targetProjectRevenue}
               onChange={event => {
                 setTargetProjectRevenue(Number(event.target.value));
-                setStatus('draft');
+                markEstimateDirty();
               }}
-              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
             <span className="text-xs text-muted-foreground">
               Later this will sync with project financials.
@@ -558,11 +714,15 @@ export function CostEstimateSection() {
               <Button
                 type="button"
                 onClick={handleApproveEstimate}
-                disabled={!summary.isRevenueMatched || status === 'approved'}
+                disabled={
+                  !hasSavedEstimate ||
+                  !summary.isRevenueMatched ||
+                  status === 'approved'
+                }
                 className="gap-2"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                {status === 'approved' ? 'Approved' : 'Approve Estimate'}
+                {approvalButtonLabel}
               </Button>
             </div>
           </div>
@@ -654,7 +814,7 @@ export function CostEstimateSection() {
           {groupedAreas.map(group => (
             <div
               key={group.area.id}
-              className="overflow-hidden rounded-2xl border border-border bg-background"
+              className="overflow-visible rounded-2xl border border-border bg-background"
             >
               <div className="flex flex-col gap-3 border-b border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -683,7 +843,7 @@ export function CostEstimateSection() {
 
               {activeLineItemAreaId === group.area.id && (
                 <div className="border-b border-border bg-card/60 p-3 sm:p-4">
-                  <div className="grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1fr)_110px_110px_140px_auto]">
+                  <div className="grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_150px] xl:items-center xl:gap-4 2xl:gap-5">
                     <div className="grid gap-2 sm:gap-3">
                       <div className="relative">
                         <input
@@ -702,7 +862,7 @@ export function CostEstimateSection() {
                         />
 
                         {isItemSuggestionOpen && (
-                          <div className="absolute left-0 right-0 top-11 z-30 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                          <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
                             <div className="max-h-64 overflow-y-auto p-1">
                               {matchingItemPresets.length > 0 ? (
                                 matchingItemPresets.map(preset => (
@@ -757,13 +917,13 @@ export function CostEstimateSection() {
                               value={newPresetName}
                               onChange={event => setNewPresetName(event.target.value)}
                               placeholder="Item name"
-                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                             />
 
                             <select
                               value={newPresetUnit}
                               onChange={event => setNewPresetUnit(event.target.value)}
-                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                             >
                               {units.map(unit => (
                                 <option key={unit.id} value={unit.shortLabel}>
@@ -780,7 +940,7 @@ export function CostEstimateSection() {
                                 setNewPresetPurchaseRate(event.target.value)
                               }
                               placeholder="Purchase rate"
-                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                             />
 
                             <input
@@ -791,7 +951,7 @@ export function CostEstimateSection() {
                                 setNewPresetMarkupPercent(event.target.value)
                               }
                               placeholder="Markup %"
-                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                             />
                           </div>
 
@@ -859,7 +1019,7 @@ export function CostEstimateSection() {
                               setNewLineItemRemarks(event.target.value)
                             }
                             placeholder="Remarks optional"
-                            className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                            className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                           />
                         </div>
                       </details>
@@ -869,18 +1029,21 @@ export function CostEstimateSection() {
                       type="number"
                       min="0"
                       value={newLineItemQuantity}
-                      onChange={event => setNewLineItemQuantity(event.target.value)}
+                      onChange={event => {
+                        setNewLineItemQuantity(event.target.value);
+                        markEstimateDirty();
+                      }}
                       placeholder="Qty"
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      className="h-10 w-full min-w-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                     />
 
-                    <div className="grid gap-2">
+                    <div className="min-w-0 self-center">
                       <select
                         value={newLineItemUnit}
                         onChange={event =>
                           handleUnitSelectionChange(event.target.value)
                         }
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       >
                         {units.map(unit => (
                           <option key={unit.id} value={unit.shortLabel}>
@@ -891,7 +1054,7 @@ export function CostEstimateSection() {
                       </select>
 
                       {isNewUnitFormOpen && (
-                        <div className="rounded-xl border border-border bg-muted/30 p-2">
+                        <div className="mt-2 rounded-xl border border-border bg-muted/30 p-2">
                           <input
                             value={newUnitName}
                             onChange={event => setNewUnitName(event.target.value)}
@@ -927,12 +1090,15 @@ export function CostEstimateSection() {
                       type="number"
                       min="0"
                       value={newLineItemRate}
-                      onChange={event => setNewLineItemRate(event.target.value)}
+                      onChange={event => {
+                        setNewLineItemRate(event.target.value);
+                        markEstimateDirty();
+                      }}
                       placeholder="Rate/unit"
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      className="h-10 w-full min-w-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                     />
 
-                    <div className="flex flex-col gap-2">
+                    <div className="flex min-w-0 flex-col gap-2 self-center">
                       <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                         Amount:{' '}
                         <span className="font-semibold text-foreground">
@@ -962,7 +1128,7 @@ export function CostEstimateSection() {
                   {group.lineItems.map(lineItem => (
                     <div
                       key={lineItem.id}
-                      className="grid gap-3 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_120px_150px_auto]"
+                      className="grid gap-3 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_auto] xl:items-center xl:gap-4 2xl:gap-5"
                     >
                       <div className="min-w-0">
                         <p className="font-medium text-foreground">{lineItem.name}</p>
@@ -990,7 +1156,7 @@ export function CostEstimateSection() {
                             quantity: Number(event.target.value),
                           })
                         }
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
 
                       <select
@@ -1000,7 +1166,7 @@ export function CostEstimateSection() {
                             unitLabel: event.target.value,
                           })
                         }
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       >
                         {units.map(unit => (
                           <option key={unit.id} value={unit.shortLabel}>
@@ -1018,7 +1184,7 @@ export function CostEstimateSection() {
                             ratePerUnit: Number(event.target.value),
                           })
                         }
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
 
                       <div className="flex items-center justify-between gap-3">
@@ -1045,7 +1211,7 @@ export function CostEstimateSection() {
             </div>
           ))}
         </div>
-      </div>
+      </fieldset>
     </SectionCard>
   );
 }

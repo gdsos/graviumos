@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
 interface SectionCardProps {
-  title?: string;
-  description?: string;
+  title?: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
