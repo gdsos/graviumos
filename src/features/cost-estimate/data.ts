@@ -1,8 +1,33 @@
 import type {
   CostEstimateArea,
   CostEstimateLineItem,
+  CostEstimateProject,
   CostEstimateUnit,
 } from './types';
+
+export const demoCostEstimateProjects: CostEstimateProject[] = [
+  {
+    id: 'project-villa-athani',
+    name: 'Villa, Athani',
+    clientName: 'Rafeek Muhammed Ali',
+    location: 'Athani',
+    hasCostEstimate: true,
+  },
+  {
+    id: 'project-apartment-kakkanad',
+    name: 'Apartment, Kakkanad',
+    clientName: 'Muhammed Rafeeq',
+    location: 'Kakkanad',
+    hasCostEstimate: false,
+  },
+  {
+    id: 'project-office-edappally',
+    name: 'Office, Edappally',
+    clientName: 'Gravium Workspace',
+    location: 'Edappally',
+    hasCostEstimate: false,
+  },
+];
 
 export const defaultCostEstimateUnits: CostEstimateUnit[] = [
   { id: 'sqft', label: 'Square Feet', shortLabel: 'sqft' },

@@ -13,6 +13,14 @@ export interface CostEstimateUnit {
   isCustom?: boolean;
 }
 
+export interface CostEstimateProject {
+  id: string;
+  name: string;
+  clientName: string;
+  location?: string;
+  hasCostEstimate?: boolean;
+}
+
 export interface CostEstimateLineItem {
   id: string;
   areaId: string;

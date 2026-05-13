@@ -17,11 +17,13 @@ import {
   defaultCostEstimateUnits,
   demoCostEstimateAreas,
   demoCostEstimateLineItems,
+  demoCostEstimateProjects,
 } from '../data';
 
 import type {
   CostEstimateArea,
   CostEstimateLineItem,
+  CostEstimateProject,
   CostEstimateStatus,
   CostEstimateUnit,
 } from '../types';
@@ -42,8 +44,16 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}`;
 }
 
+const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
+
 function getAreaName(areas: CostEstimateArea[], areaId: string) {
   return areas.find(area => area.id === areaId)?.name ?? 'Selected Area';
+}
+
+function getProjectLabel(project?: CostEstimateProject) {
+  if (!project) return 'Unassigned Draft';
+
+  return `${project.name} ? ${project.clientName}`;
 }
 
 function createDefaultDescription({
@@ -65,6 +75,7 @@ function createDefaultDescription({
 
 export function CostEstimateSection() {
   const [status, setStatus] = useState<CostEstimateStatus>('draft');
+  const [selectedProjectId, setSelectedProjectId] = useState(UNASSIGNED_PROJECT_ID);
   const [areas, setAreas] = useState<CostEstimateArea[]>(demoCostEstimateAreas);
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     demoCostEstimateLineItems
@@ -109,6 +120,13 @@ export function CostEstimateSection() {
     unitLabel: newLineItemUnit,
   });
 
+  const availableProjectsForNewEstimate = demoCostEstimateProjects.filter(
+    project => !project.hasCostEstimate || project.id === selectedProjectId
+  );
+  const selectedProject =
+    demoCostEstimateProjects.find(project => project.id === selectedProjectId) ??
+    undefined;
+
   const groupedAreas = areas.map(area => {
     const areaLineItems = lineItems.filter(lineItem => lineItem.areaId === area.id);
     const areaTotal = areaLineItems.reduce(
@@ -122,6 +140,11 @@ export function CostEstimateSection() {
       total: areaTotal,
     };
   });
+
+  const handleProjectSelectionChange = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setStatus('draft');
+  };
 
   const handleAddArea = () => {
     const trimmedName = newAreaName.trim();
@@ -244,14 +267,57 @@ export function CostEstimateSection() {
       }
     >
       <div className="grid gap-5">
-        <div className="rounded-2xl border border-border bg-muted/30 p-4">
-          <p className="text-sm font-medium text-foreground">
-            Future source of truth
-          </p>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Select areas first, then add estimate line items under each area.
-            Timeline will later convert approved area groups into work packages.
-          </p>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="rounded-2xl border border-border bg-muted/30 p-4">
+            <p className="text-sm font-medium text-foreground">
+              Future source of truth
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Select areas first, then add estimate line items under each area.
+              Timeline will later convert approved area groups into work packages.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-sm font-medium text-foreground">
+              Estimate Project
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Create as an unassigned draft or attach to a project without an
+              existing cost estimate.
+            </p>
+
+            <select
+              value={selectedProjectId}
+              onChange={event => handleProjectSelectionChange(event.target.value)}
+              className="mt-3 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            >
+              <option value={UNASSIGNED_PROJECT_ID}>Unassigned Draft</option>
+              {availableProjectsForNewEstimate.map(project => (
+                <option key={project.id} value={project.id}>
+                  {getProjectLabel(project)}
+                </option>
+              ))}
+            </select>
+
+            <div className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs leading-5 text-muted-foreground">
+              {selectedProject ? (
+                <>
+                  Linked to{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedProject.name}
+                  </span>
+                  . Projects that already have a cost estimate are hidden from
+                  this create list.
+                </>
+              ) : (
+                <>
+                  This estimate is currently not linked to any project. It can be
+                  converted to a new or existing project later.
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
