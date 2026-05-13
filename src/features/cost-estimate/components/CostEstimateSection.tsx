@@ -88,7 +88,7 @@ export function CostEstimateSection() {
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     demoCostEstimateLineItems
   );
-  const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
+  const [units] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
   const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
     demoCostEstimateItemPresets
   );
@@ -100,7 +100,6 @@ export function CostEstimateSection() {
   );
   const [targetProjectRevenue, setTargetProjectRevenue] = useState(950000);
   const [newAreaName, setNewAreaName] = useState('');
-  const [newUnitName, setNewUnitName] = useState('');
   const [newItemPresetId, setNewItemPresetId] = useState(CUSTOM_ITEM_PRESET_ID);
   const [isNewItemPresetFormOpen, setIsNewItemPresetFormOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
@@ -109,6 +108,9 @@ export function CostEstimateSection() {
   const [newPresetMarkupPercent, setNewPresetMarkupPercent] = useState('35');
   const [newPresetDescription, setNewPresetDescription] = useState('');
   const [newLineItemAreaId, setNewLineItemAreaId] = useState(
+    demoCostEstimateAreas[0]?.id ?? ''
+  );
+  const [activeLineItemAreaId, setActiveLineItemAreaId] = useState(
     demoCostEstimateAreas[0]?.id ?? ''
   );
   const [newLineItemName, setNewLineItemName] = useState('');
@@ -195,6 +197,11 @@ export function CostEstimateSection() {
     setStatus('draft');
   };
 
+  const handleStartAreaLineItem = (areaId: string) => {
+    setNewLineItemAreaId(areaId);
+    setActiveLineItemAreaId(areaId);
+  };
+
   const handleItemPresetChange = (presetId: string) => {
     if (presetId === ADD_NEW_ITEM_PRESET_ID) {
       setIsNewItemPresetFormOpen(true);
@@ -260,28 +267,6 @@ export function CostEstimateSection() {
     setNewPresetMarkupPercent('35');
     setNewPresetDescription('');
     setIsNewItemPresetFormOpen(false);
-  };
-
-  const handleAddCustomUnit = () => {
-    const trimmedUnit = newUnitName.trim();
-
-    if (!trimmedUnit) return;
-    if (units.some(unit => unit.shortLabel.toLowerCase() === trimmedUnit.toLowerCase())) {
-      setNewLineItemUnit(trimmedUnit);
-      setNewUnitName('');
-      return;
-    }
-
-    const newUnit: CostEstimateUnit = {
-      id: createId('estimate-unit'),
-      label: trimmedUnit,
-      shortLabel: trimmedUnit,
-      isCustom: true,
-    };
-
-    setUnits(current => [...current, newUnit]);
-    setNewLineItemUnit(newUnit.shortLabel);
-    setNewUnitName('');
   };
 
   const handleAddLineItem = () => {
@@ -545,304 +530,85 @@ export function CostEstimateSection() {
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-sm font-medium text-foreground">
-              Area setup
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Area setup
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Decide which rooms or areas are included before adding line items.
+              </p>
+            </div>
+
+            <p className="text-xs leading-5 text-muted-foreground sm:text-right">
+              Line items are now added inside each area group below.
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Decide which rooms or areas are included before adding line items.
-            </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <input
-                value={newAreaName}
-                onChange={event => setNewAreaName(event.target.value)}
-                placeholder="e.g. Prayer Room"
-                className="min-h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-              />
-              <Button
-                type="button"
-                onClick={handleAddArea}
-                disabled={!newAreaName.trim()}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Area
-              </Button>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleAddRepeatedRoom('bedroom')}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Bedroom
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleAddRepeatedRoom('bathroom')}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Bathroom
-              </Button>
-            </div>
-
-            <div className="mt-4 overflow-hidden rounded-2xl border border-border">
-              {groupedAreas.map(group => (
-                <div
-                  key={group.area.id}
-                  className="grid gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px]"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {group.area.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {group.area.type.replaceAll('_', ' ')}
-                    </p>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground sm:text-right">
-                    {group.lineItems.length} item(s)
-                  </p>
-
-                  <p className="text-sm font-semibold text-foreground sm:text-right">
-                    {formatINR(group.total)}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-sm font-medium text-foreground">
-              Add custom line item
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Amount is calculated from quantity x rate/unit.
-            </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={newAreaName}
+              onChange={event => setNewAreaName(event.target.value)}
+              placeholder="e.g. Prayer Room"
+              className="min-h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+            />
+            <Button
+              type="button"
+              onClick={handleAddArea}
+              disabled={!newAreaName.trim()}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Area
+            </Button>
+          </div>
 
-            <div className="mt-4 grid gap-3">
-              <select
-                value={newLineItemAreaId}
-                onChange={event => setNewLineItemAreaId(event.target.value)}
-                className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAddRepeatedRoom('bedroom')}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Bedroom
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAddRepeatedRoom('bathroom')}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Bathroom
+            </Button>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+            {groupedAreas.map(group => (
+              <div
+                key={group.area.id}
+                className="grid gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px]"
               >
-                {areas.map(area => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={newItemPresetId}
-                onChange={event => handleItemPresetChange(event.target.value)}
-                className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-              >
-                <option value={CUSTOM_ITEM_PRESET_ID}>
-                  Custom item / type manually
-                </option>
-                {itemPresets.map(preset => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name} - {preset.defaultUnitLabel} @{' '}
-                    {formatINR(preset.sellingRatePerUnit)}
-                  </option>
-                ))}
-                <option value={ADD_NEW_ITEM_PRESET_ID}>+ Add New Item</option>
-              </select>
-
-              <input
-                value={newLineItemName}
-                onChange={event => {
-                  setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
-                  setNewLineItemName(event.target.value);
-                }}
-                placeholder="Type item name or select preset"
-                className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-              />
-
-              {isNewItemPresetFormOpen && (
-                <div className="rounded-2xl border border-border bg-muted/30 p-3">
-                  <p className="text-sm font-medium text-foreground">
-                    Add New Item Preset
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {group.area.name}
                   </p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    This is temporary here. Later, item presets will move to
-                    Procurement &gt; Items.
+                  <p className="text-xs text-muted-foreground">
+                    {group.area.type.replaceAll('_', ' ')}
                   </p>
-
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <input
-                      value={newPresetName}
-                      onChange={event => setNewPresetName(event.target.value)}
-                      placeholder="Item name"
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                    />
-
-                    <select
-                      value={newPresetUnit}
-                      onChange={event => setNewPresetUnit(event.target.value)}
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    >
-                      {units.map(unit => (
-                        <option key={unit.id} value={unit.shortLabel}>
-                          {unit.shortLabel}
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={newPresetPurchaseRate}
-                      onChange={event =>
-                        setNewPresetPurchaseRate(event.target.value)
-                      }
-                      placeholder="Purchase rate"
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                    />
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={newPresetMarkupPercent}
-                      onChange={event =>
-                        setNewPresetMarkupPercent(event.target.value)
-                      }
-                      placeholder="Markup %"
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                    />
-                  </div>
-
-                  <textarea
-                    value={newPresetDescription}
-                    onChange={event => setNewPresetDescription(event.target.value)}
-                    placeholder="Default description optional"
-                    rows={2}
-                    className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                  />
-
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-xs text-muted-foreground">
-                      Selling rate preview:{' '}
-                      <span className="font-semibold text-foreground">
-                        {formatINR(
-                          calculateSellingRate(
-                            Number(newPresetPurchaseRate) || 0,
-                            Number(newPresetMarkupPercent) || 0
-                          )
-                        )}
-                      </span>
-                    </p>
-
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsNewItemPresetFormOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={handleAddItemPreset}
-                        disabled={!newPresetName.trim()}
-                      >
-                        Save Item
-                      </Button>
-                    </div>
-                  </div>
                 </div>
-              )}
 
-              <textarea
-                value={newLineItemDescription || previewDescription}
-                onChange={event => setNewLineItemDescription(event.target.value)}
-                rows={3}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-              />
+                <p className="text-xs text-muted-foreground sm:text-right">
+                  {group.lineItems.length} item(s)
+                </p>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <input
-                  type="number"
-                  min="0"
-                  value={newLineItemQuantity}
-                  onChange={event => setNewLineItemQuantity(event.target.value)}
-                  placeholder="Qty"
-                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                />
-
-                <select
-                  value={newLineItemUnit}
-                  onChange={event => setNewLineItemUnit(event.target.value)}
-                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                >
-                  {units.map(unit => (
-                    <option key={unit.id} value={unit.shortLabel}>
-                      {unit.shortLabel}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  type="number"
-                  min="0"
-                  value={newLineItemRate}
-                  onChange={event => setNewLineItemRate(event.target.value)}
-                  placeholder="Rate/unit"
-                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                />
+                <p className="text-sm font-semibold text-foreground sm:text-right">
+                  {formatINR(group.total)}
+                </p>
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                <input
-                  value={newUnitName}
-                  onChange={event => setNewUnitName(event.target.value)}
-                  placeholder="Add custom unit"
-                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleAddCustomUnit}
-                  disabled={!newUnitName.trim()}
-                  className="gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Save Unit
-                </Button>
-              </div>
-
-              <input
-                value={newLineItemRemarks}
-                onChange={event => setNewLineItemRemarks(event.target.value)}
-                placeholder="Remarks optional"
-                className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-              />
-
-              <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                Preview amount:{' '}
-                <span className="font-semibold text-foreground">
-                  {formatINR((Number(newLineItemQuantity) || 0) * (Number(newLineItemRate) || 0))}
-                </span>
-              </div>
-
-              <Button
-                type="button"
-                onClick={handleAddLineItem}
-                disabled={!newLineItemName.trim() || !newLineItemAreaId}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Line Item
-              </Button>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -860,10 +626,221 @@ export function CostEstimateSection() {
                   </p>
                 </div>
 
-                <div className="text-sm font-semibold text-foreground">
-                  Area total: {formatINR(group.total)}
+                <div className="flex flex-col gap-2 sm:items-end">
+                  <div className="text-sm font-semibold text-foreground">
+                    Area total: {formatINR(group.total)}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleStartAreaLineItem(group.area.id)}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add New Row
+                  </Button>
                 </div>
               </div>
+
+              {activeLineItemAreaId === group.area.id && (
+                <div className="border-b border-border bg-card/60 p-4">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_110px_110px_140px_auto]">
+                    <div className="grid gap-3">
+                      <select
+                        value={newItemPresetId}
+                        onChange={event => handleItemPresetChange(event.target.value)}
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        <option value={CUSTOM_ITEM_PRESET_ID}>
+                          Custom item / type manually
+                        </option>
+                        {itemPresets.map(preset => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name} - {preset.defaultUnitLabel} @{' '}
+                            {formatINR(preset.sellingRatePerUnit)}
+                          </option>
+                        ))}
+                        <option value={ADD_NEW_ITEM_PRESET_ID}>+ Add New Item</option>
+                      </select>
+
+                      <input
+                        value={newLineItemName}
+                        onChange={event => {
+                          setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
+                          setNewLineItemName(event.target.value);
+                        }}
+                        placeholder="Type item name or select preset"
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+
+                      {isNewItemPresetFormOpen && (
+                        <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                          <p className="text-sm font-medium text-foreground">
+                            Add New Item Preset
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            This is temporary here. Later, item presets will move
+                            to Procurement &gt; Items.
+                          </p>
+
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <input
+                              value={newPresetName}
+                              onChange={event => setNewPresetName(event.target.value)}
+                              placeholder="Item name"
+                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                            />
+
+                            <select
+                              value={newPresetUnit}
+                              onChange={event => setNewPresetUnit(event.target.value)}
+                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                            >
+                              {units.map(unit => (
+                                <option key={unit.id} value={unit.shortLabel}>
+                                  {unit.shortLabel}
+                                </option>
+                              ))}
+                            </select>
+
+                            <input
+                              type="number"
+                              min="0"
+                              value={newPresetPurchaseRate}
+                              onChange={event =>
+                                setNewPresetPurchaseRate(event.target.value)
+                              }
+                              placeholder="Purchase rate"
+                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                            />
+
+                            <input
+                              type="number"
+                              min="0"
+                              value={newPresetMarkupPercent}
+                              onChange={event =>
+                                setNewPresetMarkupPercent(event.target.value)
+                              }
+                              placeholder="Markup %"
+                              className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                            />
+                          </div>
+
+                          <textarea
+                            value={newPresetDescription}
+                            onChange={event =>
+                              setNewPresetDescription(event.target.value)
+                            }
+                            placeholder="Default description optional"
+                            rows={2}
+                            className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                          />
+
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">
+                              Selling rate preview:{' '}
+                              <span className="font-semibold text-foreground">
+                                {formatINR(
+                                  calculateSellingRate(
+                                    Number(newPresetPurchaseRate) || 0,
+                                    Number(newPresetMarkupPercent) || 0
+                                  )
+                                )}
+                              </span>
+                            </p>
+
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsNewItemPresetFormOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={handleAddItemPreset}
+                                disabled={!newPresetName.trim()}
+                              >
+                                Save Item
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <textarea
+                        value={newLineItemDescription || previewDescription}
+                        onChange={event =>
+                          setNewLineItemDescription(event.target.value)
+                        }
+                        rows={2}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+
+                      <input
+                        value={newLineItemRemarks}
+                        onChange={event => setNewLineItemRemarks(event.target.value)}
+                        placeholder="Remarks optional"
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+                    </div>
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={newLineItemQuantity}
+                      onChange={event => setNewLineItemQuantity(event.target.value)}
+                      placeholder="Qty"
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                    />
+
+                    <select
+                      value={newLineItemUnit}
+                      onChange={event => setNewLineItemUnit(event.target.value)}
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    >
+                      {units.map(unit => (
+                        <option key={unit.id} value={unit.shortLabel}>
+                          {unit.shortLabel}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={newLineItemRate}
+                      onChange={event => setNewLineItemRate(event.target.value)}
+                      placeholder="Rate/unit"
+                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                    />
+
+                    <div className="flex flex-col gap-2">
+                      <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                        Amount:{' '}
+                        <span className="font-semibold text-foreground">
+                          {formatINR(
+                            (Number(newLineItemQuantity) || 0) *
+                              (Number(newLineItemRate) || 0)
+                          )}
+                        </span>
+                      </div>
+
+                      <Button
+                        type="button"
+                        onClick={handleAddLineItem}
+                        disabled={!newLineItemName.trim() || !newLineItemAreaId}
+                        className="gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Save Row
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {group.lineItems.length > 0 ? (
                 <div className="grid gap-3 p-4">
