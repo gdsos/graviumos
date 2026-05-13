@@ -10,14 +10,20 @@ import {
   DEFAULT_MISC_CHARGE_PERCENT,
   DEFAULT_SERVICE_CHARGE_PERCENT,
   calculateCostEstimateSummary,
+  calculateLineItemTotal,
   formatEstimateDifferenceLabel,
 } from '../calculator';
-import { demoCostEstimateAreas, demoCostEstimateLineItems } from '../data';
+import {
+  defaultCostEstimateUnits,
+  demoCostEstimateAreas,
+  demoCostEstimateLineItems,
+} from '../data';
 
 import type {
   CostEstimateArea,
   CostEstimateLineItem,
   CostEstimateStatus,
+  CostEstimateUnit,
 } from '../types';
 
 function formatINR(amount: number) {
@@ -40,12 +46,30 @@ function getAreaName(areas: CostEstimateArea[], areaId: string) {
   return areas.find(area => area.id === areaId)?.name ?? 'Selected Area';
 }
 
+function createDefaultDescription({
+  areaName,
+  itemName,
+  quantity,
+  unitLabel,
+}: {
+  areaName: string;
+  itemName: string;
+  quantity: number;
+  unitLabel: string;
+}) {
+  const safeAreaName = areaName || 'selected area';
+  const safeItemName = itemName || 'custom work item';
+
+  return `Design, supply, and installation of ${safeItemName} in ${safeAreaName}, measured as ${quantity || 0} ${unitLabel}, including required materials, fittings, finishing, and site installation.`;
+}
+
 export function CostEstimateSection() {
   const [status, setStatus] = useState<CostEstimateStatus>('draft');
   const [areas, setAreas] = useState<CostEstimateArea[]>(demoCostEstimateAreas);
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     demoCostEstimateLineItems
   );
+  const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
   const [serviceChargePercent, setServiceChargePercent] = useState(
     DEFAULT_SERVICE_CHARGE_PERCENT
   );
@@ -54,11 +78,16 @@ export function CostEstimateSection() {
   );
   const [targetProjectRevenue, setTargetProjectRevenue] = useState(950000);
   const [newAreaName, setNewAreaName] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
   const [newLineItemAreaId, setNewLineItemAreaId] = useState(
     demoCostEstimateAreas[0]?.id ?? ''
   );
   const [newLineItemName, setNewLineItemName] = useState('');
-  const [newLineItemCogs, setNewLineItemCogs] = useState('50000');
+  const [newLineItemDescription, setNewLineItemDescription] = useState('');
+  const [newLineItemQuantity, setNewLineItemQuantity] = useState('1');
+  const [newLineItemUnit, setNewLineItemUnit] = useState('sqft');
+  const [newLineItemRate, setNewLineItemRate] = useState('500');
+  const [newLineItemRemarks, setNewLineItemRemarks] = useState('');
 
   const summary = useMemo(
     () =>
@@ -71,6 +100,28 @@ export function CostEstimateSection() {
       }),
     [lineItems, miscChargePercent, serviceChargePercent, targetProjectRevenue]
   );
+
+  const selectedAreaName = getAreaName(areas, newLineItemAreaId);
+  const previewDescription = createDefaultDescription({
+    areaName: selectedAreaName,
+    itemName: newLineItemName,
+    quantity: Number(newLineItemQuantity) || 0,
+    unitLabel: newLineItemUnit,
+  });
+
+  const groupedAreas = areas.map(area => {
+    const areaLineItems = lineItems.filter(lineItem => lineItem.areaId === area.id);
+    const areaTotal = areaLineItems.reduce(
+      (total, lineItem) => total + calculateLineItemTotal(lineItem),
+      0
+    );
+
+    return {
+      area,
+      lineItems: areaLineItems,
+      total: areaTotal,
+    };
+  });
 
   const handleAddArea = () => {
     const trimmedName = newAreaName.trim();
@@ -103,11 +154,34 @@ export function CostEstimateSection() {
     setStatus('draft');
   };
 
+  const handleAddCustomUnit = () => {
+    const trimmedUnit = newUnitName.trim();
+
+    if (!trimmedUnit) return;
+    if (units.some(unit => unit.shortLabel.toLowerCase() === trimmedUnit.toLowerCase())) {
+      setNewLineItemUnit(trimmedUnit);
+      setNewUnitName('');
+      return;
+    }
+
+    const newUnit: CostEstimateUnit = {
+      id: createId('estimate-unit'),
+      label: trimmedUnit,
+      shortLabel: trimmedUnit,
+      isCustom: true,
+    };
+
+    setUnits(current => [...current, newUnit]);
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewUnitName('');
+  };
+
   const handleAddLineItem = () => {
     const trimmedName = newLineItemName.trim();
-    const cogsAmount = Math.max(0, Number(newLineItemCogs) || 0);
+    const quantity = Math.max(0, Number(newLineItemQuantity) || 0);
+    const ratePerUnit = Math.max(0, Number(newLineItemRate) || 0);
 
-    if (!trimmedName || !newLineItemAreaId) return;
+    if (!trimmedName || !newLineItemAreaId || quantity <= 0) return;
 
     setLineItems(current => [
       ...current,
@@ -115,22 +189,28 @@ export function CostEstimateSection() {
         id: createId('estimate-line'),
         areaId: newLineItemAreaId,
         name: trimmedName,
-        cogsAmount,
-        quantity: 1,
-        unitLabel: 'scope',
+        description: newLineItemDescription.trim() || previewDescription,
+        quantity,
+        unitLabel: newLineItemUnit,
+        ratePerUnit,
+        remarks: newLineItemRemarks.trim() || undefined,
       },
     ]);
     setNewLineItemName('');
-    setNewLineItemCogs('50000');
+    setNewLineItemDescription('');
+    setNewLineItemQuantity('1');
+    setNewLineItemRate('500');
+    setNewLineItemRemarks('');
     setStatus('draft');
   };
 
-  const handleUpdateLineItemAmount = (lineItemId: string, amount: number) => {
+  const handleUpdateLineItem = (
+    lineItemId: string,
+    updates: Partial<CostEstimateLineItem>
+  ) => {
     setLineItems(current =>
       current.map(lineItem =>
-        lineItem.id === lineItemId
-          ? { ...lineItem, cogsAmount: Math.max(0, amount) }
-          : lineItem
+        lineItem.id === lineItemId ? { ...lineItem, ...updates } : lineItem
       )
     );
     setStatus('draft');
@@ -169,15 +249,14 @@ export function CostEstimateSection() {
             Future source of truth
           </p>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Areas, repeated rooms, scope, COGS, execution revenue, and vendor-linked
-            work should be finalized here. Timeline will later convert the approved
-            estimate into work packages.
+            Select areas first, then add estimate line items under each area.
+            Timeline will later convert approved area groups into work packages.
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">COGS</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal</p>
             <p className="mt-2 text-xl font-semibold text-foreground">
               {formatINR(summary.cogsSubtotal)}
             </p>
@@ -196,7 +275,7 @@ export function CostEstimateSection() {
           </div>
           <div className="rounded-2xl border border-border bg-background p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Gross Revenue
+              Grand Total
             </p>
             <p className="mt-2 text-xl font-semibold text-foreground">
               {formatINR(summary.estimatedGrossRevenue)}
@@ -282,7 +361,7 @@ export function CostEstimateSection() {
                 </StatusBadge>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Estimated gross revenue is{' '}
+                Estimated grand total is{' '}
                 <span className="font-medium text-foreground">
                   {formatINR(summary.estimatedGrossRevenue)}
                 </span>{' '}
@@ -317,11 +396,10 @@ export function CostEstimateSection() {
         <div className="grid gap-3 lg:grid-cols-2">
           <div className="rounded-2xl border border-border bg-background p-4">
             <p className="text-sm font-medium text-foreground">
-              Areas / repeated rooms
+              Area setup
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Repeated rooms are created here so each room can later carry its own
-              estimate scope.
+              Decide which rooms or areas are included before adding line items.
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <input
@@ -379,11 +457,10 @@ export function CostEstimateSection() {
 
           <div className="rounded-2xl border border-border bg-background p-4">
             <p className="text-sm font-medium text-foreground">
-              Add estimate scope item
+              Add custom line item
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Scope belongs here first. Timeline will later convert approved line
-              items into work packages.
+              Amount is calculated from quantity x rate/unit.
             </p>
 
             <div className="mt-4 grid gap-3">
@@ -406,14 +483,77 @@ export function CostEstimateSection() {
                 className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
               />
 
+              <textarea
+                value={newLineItemDescription || previewDescription}
+                onChange={event => setNewLineItemDescription(event.target.value)}
+                rows={3}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+              />
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <input
+                  type="number"
+                  min="0"
+                  value={newLineItemQuantity}
+                  onChange={event => setNewLineItemQuantity(event.target.value)}
+                  placeholder="Qty"
+                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                />
+
+                <select
+                  value={newLineItemUnit}
+                  onChange={event => setNewLineItemUnit(event.target.value)}
+                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                >
+                  {units.map(unit => (
+                    <option key={unit.id} value={unit.shortLabel}>
+                      {unit.shortLabel}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="number"
+                  min="0"
+                  value={newLineItemRate}
+                  onChange={event => setNewLineItemRate(event.target.value)}
+                  placeholder="Rate/unit"
+                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  value={newUnitName}
+                  onChange={event => setNewUnitName(event.target.value)}
+                  placeholder="Add custom unit"
+                  className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddCustomUnit}
+                  disabled={!newUnitName.trim()}
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Unit
+                </Button>
+              </div>
+
               <input
-                type="number"
-                min="0"
-                value={newLineItemCogs}
-                onChange={event => setNewLineItemCogs(event.target.value)}
-                placeholder="COGS"
+                value={newLineItemRemarks}
+                onChange={event => setNewLineItemRemarks(event.target.value)}
+                placeholder="Remarks optional"
                 className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
               />
+
+              <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Preview amount:{' '}
+                <span className="font-semibold text-foreground">
+                  {formatINR((Number(newLineItemQuantity) || 0) * (Number(newLineItemRate) || 0))}
+                </span>
+              </div>
 
               <Button
                 type="button"
@@ -422,44 +562,116 @@ export function CostEstimateSection() {
                 className="gap-2"
               >
                 <Plus className="h-4 w-4" />
-                Add Scope Item
+                Add Line Item
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-3">
-          {lineItems.map(lineItem => (
+        <div className="grid gap-4">
+          {groupedAreas.map(group => (
             <div
-              key={lineItem.id}
-              className="grid gap-3 rounded-2xl border border-border bg-background p-4 lg:grid-cols-[minmax(0,1fr)_180px_auto]"
+              key={group.area.id}
+              className="overflow-hidden rounded-2xl border border-border bg-background"
             >
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">{lineItem.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {getAreaName(areas, lineItem.areaId)}
-                  {lineItem.vendorName ? ` - ${lineItem.vendorName}` : ''}
-                </p>
+              <div className="flex flex-col gap-3 border-b border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-foreground">{group.area.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {group.lineItems.length} line item(s)
+                  </p>
+                </div>
+
+                <div className="text-sm font-semibold text-foreground">
+                  Area total: {formatINR(group.total)}
+                </div>
               </div>
 
-              <input
-                type="number"
-                min="0"
-                value={lineItem.cogsAmount}
-                onChange={event =>
-                  handleUpdateLineItemAmount(lineItem.id, Number(event.target.value))
-                }
-                className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-              />
+              {group.lineItems.length > 0 ? (
+                <div className="grid gap-3 p-4">
+                  {group.lineItems.map(lineItem => (
+                    <div
+                      key={lineItem.id}
+                      className="grid gap-3 rounded-2xl border border-border bg-card p-4 xl:grid-cols-[minmax(0,1fr)_120px_120px_150px_auto]"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground">{lineItem.name}</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {lineItem.description}
+                        </p>
+                        {lineItem.vendorName && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Vendor: {lineItem.vendorName}
+                          </p>
+                        )}
+                        {lineItem.remarks && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Remarks: {lineItem.remarks}
+                          </p>
+                        )}
+                      </div>
 
-              <button
-                type="button"
-                onClick={() => handleRemoveLineItem(lineItem.id)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 text-destructive transition hover:bg-destructive/10"
-                aria-label="Remove estimate line item"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+                      <input
+                        type="number"
+                        min="0"
+                        value={lineItem.quantity}
+                        onChange={event =>
+                          handleUpdateLineItem(lineItem.id, {
+                            quantity: Number(event.target.value),
+                          })
+                        }
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+
+                      <select
+                        value={lineItem.unitLabel}
+                        onChange={event =>
+                          handleUpdateLineItem(lineItem.id, {
+                            unitLabel: event.target.value,
+                          })
+                        }
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        {units.map(unit => (
+                          <option key={unit.id} value={unit.shortLabel}>
+                            {unit.shortLabel}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={lineItem.ratePerUnit}
+                        onChange={event =>
+                          handleUpdateLineItem(lineItem.id, {
+                            ratePerUnit: Number(event.target.value),
+                          })
+                        }
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatINR(calculateLineItemTotal(lineItem))}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLineItem(lineItem.id)}
+                          className="flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 text-destructive transition hover:bg-destructive/10"
+                          aria-label="Remove estimate line item"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="p-4 text-sm text-muted-foreground">
+                  No line items added for this area yet.
+                </p>
+              )}
             </div>
           ))}
         </div>

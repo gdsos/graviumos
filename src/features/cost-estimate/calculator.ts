@@ -5,7 +5,7 @@ export const DEFAULT_MISC_CHARGE_PERCENT = 10;
 export const DEFAULT_GST_PERCENT = 18;
 
 export function calculateLineItemTotal(lineItem: CostEstimateLineItem) {
-  return Math.round(lineItem.cogsAmount * lineItem.quantity);
+  return Math.round(lineItem.quantity * lineItem.ratePerUnit);
 }
 
 export function calculateCogsSubtotal(lineItems: CostEstimateLineItem[]) {

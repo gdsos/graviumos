@@ -6,14 +6,23 @@ export interface CostEstimateArea {
   type: 'living_room' | 'kitchen' | 'bedroom' | 'bathroom' | 'custom';
 }
 
+export interface CostEstimateUnit {
+  id: string;
+  label: string;
+  shortLabel: string;
+  isCustom?: boolean;
+}
+
 export interface CostEstimateLineItem {
   id: string;
   areaId: string;
   name: string;
-  cogsAmount: number;
+  description: string;
   quantity: number;
   unitLabel: string;
+  ratePerUnit: number;
   vendorName?: string;
+  remarks?: string;
 }
 
 export interface CostEstimateSummary {
