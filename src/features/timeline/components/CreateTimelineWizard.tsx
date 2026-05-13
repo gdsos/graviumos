@@ -274,6 +274,7 @@ export function CreateTimelineWizard({
   onUseDraft,
 }: CreateTimelineWizardProps) {
   const wizardTopRef = useRef<HTMLElement | null>(null);
+  const stepButtonRefs = useRef<Partial<Record<WizardStep, HTMLButtonElement | null>>>({});
   const initialTemplateId = getInitialTemplateId();
 
   const [activeStep, setActiveStep] = useState<WizardStep>('template');
@@ -424,13 +425,17 @@ export function CreateTimelineWizard({
   const canUseDraft =
     Boolean(generatedTimeline) &&
     (!requiresApprovedCostEstimate || isCostEstimateApproved);
-  const hasRevenueMismatch =
-    Boolean(costEstimateSummary) && !costEstimateSummary?.isRevenueMatched;
-  const isContinueDisabled =
+  const isEstimateAwaitingSummary =
     activeStep === 'estimate' &&
     requiresApprovedCostEstimate &&
-    !hasRevenueMismatch &&
+    !costEstimateSummary;
+  const isEstimateMatchedButNotApproved =
+    activeStep === 'estimate' &&
+    requiresApprovedCostEstimate &&
+    Boolean(costEstimateSummary?.isRevenueMatched) &&
     !isCostEstimateApproved;
+  const isContinueDisabled =
+    isEstimateAwaitingSummary || isEstimateMatchedButNotApproved;
   const shouldShowEstimateApprovalNotice =
     requiresApprovedCostEstimate &&
     !isCostEstimateApproved &&
@@ -612,16 +617,16 @@ export function CreateTimelineWizard({
       behavior: 'smooth',
       block: 'start',
     });
+
+    stepButtonRefs.current[activeStep]?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    });
   }, [activeStep]);
 
   const goNext = () => {
-    if (
-      activeStep === 'estimate' &&
-      requiresApprovedCostEstimate &&
-      hasRevenueMismatch
-    ) {
-      setIsRevenueMismatchModalOpen(true);
-      setIsRevenueOverwriteWarningVisible(false);
+    if (activeStep === 'estimate' && !canLeaveEstimateStep()) {
       return;
     }
 
@@ -641,8 +646,32 @@ export function CreateTimelineWizard({
     if (previousStep) setActiveStep(previousStep.id);
   };
 
+  const canLeaveEstimateStep = () => {
+    if (!requiresApprovedCostEstimate || isCostEstimateApproved) return true;
+
+    if (!costEstimateSummary) return false;
+
+    if (!costEstimateSummary.isRevenueMatched) {
+      setIsRevenueMismatchModalOpen(true);
+      setIsRevenueOverwriteWarningVisible(false);
+      return false;
+    }
+
+    return false;
+  };
+
   const handleStepClick = (step: WizardStep, stepIndex: number) => {
     if (stepIndex > maxUnlockedStepIndex) return;
+
+    const estimateStepIndex = getStepIndex('estimate');
+
+    if (
+      currentStepIndex <= estimateStepIndex &&
+      stepIndex > estimateStepIndex &&
+      !canLeaveEstimateStep()
+    ) {
+      return;
+    }
 
     setActiveStep(step);
   };
@@ -1198,7 +1227,7 @@ export function CreateTimelineWizard({
     <SectionCard
       title="Timeline Basics"
       description="Manual timeline inputs for now. Later these can be fetched from the approved Cost Estimate."
-      className="shadow-none"
+      className="rounded-none border-x-0 shadow-none sm:rounded-2xl sm:border-x"
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="min-w-0 xl:col-span-2">
@@ -1481,18 +1510,18 @@ export function CreateTimelineWizard({
   return (
     <section
       ref={wizardTopRef}
-      className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
+      className="-mx-4 min-w-0 overflow-hidden rounded-none border-y border-border bg-card text-card-foreground shadow-sm sm:mx-0 sm:rounded-2xl sm:border"
     >
-      <div className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+      <div className="border-b border-border px-3 py-3 sm:px-5 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
               Timeline Creation
             </p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground">
+            <h2 className="mt-1 text-lg font-semibold text-foreground sm:text-xl">
               Create Timeline Wizard
             </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground sm:block">
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
               Build a timeline from project type, areas, scope items, payment gates,
               vendors, and generated work packages.
             </p>
@@ -1507,7 +1536,7 @@ export function CreateTimelineWizard({
       </div>
 
       <div className="border-b border-border px-3 py-2 sm:p-4">
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-7 sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="-mx-3 flex snap-x gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-7 sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
           {wizardSteps.map((step, index) => {
             const isActive = activeStep === step.id;
             const isCompleted = index < currentStepIndex;
@@ -1515,10 +1544,13 @@ export function CreateTimelineWizard({
             return (
               <button
                 key={step.id}
+                ref={element => {
+                  stepButtonRefs.current[step.id] = element;
+                }}
                 type="button"
                 onClick={() => handleStepClick(step.id, index)}
                 disabled={index > maxUnlockedStepIndex}
-                className={`min-w-[112px] rounded-2xl border px-3 py-2.5 text-center transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-0 sm:px-2 sm:py-3 ${
+                className={`min-w-[104px] snap-start rounded-full border px-3 py-2 text-center transition disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-0 sm:rounded-2xl sm:px-2 sm:py-3 ${
                   isActive
                     ? 'border-foreground bg-primary text-primary-foreground'
                     : isCompleted
@@ -1539,7 +1571,7 @@ export function CreateTimelineWizard({
       </div>
 
       {selectedTemplate && (
-        <div className="border-b border-border px-4 py-2.5 sm:px-5 sm:py-3">
+        <div className="border-b border-border px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">
@@ -1557,7 +1589,7 @@ export function CreateTimelineWizard({
         </div>
       )}
 
-      <div className="p-3 sm:p-5">
+      <div className="p-0 sm:p-5">
         <SectionCard
           title={wizardSteps[currentStepIndex]?.label ?? 'Step'}
           description={wizardSteps[currentStepIndex]?.description}
@@ -1649,7 +1681,7 @@ export function CreateTimelineWizard({
         </div>
       )}
 
-      <div className="sticky bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
+      <div className="sticky bottom-0 z-10 border-t border-border bg-card/95 px-3 py-3 backdrop-blur sm:px-5 sm:py-4">
         {shouldShowEstimateApprovalNotice && (
           <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-muted-foreground">
             Approve the Cost Estimate before creating an execution timeline. If
