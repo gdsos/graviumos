@@ -422,6 +422,7 @@ export function CreateTimelineWizard({
   const customScopeCount = selectedScopeItems.filter(scopeItem => scopeItem.isCustom).length;
   const requiresApprovedCostEstimate =
     selectedTemplate?.defaultTimelineMode !== 'design_only';
+  const shouldHideManualExecutionValue = requiresApprovedCostEstimate;
   const canUseDraft =
     Boolean(generatedTimeline) &&
     (!requiresApprovedCostEstimate || isCostEstimateApproved);
@@ -1288,31 +1289,51 @@ export function CreateTimelineWizard({
           />
         </div>
 
-        <div className="min-w-0">
-          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Execution Value
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={
-              costEstimateSummary?.estimatedGrossRevenue
-                ? String(costEstimateSummary.estimatedGrossRevenue)
-                : timelineDraftInput.executionValue
-            }
-            onChange={event =>
-              handleTimelineDraftInputChange('executionValue', event.target.value)
-            }
-            disabled={Boolean(costEstimateSummary?.estimatedGrossRevenue)}
-            className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
-            placeholder="0"
-          />
-          {costEstimateSummary?.estimatedGrossRevenue && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Using estimated gross revenue from Cost Estimate.
+        {shouldHideManualExecutionValue ? (
+          <div className="min-w-0 rounded-2xl border border-border bg-muted/30 p-3 xl:col-span-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Execution Value
             </p>
-          )}
-        </div>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              Locked until Cost Estimate approval
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Execution revenue should come from the approved Cost Estimate, not
+              from manual timeline input.
+            </p>
+            {costEstimateSummary?.estimatedGrossRevenue && (
+              <p className="mt-2 text-sm font-semibold text-foreground">
+                {formatINR(costEstimateSummary.estimatedGrossRevenue)}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="min-w-0">
+            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Execution Value
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={
+                costEstimateSummary?.estimatedGrossRevenue
+                  ? String(costEstimateSummary.estimatedGrossRevenue)
+                  : timelineDraftInput.executionValue
+              }
+              onChange={event =>
+                handleTimelineDraftInputChange('executionValue', event.target.value)
+              }
+              disabled={Boolean(costEstimateSummary?.estimatedGrossRevenue)}
+              className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+              placeholder="0"
+            />
+            {costEstimateSummary?.estimatedGrossRevenue && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Using estimated gross revenue from Cost Estimate.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </SectionCard>
   );
