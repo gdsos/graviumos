@@ -47,8 +47,7 @@ function createId(prefix: string) {
 }
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
-const CUSTOM_ITEM_PRESET_ID = 'custom-item';
-const ADD_NEW_ITEM_PRESET_ID = 'add-new-item';
+const ADD_NEW_UNIT_ID = 'add-new-unit';
 
 function getAreaName(areas: CostEstimateArea[], areaId: string) {
   return areas.find(area => area.id === areaId)?.name ?? 'Selected Area';
@@ -88,7 +87,7 @@ export function CostEstimateSection() {
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     demoCostEstimateLineItems
   );
-  const [units] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
+  const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
   const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
     demoCostEstimateItemPresets
   );
@@ -100,7 +99,9 @@ export function CostEstimateSection() {
   );
   const [targetProjectRevenue, setTargetProjectRevenue] = useState(950000);
   const [newAreaName, setNewAreaName] = useState('');
-  const [newItemPresetId, setNewItemPresetId] = useState(CUSTOM_ITEM_PRESET_ID);
+  const [newUnitName, setNewUnitName] = useState('');
+  const [isNewUnitFormOpen, setIsNewUnitFormOpen] = useState(false);
+  const [isItemSuggestionOpen, setIsItemSuggestionOpen] = useState(false);
   const [isNewItemPresetFormOpen, setIsNewItemPresetFormOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [newPresetUnit, setNewPresetUnit] = useState('sqft');
@@ -161,6 +162,10 @@ export function CostEstimateSection() {
     };
   });
 
+  const matchingItemPresets = itemPresets.filter(preset =>
+    preset.name.toLowerCase().includes(newLineItemName.trim().toLowerCase())
+  );
+
   const handleProjectSelectionChange = (projectId: string) => {
     setSelectedProjectId(projectId);
     setStatus('draft');
@@ -202,25 +207,22 @@ export function CostEstimateSection() {
     setActiveLineItemAreaId(areaId);
   };
 
-  const handleItemPresetChange = (presetId: string) => {
-    if (presetId === ADD_NEW_ITEM_PRESET_ID) {
-      setIsNewItemPresetFormOpen(true);
-      setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
-      return;
-    }
-
-    setNewItemPresetId(presetId);
-
-    if (presetId === CUSTOM_ITEM_PRESET_ID) return;
-
-    const preset = itemPresets.find(currentPreset => currentPreset.id === presetId);
-
-    if (!preset) return;
-
+  const applyItemPreset = (preset: CostEstimateItemPreset) => {
     setNewLineItemName(preset.name);
     setNewLineItemUnit(preset.defaultUnitLabel);
     setNewLineItemRate(String(preset.sellingRatePerUnit));
     setNewLineItemDescription(preset.defaultDescription);
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleItemNameChange = (itemName: string) => {
+    setNewLineItemName(itemName);
+    setIsItemSuggestionOpen(true);
+  };
+
+  const handleOpenNewItemPresetForm = () => {
+    setIsNewItemPresetFormOpen(true);
+    setIsItemSuggestionOpen(false);
   };
 
   const handleAddItemPreset = () => {
@@ -257,7 +259,6 @@ export function CostEstimateSection() {
     };
 
     setItemPresets(current => [...current, newPreset]);
-    setNewItemPresetId(newPreset.id);
     setNewLineItemName(newPreset.name);
     setNewLineItemUnit(newPreset.defaultUnitLabel);
     setNewLineItemRate(String(newPreset.sellingRatePerUnit));
@@ -267,6 +268,44 @@ export function CostEstimateSection() {
     setNewPresetMarkupPercent('35');
     setNewPresetDescription('');
     setIsNewItemPresetFormOpen(false);
+  };
+
+  const handleUnitSelectionChange = (unitValue: string) => {
+    if (unitValue === ADD_NEW_UNIT_ID) {
+      setIsNewUnitFormOpen(true);
+      return;
+    }
+
+    setNewLineItemUnit(unitValue);
+  };
+
+  const handleAddCustomUnit = () => {
+    const trimmedUnit = newUnitName.trim();
+
+    if (!trimmedUnit) return;
+
+    const existingUnit = units.find(
+      unit => unit.shortLabel.toLowerCase() === trimmedUnit.toLowerCase()
+    );
+
+    if (existingUnit) {
+      setNewLineItemUnit(existingUnit.shortLabel);
+      setNewUnitName('');
+      setIsNewUnitFormOpen(false);
+      return;
+    }
+
+    const newUnit: CostEstimateUnit = {
+      id: createId('estimate-unit'),
+      label: trimmedUnit,
+      shortLabel: trimmedUnit,
+      isCustom: true,
+    };
+
+    setUnits(current => [...current, newUnit]);
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewUnitName('');
+    setIsNewUnitFormOpen(false);
   };
 
   const handleAddLineItem = () => {
@@ -289,7 +328,6 @@ export function CostEstimateSection() {
         remarks: newLineItemRemarks.trim() || undefined,
       },
     ]);
-    setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
     setNewLineItemName('');
     setNewLineItemDescription('');
     setNewLineItemQuantity('1');
@@ -647,32 +685,62 @@ export function CostEstimateSection() {
                 <div className="border-b border-border bg-card/60 p-4">
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_110px_110px_140px_auto]">
                     <div className="grid gap-3">
-                      <select
-                        value={newItemPresetId}
-                        onChange={event => handleItemPresetChange(event.target.value)}
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      >
-                        <option value={CUSTOM_ITEM_PRESET_ID}>
-                          Custom item / type manually
-                        </option>
-                        {itemPresets.map(preset => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name} - {preset.defaultUnitLabel} @{' '}
-                            {formatINR(preset.sellingRatePerUnit)}
-                          </option>
-                        ))}
-                        <option value={ADD_NEW_ITEM_PRESET_ID}>+ Add New Item</option>
-                      </select>
+                      <div className="relative">
+                        <input
+                          value={newLineItemName}
+                          onFocus={() => setIsItemSuggestionOpen(true)}
+                          onBlur={() => {
+                            window.setTimeout(() => {
+                              setIsItemSuggestionOpen(false);
+                            }, 120);
+                          }}
+                          onChange={event =>
+                            handleItemNameChange(event.target.value)
+                          }
+                          placeholder="Type item name or search preset"
+                          className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                        />
 
-                      <input
-                        value={newLineItemName}
-                        onChange={event => {
-                          setNewItemPresetId(CUSTOM_ITEM_PRESET_ID);
-                          setNewLineItemName(event.target.value);
-                        }}
-                        placeholder="Type item name or select preset"
-                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                      />
+                        {isItemSuggestionOpen && (
+                          <div className="absolute left-0 right-0 top-11 z-30 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                            <div className="max-h-64 overflow-y-auto p-1">
+                              {matchingItemPresets.length > 0 ? (
+                                matchingItemPresets.map(preset => (
+                                  <button
+                                    key={preset.id}
+                                    type="button"
+                                    onMouseDown={event => event.preventDefault()}
+                                    onClick={() => applyItemPreset(preset)}
+                                    className="w-full rounded-lg px-3 py-2 text-left transition hover:bg-muted"
+                                  >
+                                    <span className="block text-sm font-medium text-foreground">
+                                      {preset.name}
+                                    </span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                      {preset.defaultUnitLabel} @{' '}
+                                      {formatINR(preset.sellingRatePerUnit)}
+                                    </span>
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="px-3 py-2 text-xs text-muted-foreground">
+                                  No matching preset. Keep typing to use a custom
+                                  item.
+                                </p>
+                              )}
+
+                              <button
+                                type="button"
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={handleOpenNewItemPresetForm}
+                                className="mt-1 w-full rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                              >
+                                + Add New Item
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       {isNewItemPresetFormOpen && (
                         <div className="rounded-2xl border border-border bg-muted/30 p-3">
@@ -796,17 +864,54 @@ export function CostEstimateSection() {
                       className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                     />
 
-                    <select
-                      value={newLineItemUnit}
-                      onChange={event => setNewLineItemUnit(event.target.value)}
-                      className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    >
-                      {units.map(unit => (
-                        <option key={unit.id} value={unit.shortLabel}>
-                          {unit.shortLabel}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="grid gap-2">
+                      <select
+                        value={newLineItemUnit}
+                        onChange={event =>
+                          handleUnitSelectionChange(event.target.value)
+                        }
+                        className="min-h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        {units.map(unit => (
+                          <option key={unit.id} value={unit.shortLabel}>
+                            {unit.shortLabel}
+                          </option>
+                        ))}
+                        <option value={ADD_NEW_UNIT_ID}>+ Add New Unit</option>
+                      </select>
+
+                      {isNewUnitFormOpen && (
+                        <div className="rounded-xl border border-border bg-muted/30 p-2">
+                          <input
+                            value={newUnitName}
+                            onChange={event => setNewUnitName(event.target.value)}
+                            placeholder="Unit label"
+                            className="min-h-9 w-full rounded-lg border border-border bg-background px-2 text-xs text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                setNewUnitName('');
+                                setIsNewUnitFormOpen(false);
+                              }}
+                              className="h-8 flex-1 px-2 text-xs"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={handleAddCustomUnit}
+                              disabled={!newUnitName.trim()}
+                              className="h-8 flex-1 px-2 text-xs"
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <input
                       type="number"
