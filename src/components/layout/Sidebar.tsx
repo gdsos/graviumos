@@ -13,7 +13,8 @@ import {
   Megaphone,
   ReceiptIndianRupee,
   Store,
-  CalendarClock
+  CalendarClock,
+  ClipboardList
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -38,6 +39,7 @@ const adminNavItems: NavItem[] = [
   { label: "Leads", icon: BarChart3, path: "/admin/leads" },
   { label: "Projects", icon: Folder, path: "/admin/projects" },
   { label: "Vendors", icon: Store, path: "/admin/vendors" },
+  { label: "Cost Estimates", icon: ClipboardList, path: "/admin/cost-estimates" },
   { label: "Timeline", icon: CalendarClock, path: "/admin/timeline" },
   { label: "Tasks", icon: CheckSquare, path: "/admin/tasks" },
   { label: "People", icon: Users, path: "/admin/people" },
@@ -52,6 +54,7 @@ const employeeNavItems: NavItem[] = [
   { label: "My Tasks", icon: CheckSquare, path: "/portal/tasks" },
   { label: "Projects", icon: Folder, path: "/portal/projects" },
   { label: "Vendors", icon: Store, path: "/portal/vendors" },
+  { label: "Cost Estimates", icon: ClipboardList, path: "/portal/cost-estimates" },
   { label: "Timeline", icon: CalendarClock, path: "/portal/timeline" },
   { label: "Leads", icon: BarChart3, path: "/portal/leads", msOnly: true },
   { label: "Financials", icon: DollarSign, path: "/portal/financials", financeOnly: true },

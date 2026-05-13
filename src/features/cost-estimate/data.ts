@@ -101,10 +101,14 @@ export const demoCostEstimateItemPresets: CostEstimateItemPreset[] = [
 
 
 export const demoCostEstimateAreas: CostEstimateArea[] = [
-  { id: 'estimate-area-living', name: 'Living Room', type: 'living_room' },
+  { id: 'estimate-area-living', name: 'Living Area', type: 'living_room' },
+  { id: 'estimate-area-dining', name: 'Dining Area', type: 'custom' },
+  { id: 'estimate-area-sit-out', name: 'Sit-out Area', type: 'custom' },
+  { id: 'estimate-area-wash', name: 'Wash Area', type: 'custom' },
+  { id: 'estimate-area-common-bathroom', name: 'Common Bathroom', type: 'bathroom' },
+  { id: 'estimate-area-bedroom', name: 'Bedroom', type: 'bedroom' },
+  { id: 'estimate-area-attached-bathroom', name: 'Attached Bathroom', type: 'bathroom' },
   { id: 'estimate-area-kitchen', name: 'Kitchen', type: 'kitchen' },
-  { id: 'estimate-area-bedroom-1', name: 'Bedroom 1', type: 'bedroom' },
-  { id: 'estimate-area-bedroom-2', name: 'Bedroom 2', type: 'bedroom' },
 ];
 
 export const demoCostEstimateLineItems: CostEstimateLineItem[] = [
