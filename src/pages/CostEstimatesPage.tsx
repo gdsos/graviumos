@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, FilePlus2, Plus, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  FilePlus2,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { CostEstimateSection } from '@/features/cost-estimate/components/CostEstimateSection';
-import type { CostEstimateArea } from '@/features/cost-estimate/types';
 import {
   demoCostEstimateAreas,
   demoCostEstimateProjects,
 } from '@/features/cost-estimate/data';
+import type { CostEstimateArea } from '@/features/cost-estimate/types';
 
 type EstimateCardStatus = 'draft' | 'approved' | 'revision';
 
@@ -22,6 +27,7 @@ interface EstimateCardRecord {
   version: number;
   grandTotal: number;
   updatedAt: string;
+  areas: CostEstimateArea[];
 }
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
@@ -46,6 +52,7 @@ const initialEstimateCards: EstimateCardRecord[] = [
     version: 1,
     grandTotal: 0,
     updatedAt: 'Just now',
+    areas: demoCostEstimateAreas,
   },
   {
     id: 'estimate-villa-athani',
@@ -56,6 +63,7 @@ const initialEstimateCards: EstimateCardRecord[] = [
     version: 1,
     grandTotal: 1870215,
     updatedAt: 'Today',
+    areas: demoCostEstimateAreas,
   },
 ];
 
@@ -107,16 +115,18 @@ function createId(prefix: string) {
 }
 
 export default function CostEstimatesPage() {
-  const [records, setRecords] = useState<EstimateCardRecord[]>(initialEstimateCards);
+  const [records, setRecords] =
+    useState<EstimateCardRecord[]>(initialEstimateCards);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<'project' | 'areas'>('project');
-  const [selectedProjectId, setSelectedProjectId] = useState(UNASSIGNED_PROJECT_ID);
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    UNASSIGNED_PROJECT_ID
+  );
   const [projectSearch, setProjectSearch] = useState('Unassigned Draft');
   const [isProjectSuggestionOpen, setIsProjectSuggestionOpen] = useState(false);
-  const [modalAreas, setModalAreas] = useState<CostEstimateArea[]>(
-    demoCostEstimateAreas
-  );
+  const [modalAreas, setModalAreas] =
+    useState<CostEstimateArea[]>(demoCostEstimateAreas);
   const [selectedAreaIds, setSelectedAreaIds] = useState(
     demoCostEstimateAreas.map(area => area.id)
   );
@@ -148,8 +158,7 @@ export default function CostEstimatesPage() {
   );
 
   const selectedAreas = useMemo(
-    () =>
-      modalAreas.filter(area => selectedAreaIds.includes(area.id)),
+    () => modalAreas.filter(area => selectedAreaIds.includes(area.id)),
     [modalAreas, selectedAreaIds]
   );
 
@@ -220,7 +229,7 @@ export default function CostEstimatesPage() {
     });
 
     const numberedBedroomCount = normalizedAreas.filter(area =>
-      /^Bedroom \\d+$/.test(area.name)
+      /^Bedroom \d+$/.test(area.name)
     ).length;
 
     const nextBedroomNumber = numberedBedroomCount + 1;
@@ -247,8 +256,9 @@ export default function CostEstimatesPage() {
 
   const handleAddCommonBathroom = () => {
     const commonBathroomCount =
-      modalAreas.filter(area => area.name.toLowerCase().includes('common bathroom'))
-        .length + 1;
+      modalAreas.filter(area =>
+        area.name.toLowerCase().includes('common bathroom')
+      ).length + 1;
 
     const newArea: CostEstimateArea = {
       id: createId('estimate-common-bathroom'),
@@ -302,11 +312,36 @@ export default function CostEstimatesPage() {
       version: 1,
       grandTotal: 0,
       updatedAt: 'Just now',
+      areas: selectedAreas,
     };
 
     setRecords(current => [nextRecord, ...current]);
     setSelectedRecordId(nextRecord.id);
     setIsCreateModalOpen(false);
+  };
+
+  const handleSaveAndCloseEstimate = (payload: {
+    grandTotal: number;
+    status: EstimateCardStatus;
+    version: number;
+  }) => {
+    if (!selectedRecordId) return;
+
+    setRecords(current =>
+      current.map(record =>
+        record.id === selectedRecordId
+          ? {
+              ...record,
+              grandTotal: payload.grandTotal,
+              status: payload.status,
+              version: payload.version,
+              updatedAt: 'Just now',
+            }
+          : record
+      )
+    );
+
+    setSelectedRecordId(null);
   };
 
   const handleDeleteRecord = (recordId: string) => {
@@ -336,7 +371,7 @@ export default function CostEstimatesPage() {
 
   if (selectedRecord) {
     return (
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+      <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Button
@@ -354,7 +389,9 @@ export default function CostEstimatesPage() {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {getEstimateStatusLabel(selectedRecord)}
-              {selectedRecord.clientName ? ` ? ${selectedRecord.clientName}` : ''}
+              {selectedRecord.clientName
+                ? ` - ${selectedRecord.clientName}`
+                : ''}
             </p>
           </div>
 
@@ -363,7 +400,11 @@ export default function CostEstimatesPage() {
           </StatusBadge>
         </div>
 
-        <CostEstimateSection />
+        <CostEstimateSection
+          initialAreas={selectedRecord.areas}
+          initialProjectId={selectedRecord.projectId}
+          onSaveAndClose={handleSaveAndCloseEstimate}
+        />
       </div>
     );
   }
@@ -459,7 +500,7 @@ export default function CostEstimatesPage() {
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 p-4 backdrop-blur-md">
-          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-visible rounded-3xl border border-border bg-card shadow-2xl">
+          <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-visible rounded-3xl border border-border bg-card shadow-2xl">
             {createStep === 'project' ? (
               <div className="space-y-4 overflow-visible p-4 sm:p-6">
                 <div>
@@ -516,7 +557,7 @@ export default function CostEstimatesPage() {
                             </span>
                             <span className="mt-0.5 block text-xs text-muted-foreground">
                               {project.clientName}
-                              {project.location ? ` ? ${project.location}` : ''}
+                              {project.location ? ` - ${project.location}` : ''}
                             </span>
                           </button>
                         ))}
@@ -532,7 +573,7 @@ export default function CostEstimatesPage() {
                   )}
                 </div>
 
-                <div className="sticky bottom-0 z-20 -mx-4 mt-4 flex justify-end gap-2 bg-card px-4 py-3 sm:-mx-6 sm:px-6">
+                <div className="flex justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -546,8 +587,8 @@ export default function CostEstimatesPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4 overflow-visible p-4 sm:p-6">
-                <div>
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="shrink-0 p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold text-foreground">
                     Select Areas
                   </p>
@@ -557,7 +598,8 @@ export default function CostEstimatesPage() {
                   </p>
                 </div>
 
-                <div className="max-h-[260px] overflow-y-auto rounded-2xl border border-border">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 sm:px-6">
+                  <div className="max-h-[260px] overflow-y-auto rounded-2xl border border-border">
                   {modalAreas.map(area => {
                     const isSelected = selectedAreaIds.includes(area.id);
 
@@ -661,7 +703,9 @@ export default function CostEstimatesPage() {
                   </p>
                 </div>
 
-                <div className="sticky bottom-0 z-20 -mx-4 mt-4 flex flex-col-reverse gap-2 bg-card px-4 py-3 sm:-mx-6 sm:flex-row sm:justify-between sm:px-6">
+                </div>
+
+                <div className="shrink-0 flex flex-col-reverse gap-2 rounded-b-3xl bg-card px-4 py-3 shadow-[0_-12px_24px_rgba(0,0,0,0.35)] sm:flex-row sm:justify-between sm:px-6">
                   <Button
                     type="button"
                     variant="outline"

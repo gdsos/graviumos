@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
   FilePlus2,
   Plus,
   RefreshCcw,
@@ -56,6 +57,16 @@ function createId(prefix: string) {
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
 const ADD_NEW_UNIT_ID = 'add-new-unit';
 
+interface CostEstimateSectionProps {
+  initialAreas?: CostEstimateArea[];
+  initialProjectId?: string;
+  onSaveAndClose?: (payload: {
+    grandTotal: number;
+    status: 'draft' | 'approved' | 'revision';
+    version: number;
+  }) => void;
+}
+
 function getAreaName(areas: CostEstimateArea[], areaId: string) {
   return areas.find(area => area.id === areaId)?.name ?? 'Selected Area';
 }
@@ -87,15 +98,24 @@ function createDefaultDescription({
   return `Design, supply, and installation of ${safeItemName} in ${safeAreaName}, measured as ${quantity || 0} ${unitLabel}, including required materials, fittings, finishing, and site installation.`;
 }
 
-export function CostEstimateSection() {
+export function CostEstimateSection({
+  initialAreas,
+  initialProjectId,
+  onSaveAndClose,
+}: CostEstimateSectionProps) {
   const [status, setStatus] = useState<CostEstimateStatus>('draft');
   const [hasSavedEstimate, setHasSavedEstimate] = useState(false);
   const [isEditingEstimate, setIsEditingEstimate] = useState(true);
   const [estimateVersion, setEstimateVersion] = useState(1);
   const [isRevisionDraft, setIsRevisionDraft] = useState(false);
   const [supersededVersions, setSupersededVersions] = useState<number[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState(UNASSIGNED_PROJECT_ID);
-  const [areas, setAreas] = useState<CostEstimateArea[]>(demoCostEstimateAreas);
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    initialProjectId ?? UNASSIGNED_PROJECT_ID
+  );
+  const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
+  const [areas, setAreas] = useState<CostEstimateArea[]>(
+    initialAreas && initialAreas.length > 0 ? initialAreas : demoCostEstimateAreas
+  );
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     demoCostEstimateLineItems
   );
@@ -215,6 +235,19 @@ export function CostEstimateSection() {
     setHasSavedEstimate(true);
     setIsEditingEstimate(true);
     setStatus('draft');
+  };
+
+  const handleSaveAndClose = () => {
+    const nextStatus = isRevisionDraft ? 'revision' : status;
+
+    setHasSavedEstimate(true);
+    setIsEditingEstimate(true);
+
+    onSaveAndClose?.({
+      grandTotal: summary.estimatedGrossRevenue,
+      status: nextStatus,
+      version: estimateVersion,
+    });
   };
 
   const handleDeleteDraft = () => {
@@ -495,16 +528,53 @@ export function CostEstimateSection() {
             </Button>
           ) : (
             <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={hasSavedEstimate}
-                className="gap-2"
+              <div
+                className="relative inline-flex h-10 items-stretch"
+                onBlur={event => {
+                  const nextFocusTarget = event.relatedTarget as Node | null;
+
+                  if (!event.currentTarget.contains(nextFocusTarget)) {
+                    setIsSaveMenuOpen(false);
+                  }
+                }}
               >
-                <Save className="h-4 w-4" />
-                {saveButtonLabel}
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSaveDraft}
+                  disabled={hasSavedEstimate}
+                  className="h-10 rounded-r-none border-r-0 gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {saveButtonLabel}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsSaveMenuOpen(current => !current)}
+                  className="h-10 rounded-l-none rounded-r-lg border-l-0 px-3"
+                  aria-label="Open save options"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+
+                {isSaveMenuOpen && (
+                  <div className="absolute right-0 top-11 z-[100] w-max overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                    <button
+                      type="button"
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => {
+                        setIsSaveMenuOpen(false);
+                        handleSaveAndClose();
+                      }}
+                      className="whitespace-nowrap px-3 py-2 text-left text-sm transition hover:bg-muted"
+                    >
+                      Save and Close
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <Button
                 type="button"
