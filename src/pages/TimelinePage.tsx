@@ -27,7 +27,6 @@ import { NextActionsPanel } from '@/features/timeline/components/NextActionsPane
 import { PaymentGateBar } from '@/features/timeline/components/PaymentGateBar';
 import { TimelineSummaryCards } from '@/features/timeline/components/TimelineSummaryCards';
 import { TimelineWorkPackages } from '@/features/timeline/components/TimelineWorkPackages';
-import { CostEstimateSection } from '@/features/cost-estimate/components/CostEstimateSection';
 
 import type {
   PaymentGate,
@@ -498,12 +497,6 @@ export default function TimelinePage() {
           ) : null
         }
       />
-
-      {!showCreateWizard && (
-        <div className="mb-6">
-          <CostEstimateSection />
-        </div>
-      )}
 
       {showCreateWizard && (
         <div className="mb-6">

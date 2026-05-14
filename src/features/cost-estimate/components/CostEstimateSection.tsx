@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
@@ -113,6 +113,7 @@ export function CostEstimateSection({
     initialProjectId ?? UNASSIGNED_PROJECT_ID
   );
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
+  const saveMenuRef = useRef<HTMLDivElement | null>(null);
   const [areas, setAreas] = useState<CostEstimateArea[]>(
     initialAreas && initialAreas.length > 0 ? initialAreas : demoCostEstimateAreas
   );
@@ -224,6 +225,24 @@ export function CostEstimateSection({
   const matchingItemPresets = itemPresets.filter(preset =>
     preset.name.toLowerCase().includes(newLineItemName.trim().toLowerCase())
   );
+
+  useEffect(() => {
+    if (!isSaveMenuOpen) return;
+
+    const handleDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+
+      if (target && saveMenuRef.current?.contains(target)) return;
+
+      setIsSaveMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+    };
+  }, [isSaveMenuOpen]);
 
   const markEstimateDirty = () => {
     setStatus('draft');
@@ -529,21 +548,14 @@ export function CostEstimateSection({
           ) : (
             <>
               <div
+                ref={saveMenuRef}
                 className="relative inline-flex h-10 items-stretch"
-                onBlur={event => {
-                  const nextFocusTarget = event.relatedTarget as Node | null;
-
-                  if (!event.currentTarget.contains(nextFocusTarget)) {
-                    setIsSaveMenuOpen(false);
-                  }
-                }}
               >
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleSaveDraft}
-                  disabled={hasSavedEstimate}
-                  className="h-10 rounded-r-none border-r-0 gap-2"
+                  className="h-10 rounded-r-none border-r-0 bg-background text-foreground hover:bg-muted gap-2"
                 >
                   <Save className="h-4 w-4" />
                   {saveButtonLabel}
@@ -553,7 +565,7 @@ export function CostEstimateSection({
                   type="button"
                   variant="outline"
                   onClick={() => setIsSaveMenuOpen(current => !current)}
-                  className="h-10 rounded-l-none rounded-r-lg border-l-0 px-3"
+                  className="h-10 rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
                   aria-label="Open save options"
                 >
                   <ChevronDown className="h-4 w-4" />

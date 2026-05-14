@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   FilePlus2,
@@ -114,9 +114,41 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}`;
 }
 
+const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates-demo';
+
+function getStoredEstimateCards() {
+  if (typeof window === 'undefined') return initialEstimateCards;
+
+  try {
+    const storedRecords = localStorage.getItem(COST_ESTIMATE_STORAGE_KEY);
+
+    if (!storedRecords) return initialEstimateCards;
+
+    const parsedRecords = JSON.parse(storedRecords);
+
+    if (!Array.isArray(parsedRecords)) return initialEstimateCards;
+
+    return parsedRecords.filter(record => {
+      return (
+        record &&
+        typeof record.id === 'string' &&
+        typeof record.projectName === 'string' &&
+        ['draft', 'approved', 'revision'].includes(record.status) &&
+        typeof record.version === 'number' &&
+        typeof record.grandTotal === 'number' &&
+        typeof record.updatedAt === 'string' &&
+        Array.isArray(record.areas)
+      );
+    }) as EstimateCardRecord[];
+  } catch {
+    return initialEstimateCards;
+  }
+}
+
 export default function CostEstimatesPage() {
-  const [records, setRecords] =
-    useState<EstimateCardRecord[]>(initialEstimateCards);
+  const [records, setRecords] = useState<EstimateCardRecord[]>(() =>
+    getStoredEstimateCards()
+  );
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<'project' | 'areas'>('project');
@@ -131,6 +163,12 @@ export default function CostEstimatesPage() {
     demoCostEstimateAreas.map(area => area.id)
   );
   const [newAreaName, setNewAreaName] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    localStorage.setItem(COST_ESTIMATE_STORAGE_KEY, JSON.stringify(records));
+  }, [records]);
 
   const selectedRecord = records.find(record => record.id === selectedRecordId);
   const usedProjectIds = new Set(
