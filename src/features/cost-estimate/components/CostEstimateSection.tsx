@@ -76,6 +76,8 @@ interface CostEstimateSectionProps {
   initialServiceChargePercent?: number;
   initialMiscChargePercent?: number;
   initialTargetProjectRevenue?: number;
+  isHistoricalView?: boolean;
+  onViewApprovedVersion?: () => void;
   onSaveDraft?: (payload: CostEstimateSavePayload) => void;
   onApproveEstimate?: (payload: CostEstimateSavePayload) => void;
   onCreateRevision?: (payload: CostEstimateSavePayload) => void;
@@ -123,6 +125,8 @@ export function CostEstimateSection({
   initialServiceChargePercent,
   initialMiscChargePercent,
   initialTargetProjectRevenue,
+  isHistoricalView,
+  onViewApprovedVersion,
   onSaveDraft,
   onApproveEstimate,
   onCreateRevision,
@@ -611,17 +615,31 @@ export function CostEstimateSection({
       actions={
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {status === 'approved' ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCreateRevision}
-              className="gap-2"
-            >
-              <FilePlus2 className="h-4 w-4" />
-              Create Revision
-            </Button>
+            isHistoricalView ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCreateRevision}
+                className="gap-2"
+              >
+                <FilePlus2 className="h-4 w-4" />
+                Create Revision
+              </Button>
+            )
           ) : (
             <div className="flex flex-wrap items-center gap-2">
+              {isRevisionDraft && onViewApprovedVersion && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onViewApprovedVersion}
+                  className="h-10 gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  View Approved
+                </Button>
+              )}
+
               <div
                 ref={saveMenuRef}
                 className="relative inline-flex h-10 min-w-0 items-stretch"

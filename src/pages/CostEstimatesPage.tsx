@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  CheckCircle2,
   FilePlus2,
   Plus,
   Trash2,
@@ -69,6 +70,33 @@ const customAreaSuggestions = [
   'Store Room',
 ];
 
+function nowTimestamp() {
+  return new Date().toISOString();
+}
+
+function formatUpdatedAt(value: string) {
+  const updatedAt = new Date(value);
+
+  if (Number.isNaN(updatedAt.getTime())) return value;
+
+  const diffMs = Date.now() - updatedAt.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  return updatedAt.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 const initialEstimateCards: EstimateCardRecord[] = [
   {
     id: 'estimate-unassigned-draft',
@@ -76,7 +104,7 @@ const initialEstimateCards: EstimateCardRecord[] = [
     status: 'draft',
     version: 1,
     grandTotal: 0,
-    updatedAt: 'Just now',
+    updatedAt: nowTimestamp(),
     areas: demoCostEstimateAreas,
     lineItems: [],
     serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
@@ -91,7 +119,7 @@ const initialEstimateCards: EstimateCardRecord[] = [
     status: 'approved',
     version: 1,
     grandTotal: 1870215,
-    updatedAt: 'Today',
+    updatedAt: nowTimestamp(),
     areas: demoCostEstimateAreas,
     lineItems: demoCostEstimateLineItems,
     serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
@@ -187,6 +215,9 @@ export default function CostEstimatesPage() {
     getStoredEstimateCards()
   );
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [isViewingApprovedSnapshot, setIsViewingApprovedSnapshot] = useState(false);
+  const [approvedSnapshotReturnTarget, setApprovedSnapshotReturnTarget] =
+    useState<'list' | 'revision'>('revision');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<'project' | 'areas'>('project');
   const [selectedProjectId, setSelectedProjectId] = useState(
@@ -208,6 +239,26 @@ export default function CostEstimatesPage() {
   }, [records]);
 
   const selectedRecord = records.find(record => record.id === selectedRecordId);
+  const selectedApprovedSnapshot =
+    selectedRecord?.status === 'revision' && selectedRecord.approvedSnapshot
+      ? {
+          ...selectedRecord,
+          grandTotal: selectedRecord.approvedSnapshot.grandTotal,
+          status: 'approved' as const,
+          version: selectedRecord.approvedSnapshot.version,
+          areas: selectedRecord.approvedSnapshot.areas,
+          lineItems: selectedRecord.approvedSnapshot.lineItems,
+          serviceChargePercent:
+            selectedRecord.approvedSnapshot.serviceChargePercent,
+          miscChargePercent: selectedRecord.approvedSnapshot.miscChargePercent,
+          targetProjectRevenue:
+            selectedRecord.approvedSnapshot.targetProjectRevenue,
+        }
+      : undefined;
+  const activeSelectedRecord =
+    isViewingApprovedSnapshot && selectedApprovedSnapshot
+      ? selectedApprovedSnapshot
+      : selectedRecord;
   const usedProjectIds = new Set(
     records
       .map(record => record.projectId)
@@ -386,7 +437,7 @@ export default function CostEstimatesPage() {
       status: 'draft',
       version: 1,
       grandTotal: 0,
-      updatedAt: 'Just now',
+      updatedAt: nowTimestamp(),
       areas: selectedAreas,
       lineItems: [],
       serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
@@ -396,6 +447,7 @@ export default function CostEstimatesPage() {
 
     setRecords(current => [nextRecord, ...current]);
     setSelectedRecordId(nextRecord.id);
+    setIsViewingApprovedSnapshot(false);
     setIsCreateModalOpen(false);
   };
 
@@ -410,7 +462,7 @@ export default function CostEstimatesPage() {
               grandTotal: payload.grandTotal,
               status: payload.status,
               version: payload.version,
-              updatedAt: 'Just now',
+              updatedAt: nowTimestamp(),
               areas: payload.areas,
               lineItems: payload.lineItems,
               serviceChargePercent: payload.serviceChargePercent,
@@ -433,7 +485,7 @@ export default function CostEstimatesPage() {
               grandTotal: payload.grandTotal,
               status: 'approved',
               version: payload.version,
-              updatedAt: 'Just now',
+              updatedAt: nowTimestamp(),
               areas: payload.areas,
               lineItems: payload.lineItems,
               serviceChargePercent: payload.serviceChargePercent,
@@ -468,7 +520,7 @@ export default function CostEstimatesPage() {
               grandTotal: payload.grandTotal,
               status: 'revision',
               version: payload.version,
-              updatedAt: 'Just now',
+              updatedAt: nowTimestamp(),
               areas: payload.areas,
               lineItems: payload.lineItems,
               serviceChargePercent: payload.serviceChargePercent,
@@ -494,6 +546,7 @@ export default function CostEstimatesPage() {
     setRecords(current => current.filter(record => record.id !== recordId));
 
     if (selectedRecordId === recordId) {
+      setIsViewingApprovedSnapshot(false);
       setSelectedRecordId(null);
     }
   };
@@ -514,7 +567,7 @@ export default function CostEstimatesPage() {
                 grandTotal: snapshot.grandTotal,
                 status: 'approved',
                 version: snapshot.version,
-                updatedAt: 'Just now',
+                updatedAt: nowTimestamp(),
                 areas: snapshot.areas,
                 lineItems: snapshot.lineItems,
                 serviceChargePercent: snapshot.serviceChargePercent,
@@ -525,28 +578,48 @@ export default function CostEstimatesPage() {
             : record
         )
       );
+      setIsViewingApprovedSnapshot(false);
       setSelectedRecordId(null);
       return;
     }
 
     setRecords(current => current.filter(record => record.id !== selectedRecordId));
+    setIsViewingApprovedSnapshot(false);
     setSelectedRecordId(null);
   };
 
   const handleCreateRevision = (record: EstimateCardRecord) => {
-    const revisionRecord: EstimateCardRecord = {
-      ...record,
-      id: createId('estimate-revision'),
-      status: 'revision',
-      version: record.version + 1,
-      updatedAt: 'Just now',
+    const approvedSnapshot: EstimateEditorPayload = {
+      grandTotal: record.grandTotal,
+      status: 'approved',
+      version: record.version,
+      areas: record.areas,
+      lineItems: record.lineItems,
+      serviceChargePercent: record.serviceChargePercent,
+      miscChargePercent: record.miscChargePercent,
+      targetProjectRevenue: record.targetProjectRevenue,
+      approvedSnapshot: undefined,
     };
 
-    setRecords(current => [revisionRecord, ...current]);
-    setSelectedRecordId(revisionRecord.id);
+    setRecords(current =>
+      current.map(currentRecord =>
+        currentRecord.id === record.id
+          ? {
+              ...currentRecord,
+              status: 'revision',
+              version: record.version + 1,
+              updatedAt: nowTimestamp(),
+              approvedSnapshot,
+            }
+          : currentRecord
+      )
+    );
+
+    setIsViewingApprovedSnapshot(false);
+    setSelectedRecordId(record.id);
   };
 
-  if (selectedRecord) {
+  if (activeSelectedRecord) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -554,7 +627,10 @@ export default function CostEstimatesPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setSelectedRecordId(null)}
+              onClick={() => {
+                setIsViewingApprovedSnapshot(false);
+                setSelectedRecordId(null);
+              }}
               className="mb-3 gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -562,26 +638,52 @@ export default function CostEstimatesPage() {
             </Button>
 
             <h1 className="text-2xl font-semibold text-foreground">
-              {selectedRecord.projectName}
+              {activeSelectedRecord.projectName}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {getEstimateStatusLabel(selectedRecord)}
-              {selectedRecord.clientName
-                ? ` - ${selectedRecord.clientName}`
+              {isViewingApprovedSnapshot
+                ? `Viewing Approved - v${activeSelectedRecord.version}`
+                : getEstimateStatusLabel(activeSelectedRecord)}
+              {activeSelectedRecord.clientName
+                ? ` - ${activeSelectedRecord.clientName}`
                 : ''}
             </p>
           </div>
         </div>
 
+        {isViewingApprovedSnapshot &&
+          selectedRecord?.status === 'revision' &&
+          approvedSnapshotReturnTarget === 'revision' && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsViewingApprovedSnapshot(false)}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Revision
+            </Button>
+          )}
+
         <CostEstimateSection
-          initialAreas={selectedRecord.areas}
-          initialLineItems={selectedRecord.lineItems}
-          initialProjectId={selectedRecord.projectId}
-          initialStatus={selectedRecord.status}
-          initialVersion={selectedRecord.version}
-          initialServiceChargePercent={selectedRecord.serviceChargePercent}
-          initialMiscChargePercent={selectedRecord.miscChargePercent}
-          initialTargetProjectRevenue={selectedRecord.targetProjectRevenue}
+          key={`${activeSelectedRecord.id}-${activeSelectedRecord.status}-${activeSelectedRecord.version}-${isViewingApprovedSnapshot ? 'approved-snapshot' : 'active'}`}
+          initialAreas={activeSelectedRecord.areas}
+          initialLineItems={activeSelectedRecord.lineItems}
+          initialProjectId={activeSelectedRecord.projectId}
+          initialStatus={activeSelectedRecord.status}
+          initialVersion={activeSelectedRecord.version}
+          initialServiceChargePercent={activeSelectedRecord.serviceChargePercent}
+          initialMiscChargePercent={activeSelectedRecord.miscChargePercent}
+          initialTargetProjectRevenue={activeSelectedRecord.targetProjectRevenue}
+          isHistoricalView={isViewingApprovedSnapshot}
+          onViewApprovedVersion={
+            selectedRecord?.status === 'revision' && selectedRecord.approvedSnapshot
+              ? () => {
+                  setApprovedSnapshotReturnTarget('revision');
+                  setIsViewingApprovedSnapshot(true);
+                }
+              : undefined
+          }
           onSaveDraft={handleSaveEstimate}
           onApproveEstimate={handleApproveEstimate}
           onCreateRevision={handleCreateRevisionFromEditor}
@@ -606,7 +708,7 @@ export default function CostEstimatesPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         {records.map(record => (
             <div
               key={record.id}
@@ -642,20 +744,27 @@ export default function CostEstimatesPage() {
                     Updated
                   </p>
                   <p className="mt-1 font-semibold text-foreground">
-                    {record.updatedAt}
+                    {formatUpdatedAt(record.updatedAt)}
                   </p>
                 </div>
               </div>
 
               <div
                 className={`mt-4 grid grid-cols-1 gap-2 ${
-                  record.status === 'approved' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+                  record.status === 'approved' ||
+                  (record.status === 'revision' && record.approvedSnapshot)
+                    ? 'sm:grid-cols-[repeat(3,minmax(0,1fr))]'
+                    : 'sm:grid-cols-[repeat(2,minmax(0,1fr))]'
                 }`}
               >
                 <Button
                   type="button"
-                  onClick={() => setSelectedRecordId(record.id)}
-                  className="h-10 w-full justify-center px-4"
+                  onClick={() => {
+                    setIsViewingApprovedSnapshot(false);
+                    setApprovedSnapshotReturnTarget('revision');
+                    setSelectedRecordId(record.id);
+                  }}
+                  className="h-10 min-w-0 w-full justify-center overflow-hidden px-2 text-sm sm:px-3"
                 >
                   {record.status === 'revision' ? 'Open Revision' : 'Open Estimate'}
                 </Button>
@@ -665,10 +774,26 @@ export default function CostEstimatesPage() {
                     type="button"
                     variant="outline"
                     onClick={() => handleCreateRevision(record)}
-                    className="h-10 w-full justify-center gap-2 px-4"
+                    className="h-10 min-w-0 w-full justify-center gap-1.5 overflow-hidden px-2 text-sm sm:gap-2 sm:px-3"
                   >
-                    <FilePlus2 className="h-4 w-4" />
-                    Revision
+                    <FilePlus2 className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap">Revision</span>
+                  </Button>
+                )}
+
+                {record.status === 'revision' && record.approvedSnapshot && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedRecordId(record.id);
+                      setApprovedSnapshotReturnTarget('list');
+                      setIsViewingApprovedSnapshot(true);
+                    }}
+                    className="h-10 min-w-0 w-full justify-center gap-1.5 overflow-hidden px-2 text-sm sm:gap-2 sm:px-3"
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap">View Approved</span>
                   </Button>
                 )}
 
@@ -678,8 +803,8 @@ export default function CostEstimatesPage() {
                   onClick={() => handleDeleteRecord(record.id)}
                   className="h-10 w-full justify-center gap-2 px-4 text-destructive hover:text-destructive"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
+                  <Trash2 className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">Delete</span>
                 </Button>
               </div>
             </div>
