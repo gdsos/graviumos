@@ -28,38 +28,79 @@ interface NavItem {
   msOnly?: boolean;
 }
 
+interface NavGroup {
+  label?: string;
+  items: NavItem[];
+}
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   isAdmin: boolean;
 }
 
-const adminNavItems: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
-  { label: "Leads", icon: BarChart3, path: "/admin/leads" },
-  { label: "Projects", icon: Folder, path: "/admin/projects" },
-  { label: "Vendors", icon: Store, path: "/admin/vendors" },
-  { label: "Cost Estimates", icon: ClipboardList, path: "/admin/cost-estimates" },
-  { label: "Timeline", icon: CalendarClock, path: "/admin/timeline" },
-  { label: "Tasks", icon: CheckSquare, path: "/admin/tasks" },
-  { label: "People", icon: Users, path: "/admin/people" },
-  { label: "Financials", icon: DollarSign, path: "/admin/financials" },
-  { label: "Payroll", icon: ReceiptIndianRupee, path: "/admin/payroll" },
-  { label: "Reports", icon: FileText, path: "/admin/reports" },
-  { label: "Announcements", icon: Megaphone, path: "/admin/announcements" },
+const adminNavGroups: NavGroup[] = [
+  {
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
+      { label: "Leads", icon: BarChart3, path: "/admin/leads" },
+      { label: "Projects", icon: Folder, path: "/admin/projects" },
+    ],
+  },
+  {
+    label: "Procurement",
+    items: [
+      { label: "Vendors", icon: Store, path: "/admin/vendors" },
+      { label: "Cost Estimates", icon: ClipboardList, path: "/admin/cost-estimates" },
+    ],
+  },
+  {
+    label: "Execution",
+    items: [
+      { label: "Timeline", icon: CalendarClock, path: "/admin/timeline" },
+    ],
+  },
+  {
+    items: [
+      { label: "Tasks", icon: CheckSquare, path: "/admin/tasks" },
+      { label: "People", icon: Users, path: "/admin/people" },
+      { label: "Financials", icon: DollarSign, path: "/admin/financials" },
+      { label: "Payroll", icon: ReceiptIndianRupee, path: "/admin/payroll" },
+      { label: "Reports", icon: FileText, path: "/admin/reports" },
+      { label: "Announcements", icon: Megaphone, path: "/admin/announcements" },
+    ],
+  },
 ];
 
-const employeeNavItems: NavItem[] = [
-  { label: "Overview", icon: LayoutDashboard, path: "/portal/overview" },
-  { label: "My Tasks", icon: CheckSquare, path: "/portal/tasks" },
-  { label: "Projects", icon: Folder, path: "/portal/projects" },
-  { label: "Vendors", icon: Store, path: "/portal/vendors" },
-  { label: "Cost Estimates", icon: ClipboardList, path: "/portal/cost-estimates" },
-  { label: "Timeline", icon: CalendarClock, path: "/portal/timeline" },
-  { label: "Leads", icon: BarChart3, path: "/portal/leads", msOnly: true },
-  { label: "Financials", icon: DollarSign, path: "/portal/financials", financeOnly: true },
-  { label: "Payroll", icon: ReceiptIndianRupee, path: "/portal/payroll", financeOnly: true },
-  { label: "Whiteboard", icon: FileText, path: "/portal/whiteboard" },
+const employeeNavGroups: NavGroup[] = [
+  {
+    items: [
+      { label: "Overview", icon: LayoutDashboard, path: "/portal/overview" },
+      { label: "My Tasks", icon: CheckSquare, path: "/portal/tasks" },
+      { label: "Projects", icon: Folder, path: "/portal/projects" },
+    ],
+  },
+  {
+    label: "Procurement",
+    items: [
+      { label: "Vendors", icon: Store, path: "/portal/vendors" },
+      { label: "Cost Estimates", icon: ClipboardList, path: "/portal/cost-estimates" },
+    ],
+  },
+  {
+    label: "Execution",
+    items: [
+      { label: "Timeline", icon: CalendarClock, path: "/portal/timeline" },
+    ],
+  },
+  {
+    items: [
+      { label: "Leads", icon: BarChart3, path: "/portal/leads", msOnly: true },
+      { label: "Financials", icon: DollarSign, path: "/portal/financials", financeOnly: true },
+      { label: "Payroll", icon: ReceiptIndianRupee, path: "/portal/payroll", financeOnly: true },
+      { label: "Whiteboard", icon: FileText, path: "/portal/whiteboard" },
+    ],
+  },
 ];
 
 export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) {
@@ -75,13 +116,18 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
 
-  const navItems = isAdmin
-    ? adminNavItems
-    : employeeNavItems.filter((item) => {
-        if (item.financeOnly && !isFinance()) return false;
-        if (item.msOnly && !isMS()) return false;
-        return true;
-      });
+  const navGroups = (isAdmin ? adminNavGroups : employeeNavGroups)
+    .map((group) => ({
+      ...group,
+      items: isAdmin
+        ? group.items
+        : group.items.filter((item) => {
+            if (item.financeOnly && !isFinance()) return false;
+            if (item.msOnly && !isMS()) return false;
+            return true;
+          }),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <>
@@ -123,34 +169,46 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-2 space-y-1">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
+        <nav className="flex-1 overflow-y-auto p-2">
+          <div className="space-y-3">
+            {navGroups.map((group, groupIndex) => (
+              <div key={group.label ?? `group-${groupIndex}`} className="space-y-1">
+                {group.label && (!collapsed || isMobile) && (
+                  <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.label}
+                  </p>
+                )}
 
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => {
-                  if (isMobile && !collapsed) {
-                    onToggle();
-                  }
-                }}
-               >
-                <Button
-                  variant={isActive ? "secondary" : "ghost"}
-                  className={`w-full ${collapsed && !isMobile
-                    ? "justify-center px-0"
-                    : "justify-start gap-2 px-3"
-                    }`}
-                >
-                  <Icon size={16} />
-                  {(!collapsed || isMobile) && item.label}
-                </Button>
-              </Link>
-            );
-          })}
+                {group.items.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => {
+                        if (isMobile && !collapsed) {
+                          onToggle();
+                        }
+                      }}
+                    >
+                      <Button
+                        variant={isActive ? "secondary" : "ghost"}
+                        className={`w-full ${collapsed && !isMobile
+                          ? "justify-center px-0"
+                          : "justify-start gap-2 px-3"
+                          }`}
+                      >
+                        <Icon size={16} />
+                        {(!collapsed || isMobile) && item.label}
+                      </Button>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </nav>
 
         {/* Footer */}
