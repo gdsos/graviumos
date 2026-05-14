@@ -40,6 +40,19 @@ interface EstimateCardRecord {
   serviceChargePercent: number;
   miscChargePercent: number;
   targetProjectRevenue: number;
+  approvedSnapshot?: EstimateEditorPayload;
+}
+
+interface EstimateEditorPayload {
+  grandTotal: number;
+  status: EstimateCardStatus;
+  version: number;
+  areas: CostEstimateArea[];
+  lineItems: CostEstimateLineItem[];
+  serviceChargePercent: number;
+  miscChargePercent: number;
+  targetProjectRevenue: number;
+  approvedSnapshot?: EstimateEditorPayload;
 }
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
@@ -386,16 +399,7 @@ export default function CostEstimatesPage() {
     setIsCreateModalOpen(false);
   };
 
-  const handleSaveEstimate = (payload: {
-    grandTotal: number;
-    status: EstimateCardStatus;
-    version: number;
-    areas: CostEstimateArea[];
-    lineItems: CostEstimateLineItem[];
-    serviceChargePercent: number;
-    miscChargePercent: number;
-    targetProjectRevenue: number;
-  }) => {
+  const handleSaveEstimate = (payload: EstimateEditorPayload) => {
     if (!selectedRecordId) return;
 
     setRecords(current =>
@@ -418,16 +422,66 @@ export default function CostEstimatesPage() {
     );
   };
 
-  const handleSaveAndCloseEstimate = (payload: {
-    grandTotal: number;
-    status: EstimateCardStatus;
-    version: number;
-    areas: CostEstimateArea[];
-    lineItems: CostEstimateLineItem[];
-    serviceChargePercent: number;
-    miscChargePercent: number;
-    targetProjectRevenue: number;
-  }) => {
+  const handleApproveEstimate = (payload: EstimateEditorPayload) => {
+    if (!selectedRecordId) return;
+
+    setRecords(current =>
+      current.map(record =>
+        record.id === selectedRecordId
+          ? {
+              ...record,
+              grandTotal: payload.grandTotal,
+              status: 'approved',
+              version: payload.version,
+              updatedAt: 'Just now',
+              areas: payload.areas,
+              lineItems: payload.lineItems,
+              serviceChargePercent: payload.serviceChargePercent,
+              miscChargePercent: payload.miscChargePercent,
+              targetProjectRevenue: payload.targetProjectRevenue,
+              approvedSnapshot: undefined,
+            }
+          : record
+      )
+    );
+  };
+
+  const handleCreateRevisionFromEditor = (payload: EstimateEditorPayload) => {
+    if (!selectedRecordId || !selectedRecord) return;
+
+    const approvedSnapshot: EstimateEditorPayload = {
+      grandTotal: selectedRecord.grandTotal,
+      status: 'approved',
+      version: selectedRecord.version,
+      areas: selectedRecord.areas,
+      lineItems: selectedRecord.lineItems,
+      serviceChargePercent: selectedRecord.serviceChargePercent,
+      miscChargePercent: selectedRecord.miscChargePercent,
+      targetProjectRevenue: selectedRecord.targetProjectRevenue,
+    };
+
+    setRecords(current =>
+      current.map(record =>
+        record.id === selectedRecordId
+          ? {
+              ...record,
+              grandTotal: payload.grandTotal,
+              status: 'revision',
+              version: payload.version,
+              updatedAt: 'Just now',
+              areas: payload.areas,
+              lineItems: payload.lineItems,
+              serviceChargePercent: payload.serviceChargePercent,
+              miscChargePercent: payload.miscChargePercent,
+              targetProjectRevenue: payload.targetProjectRevenue,
+              approvedSnapshot,
+            }
+          : record
+      )
+    );
+  };
+
+  const handleSaveAndCloseEstimate = (payload: EstimateEditorPayload) => {
     handleSaveEstimate(payload);
     setSelectedRecordId(null);
   };
@@ -442,6 +496,41 @@ export default function CostEstimatesPage() {
     if (selectedRecordId === recordId) {
       setSelectedRecordId(null);
     }
+  };
+
+  const handleDeleteSelectedEstimate = () => {
+    if (!selectedRecordId) return;
+
+    const currentRecord = records.find(record => record.id === selectedRecordId);
+
+    if (currentRecord?.status === 'revision' && currentRecord.approvedSnapshot) {
+      const snapshot = currentRecord.approvedSnapshot;
+
+      setRecords(current =>
+        current.map(record =>
+          record.id === selectedRecordId
+            ? {
+                ...record,
+                grandTotal: snapshot.grandTotal,
+                status: 'approved',
+                version: snapshot.version,
+                updatedAt: 'Just now',
+                areas: snapshot.areas,
+                lineItems: snapshot.lineItems,
+                serviceChargePercent: snapshot.serviceChargePercent,
+                miscChargePercent: snapshot.miscChargePercent,
+                targetProjectRevenue: snapshot.targetProjectRevenue,
+                approvedSnapshot: undefined,
+              }
+            : record
+        )
+      );
+      setSelectedRecordId(null);
+      return;
+    }
+
+    setRecords(current => current.filter(record => record.id !== selectedRecordId));
+    setSelectedRecordId(null);
   };
 
   const handleCreateRevision = (record: EstimateCardRecord) => {
@@ -494,6 +583,9 @@ export default function CostEstimatesPage() {
           initialMiscChargePercent={selectedRecord.miscChargePercent}
           initialTargetProjectRevenue={selectedRecord.targetProjectRevenue}
           onSaveDraft={handleSaveEstimate}
+          onApproveEstimate={handleApproveEstimate}
+          onCreateRevision={handleCreateRevisionFromEditor}
+          onDeleteDraft={handleDeleteSelectedEstimate}
           onSaveAndClose={handleSaveAndCloseEstimate}
         />
       </div>

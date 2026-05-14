@@ -25,7 +25,6 @@ import {
   defaultCostEstimateUnits,
   demoCostEstimateAreas,
   demoCostEstimateItemPresets,
-  demoCostEstimateLineItems,
   demoCostEstimateProjects,
 } from '../data';
 
@@ -78,6 +77,9 @@ interface CostEstimateSectionProps {
   initialMiscChargePercent?: number;
   initialTargetProjectRevenue?: number;
   onSaveDraft?: (payload: CostEstimateSavePayload) => void;
+  onApproveEstimate?: (payload: CostEstimateSavePayload) => void;
+  onCreateRevision?: (payload: CostEstimateSavePayload) => void;
+  onDeleteDraft?: () => void;
   onSaveAndClose?: (payload: CostEstimateSavePayload) => void;
 }
 
@@ -122,6 +124,9 @@ export function CostEstimateSection({
   initialMiscChargePercent,
   initialTargetProjectRevenue,
   onSaveDraft,
+  onApproveEstimate,
+  onCreateRevision,
+  onDeleteDraft,
   onSaveAndClose,
 }: CostEstimateSectionProps) {
   const initialAreaList =
@@ -130,8 +135,12 @@ export function CostEstimateSection({
   const [status, setStatus] = useState<CostEstimateStatus>(
     initialStatus === 'approved' ? 'approved' : 'draft'
   );
-  const [hasSavedEstimate, setHasSavedEstimate] = useState(false);
-  const [isEditingEstimate, setIsEditingEstimate] = useState(true);
+  const [hasSavedEstimate, setHasSavedEstimate] = useState(
+    initialStatus === 'approved' || initialStatus === 'revision'
+  );
+  const [isEditingEstimate, setIsEditingEstimate] = useState(
+    initialStatus !== 'approved'
+  );
   const [estimateVersion, setEstimateVersion] = useState(initialVersion ?? 1);
   const [isRevisionDraft, setIsRevisionDraft] = useState(
     initialStatus === 'revision'
@@ -290,11 +299,12 @@ export function CostEstimateSection({
   };
 
   const createSavePayload = (
-    nextStatus: 'draft' | 'approved' | 'revision'
+    nextStatus: 'draft' | 'approved' | 'revision',
+    nextVersion = estimateVersion
   ): CostEstimateSavePayload => ({
     grandTotal: summary.estimatedGrossRevenue,
     status: nextStatus,
-    version: estimateVersion,
+    version: nextVersion,
     areas,
     lineItems,
     serviceChargePercent: numericServiceChargePercent,
@@ -323,10 +333,17 @@ export function CostEstimateSection({
 
   const handleDeleteDraft = () => {
     const confirmed = window.confirm(
-      'Delete this draft estimate? This will reset the current estimate data.'
+      isRevisionDraft
+        ? 'Delete this revision draft? This will remove the revision estimate.'
+        : 'Delete this draft estimate? This will remove the estimate.'
     );
 
     if (!confirmed) return;
+
+    if (onDeleteDraft) {
+      onDeleteDraft();
+      return;
+    }
 
     setStatus('draft');
     setHasSavedEstimate(false);
@@ -335,14 +352,14 @@ export function CostEstimateSection({
     setIsRevisionDraft(false);
     setSupersededVersions([]);
     setSelectedProjectId(UNASSIGNED_PROJECT_ID);
-    setAreas(demoCostEstimateAreas);
-    setLineItems(demoCostEstimateLineItems);
+    setAreas(initialAreaList);
+    setLineItems([]);
     setServiceChargePercent(DEFAULT_SERVICE_CHARGE_PERCENT);
     setMiscChargePercent(DEFAULT_MISC_CHARGE_PERCENT);
     setTargetProjectRevenue(950000);
     setNewAreaName('');
-    setNewLineItemAreaId(demoCostEstimateAreas[0]?.id ?? '');
-    setActiveLineItemAreaId(demoCostEstimateAreas[0]?.id ?? '');
+    setNewLineItemAreaId(initialPrimaryAreaId);
+    setActiveLineItemAreaId(initialPrimaryAreaId);
     setNewLineItemName('');
     setNewLineItemDescription('');
     setNewLineItemQuantity('1');
@@ -353,16 +370,20 @@ export function CostEstimateSection({
 
   const handleCreateRevision = () => {
     const confirmed = window.confirm(
-      'Create a new draft revision from this approved estimate? The current approved estimate will remain active until this revision is approved.'
+      'Create a revision draft from this approved estimate? The current approved version will stay locked until the revision is approved.'
     );
 
     if (!confirmed) return;
+
+    const nextVersion = estimateVersion + 1;
 
     setStatus('draft');
     setIsEditingEstimate(true);
     setHasSavedEstimate(false);
     setIsRevisionDraft(true);
-    setEstimateVersion(currentVersion => currentVersion + 1);
+    setEstimateVersion(nextVersion);
+
+    onCreateRevision?.(createSavePayload('revision', nextVersion));
   };
 
   const handleProjectSelectionChange = (projectId: string) => {
@@ -572,6 +593,8 @@ export function CostEstimateSection({
     setHasSavedEstimate(true);
     setIsRevisionDraft(false);
     setIsEditingEstimate(false);
+
+    onApproveEstimate?.(createSavePayload('approved'));
   };
 
   return (
