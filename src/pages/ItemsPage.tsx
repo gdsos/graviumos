@@ -16,6 +16,7 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
+import { defaultCostEstimateUnits } from '@/features/cost-estimate/data';
 import { demoProcurementItems } from '@/features/items/data';
 import { vendorCategoryLabels } from '@/features/vendors/data';
 import type {
@@ -27,6 +28,7 @@ import type {
 const ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
+const PROCUREMENT_UNITS_STORAGE_KEY = 'gravium-os-procurement-units-demo';
 
 const defaultCategoryOptions: { value: string; label: string }[] = [
   { value: 'all', label: 'All Categories' },
@@ -90,6 +92,58 @@ function getStoredCategoryOptions() {
   }
 }
 
+function getDefaultUnitOptions() {
+  return defaultCostEstimateUnits.map(unit => ({
+    value: unit.shortLabel,
+    label: unit.shortLabel,
+  }));
+}
+
+function createUnitOption(value: string) {
+  const trimmedValue = value.trim();
+
+  return {
+    value: trimmedValue,
+    label: trimmedValue,
+  };
+}
+
+function getStoredUnitOptions() {
+  const defaultUnitOptions = getDefaultUnitOptions();
+
+  if (typeof window === 'undefined') return defaultUnitOptions;
+
+  try {
+    const storedUnits = localStorage.getItem(PROCUREMENT_UNITS_STORAGE_KEY);
+
+    if (!storedUnits) return defaultUnitOptions;
+
+    const parsedUnits = JSON.parse(storedUnits);
+
+    if (!Array.isArray(parsedUnits)) return defaultUnitOptions;
+
+    const optionMap = new Map<string, string>();
+
+    defaultUnitOptions.forEach(option => {
+      optionMap.set(option.value, option.label);
+    });
+
+    parsedUnits.forEach(option => {
+      if (
+        option &&
+        typeof option.value === 'string' &&
+        typeof option.label === 'string'
+      ) {
+        optionMap.set(option.value, option.label);
+      }
+    });
+
+    return Array.from(optionMap, ([value, label]) => ({ value, label }));
+  } catch {
+    return defaultUnitOptions;
+  }
+}
+
 interface DropdownOption {
   value: string;
   label: string;
@@ -102,6 +156,7 @@ interface DropdownFieldProps {
   onChange: (value: string) => void;
   searchable?: boolean;
   allowCustom?: boolean;
+  customAddLabel?: string;
   placeholder?: string;
 }
 
@@ -112,6 +167,7 @@ function DropdownField({
   onChange,
   searchable = false,
   allowCustom = false,
+  customAddLabel = 'Add option',
   placeholder = 'Select option',
 }: DropdownFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -203,7 +259,7 @@ function DropdownField({
               onClick={() => handleSelect(query.trim())}
               className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
             >
-              Add scope: {query.trim()}
+              {customAddLabel}: {query.trim()}
             </button>
           )}
 
@@ -253,6 +309,26 @@ function formatCategory(category: string) {
   return category
     .replaceAll('_', ' ')
     .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function createItemMasterDefaultDescription(itemName: string) {
+  const trimmedName = itemName.trim();
+
+  if (!trimmedName) return '';
+
+  const parts = trimmedName
+    .split('|')
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  const baseName = parts[0] ?? trimmedName;
+  const materialType = parts[1];
+
+  if (materialType) {
+    return `Supply and installation of ${baseName} using ${materialType} as per approved design and site measurements.`;
+  }
+
+  return `Supply and installation of ${baseName} as per approved design and site measurements.`;
 }
 
 function calculateSellingRate(purchaseRate: number, markupPercent: number) {
@@ -308,6 +384,7 @@ export default function ItemsPage() {
   const [categoryOptions, setCategoryOptions] = useState(() =>
     getStoredCategoryOptions()
   );
+  const [unitOptions, setUnitOptions] = useState(() => getStoredUnitOptions());
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [status, setStatus] = useState<ItemStatus | 'all'>('all');
@@ -331,6 +408,12 @@ export default function ItemsPage() {
       JSON.stringify(categoryOptions.filter(option => option.value !== 'all'))
     );
   }, [categoryOptions]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    localStorage.setItem(PROCUREMENT_UNITS_STORAGE_KEY, JSON.stringify(unitOptions));
+  }, [unitOptions]);
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -385,6 +468,22 @@ export default function ItemsPage() {
     return nextOption.value;
   };
 
+  const registerUnitOption = (value: string) => {
+    const nextOption = createUnitOption(value);
+
+    setUnitOptions(currentOptions => {
+      const exists = currentOptions.some(
+        option => option.value.toLowerCase() === nextOption.value.toLowerCase()
+      );
+
+      if (exists) return currentOptions;
+
+      return [...currentOptions, nextOption];
+    });
+
+    return nextOption.value;
+  };
+
   const activeItemCount = items.filter(item => item.status === 'active').length;
   const averageMarkup =
     items.length > 0
@@ -400,6 +499,25 @@ export default function ItemsPage() {
             items.length
         )
       : 0;
+
+  const handleItemNameChange = (nextName: string) => {
+    setFormState(current => {
+      const previousAutoDescription = createItemMasterDefaultDescription(
+        current.name
+      );
+      const isDescriptionManual =
+        current.defaultDescription.trim() &&
+        current.defaultDescription !== previousAutoDescription;
+
+      return {
+        ...current,
+        name: nextName,
+        defaultDescription: isDescriptionManual
+          ? current.defaultDescription
+          : createItemMasterDefaultDescription(nextName),
+      };
+    });
+  };
 
   const openCreateModal = () => {
     setFormState(createFormState());
@@ -426,12 +544,13 @@ export default function ItemsPage() {
     if (Number.isNaN(markupPercent)) return;
 
     const itemCategory = registerCategoryOption(formState.category);
+    const itemUnit = registerUnitOption(trimmedUnit);
 
     const item: ProcurementItem = {
       id: modalState?.mode === 'edit' ? modalState.item.id : createId('item'),
       name: trimmedName,
       category: itemCategory,
-      defaultUnitLabel: trimmedUnit,
+      defaultUnitLabel: itemUnit,
       purchaseRatePerUnit: purchaseRate,
       markupPercent,
       sellingRatePerUnit: calculateSellingRate(purchaseRate, markupPercent),
@@ -710,12 +829,7 @@ export default function ItemsPage() {
                 <span className="text-sm font-medium text-foreground">Item Name</span>
                 <input
                   value={formState.name}
-                  onChange={event =>
-                    setFormState(current => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
+                  onChange={event => handleItemNameChange(event.target.value)}
                   placeholder="e.g. TV Unit"
                   className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                 />
@@ -728,6 +842,7 @@ export default function ItemsPage() {
                   options={formCategoryOptions}
                   searchable
                   allowCustom
+                  customAddLabel="Add Scope / Category"
                   placeholder="Search or add scope"
                   onChange={value => {
                     const categoryValue = registerCategoryOption(value);
@@ -753,20 +868,23 @@ export default function ItemsPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <label className="grid gap-2">
-                  <span className="text-sm font-medium text-foreground">Default Unit</span>
-                  <input
-                    value={formState.defaultUnitLabel}
-                    onChange={event =>
-                      setFormState(current => ({
-                        ...current,
-                        defaultUnitLabel: event.target.value,
-                      }))
-                    }
-                    placeholder="sqft"
-                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                  />
-                </label>
+                <DropdownField
+                  label="Default Unit"
+                  value={formState.defaultUnitLabel}
+                  options={unitOptions}
+                  searchable
+                  allowCustom
+                  customAddLabel="Add Unit"
+                  placeholder="Search or add unit"
+                  onChange={value => {
+                    const unitValue = registerUnitOption(value);
+
+                    setFormState(current => ({
+                      ...current,
+                      defaultUnitLabel: unitValue,
+                    }));
+                  }}
+                />
 
                 <label className="grid gap-2">
                   <span className="text-sm font-medium text-foreground">Cost Rate</span>
