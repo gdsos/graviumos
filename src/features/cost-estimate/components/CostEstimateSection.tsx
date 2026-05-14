@@ -546,10 +546,10 @@ export function CostEstimateSection({
               Create Revision
             </Button>
           ) : (
-            <>
+            <div className="flex flex-wrap items-center gap-2">
               <div
                 ref={saveMenuRef}
-                className="relative inline-flex h-10 items-stretch"
+                className="relative inline-flex h-10 min-w-0 items-stretch"
               >
                 <Button
                   type="button"
@@ -592,12 +592,12 @@ export function CostEstimateSection({
                 type="button"
                 variant="outline"
                 onClick={handleDeleteDraft}
-                className="gap-2 text-destructive hover:text-destructive"
+                className="h-10 gap-2 text-destructive hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleteButtonLabel}
               </Button>
-            </>
+            </div>
           )}
         </div>
       }

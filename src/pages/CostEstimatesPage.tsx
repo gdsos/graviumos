@@ -432,10 +432,6 @@ export default function CostEstimatesPage() {
                 : ''}
             </p>
           </div>
-
-          <StatusBadge variant={getEstimateStatusVariant(selectedRecord.status)}>
-            {getEstimateStatusLabel(selectedRecord)}
-          </StatusBadge>
         </div>
 
         <CostEstimateSection
@@ -500,11 +496,15 @@ export default function CostEstimatesPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <div
+                className={`mt-4 grid grid-cols-1 gap-2 ${
+                  record.status === 'approved' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+                }`}
+              >
                 <Button
                   type="button"
                   onClick={() => setSelectedRecordId(record.id)}
-                  className="flex-1"
+                  className="h-10 w-full justify-center px-4"
                 >
                   {record.status === 'revision' ? 'Open Revision' : 'Open Estimate'}
                 </Button>
@@ -514,7 +514,7 @@ export default function CostEstimatesPage() {
                     type="button"
                     variant="outline"
                     onClick={() => handleCreateRevision(record)}
-                    className="gap-2"
+                    className="h-10 w-full justify-center gap-2 px-4"
                   >
                     <FilePlus2 className="h-4 w-4" />
                     Revision
@@ -525,7 +525,7 @@ export default function CostEstimatesPage() {
                   type="button"
                   variant="outline"
                   onClick={() => handleDeleteRecord(record.id)}
-                  className="gap-2 text-destructive hover:text-destructive"
+                  className="h-10 w-full justify-center gap-2 px-4 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete
@@ -626,7 +626,17 @@ export default function CostEstimatesPage() {
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="shrink-0 p-4 pb-3 sm:p-6 sm:pb-4">
+                <div className="shrink-0 border-b border-border p-4 pb-3 sm:p-6 sm:pb-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setCreateStep('project')}
+                    className="-ml-2 mb-3 h-9 gap-2 px-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+
                   <p className="text-lg font-semibold text-foreground">
                     Select Areas
                   </p>
@@ -743,16 +753,8 @@ export default function CostEstimatesPage() {
 
                 </div>
 
-                <div className="shrink-0 flex flex-col-reverse gap-2 rounded-b-3xl bg-card px-4 py-3 shadow-[0_-12px_24px_rgba(0,0,0,0.35)] sm:flex-row sm:justify-between sm:px-6">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCreateStep('project')}
-                  >
-                    Back
-                  </Button>
-
-                  <div className="flex gap-2">
+                <div className="shrink-0 rounded-b-3xl border-t border-border bg-card px-4 py-3 shadow-[0_-12px_24px_rgba(0,0,0,0.35)] sm:px-6">
+                  <div className="flex justify-end gap-2">
                     <Button
                       type="button"
                       variant="outline"
