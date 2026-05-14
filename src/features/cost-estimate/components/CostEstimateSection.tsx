@@ -92,10 +92,10 @@ function createEstimateLineItemDescription({
 
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
-const ADD_NEW_UNIT_ID = 'add-new-unit';
 const ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
+const PROCUREMENT_UNITS_STORAGE_KEY = 'gravium-os-procurement-units-demo';
 
 interface ProcurementCategoryOption {
   value: string;
@@ -186,6 +186,65 @@ function getStoredCategoryOptions() {
   } catch {
     return getDefaultCategoryOptions();
   }
+}
+
+function getStoredCostEstimateUnits() {
+  if (typeof window === 'undefined') return defaultCostEstimateUnits;
+
+  try {
+    const storedUnits = localStorage.getItem(PROCUREMENT_UNITS_STORAGE_KEY);
+
+    if (!storedUnits) return defaultCostEstimateUnits;
+
+    const parsedUnits = JSON.parse(storedUnits);
+
+    if (!Array.isArray(parsedUnits)) return defaultCostEstimateUnits;
+
+    const unitMap = new Map<string, CostEstimateUnit>();
+
+    defaultCostEstimateUnits.forEach(unit => {
+      unitMap.set(unit.shortLabel.toLowerCase(), unit);
+    });
+
+    parsedUnits.forEach(option => {
+      if (
+        option &&
+        typeof option.value === 'string' &&
+        typeof option.label === 'string'
+      ) {
+        const shortLabel = option.value.trim();
+
+        if (!shortLabel) return;
+
+        unitMap.set(shortLabel.toLowerCase(), {
+          id: `unit-${shortLabel.toLowerCase().replace(/\s+/g, '-')}`,
+          label: option.label.trim() || shortLabel,
+          shortLabel,
+          isCustom: !defaultCostEstimateUnits.some(
+            unit => unit.shortLabel.toLowerCase() === shortLabel.toLowerCase()
+          ),
+        });
+      }
+    });
+
+    return Array.from(unitMap.values());
+  } catch {
+    return defaultCostEstimateUnits;
+  }
+}
+
+function saveCostEstimateUnitsToStorage(units: CostEstimateUnit[]) {
+  if (typeof window === 'undefined') return;
+
+  localStorage.setItem(
+    PROCUREMENT_UNITS_STORAGE_KEY,
+    JSON.stringify(
+      units.map(unit => ({
+        value: unit.shortLabel,
+        label: unit.shortLabel,
+      }))
+    )
+  );
 }
 
 function mapProcurementItemToPreset(item: ProcurementItem): CostEstimateItemPreset {
@@ -398,7 +457,9 @@ export function CostEstimateSection({
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     initialLineItems ?? []
   );
-  const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
+  const [units, setUnits] = useState<CostEstimateUnit[]>(
+    () => getStoredCostEstimateUnits()
+  );
   const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
     () => getStoredItemPresets()
   );
@@ -424,6 +485,8 @@ export function CostEstimateSection({
   const [newPresetCategoryQuery, setNewPresetCategoryQuery] = useState('');
   const [isNewPresetCategoryOpen, setIsNewPresetCategoryOpen] = useState(false);
   const [newPresetUnit, setNewPresetUnit] = useState('sqft');
+  const [newPresetUnitQuery, setNewPresetUnitQuery] = useState('');
+  const [isNewPresetUnitOpen, setIsNewPresetUnitOpen] = useState(false);
   const [newPresetPurchaseRate, setNewPresetPurchaseRate] = useState('500');
   const [newPresetMarkupPercent, setNewPresetMarkupPercent] = useState('35');
   const [newPresetDescription, setNewPresetDescription] = useState('');
@@ -437,6 +500,10 @@ export function CostEstimateSection({
   const [newLineItemDescription, setNewLineItemDescription] = useState('');
   const [newLineItemQuantity, setNewLineItemQuantity] = useState('1');
   const [newLineItemUnit, setNewLineItemUnit] = useState('sqft');
+  const [newLineItemUnitQuery, setNewLineItemUnitQuery] = useState('');
+  const [isNewLineItemUnitOpen, setIsNewLineItemUnitOpen] = useState(false);
+  const [savedRowUnitDropdownId, setSavedRowUnitDropdownId] = useState<string | null>(null);
+  const [savedRowUnitQuery, setSavedRowUnitQuery] = useState('');
   const [newLineItemRate, setNewLineItemRate] = useState('500');
   const [newLineItemRemarks, setNewLineItemRemarks] = useState('');
 
@@ -482,6 +549,106 @@ export function CostEstimateSection({
     itemCategoryOptions,
     newPresetCategory
   );
+  const newLineItemUnitSearchValue = newLineItemUnitQuery
+    .trim()
+    .toLowerCase();
+  const matchingLineItemUnitOptions = newLineItemUnitSearchValue
+    ? units.filter(unit =>
+        unit.shortLabel.toLowerCase().includes(newLineItemUnitSearchValue)
+      )
+    : units;
+  const newPresetUnitSearchValue = newPresetUnitQuery.trim().toLowerCase();
+  const matchingNewPresetUnitOptions = newPresetUnitSearchValue
+    ? units.filter(unit =>
+        unit.shortLabel.toLowerCase().includes(newPresetUnitSearchValue)
+      )
+    : units;
+  const canAddNewPresetUnit =
+    newPresetUnitQuery.trim().length > 0 &&
+    !units.some(
+      unit =>
+        unit.shortLabel.toLowerCase() ===
+        newPresetUnitQuery.trim().toLowerCase()
+    );
+
+  const registerNewPresetUnit = (value: string) => {
+    const trimmedUnit = value.trim();
+
+    if (!trimmedUnit) return newPresetUnit;
+
+    const existingUnit = units.find(
+      unit => unit.shortLabel.toLowerCase() === trimmedUnit.toLowerCase()
+    );
+
+    if (existingUnit) {
+      setNewPresetUnit(existingUnit.shortLabel);
+      setNewPresetUnitQuery('');
+      setIsNewPresetUnitOpen(false);
+      return existingUnit.shortLabel;
+    }
+
+    const newUnit: CostEstimateUnit = {
+      id: createId('estimate-unit'),
+      label: trimmedUnit,
+      shortLabel: trimmedUnit,
+      isCustom: true,
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      saveCostEstimateUnitsToStorage(nextUnits);
+      return nextUnits;
+    });
+    setNewPresetUnit(newUnit.shortLabel);
+    setNewPresetUnitQuery('');
+    setIsNewPresetUnitOpen(false);
+
+    return newUnit.shortLabel;
+  };
+
+  const canAddNewLineItemUnit =
+    newLineItemUnitQuery.trim().length > 0 &&
+    !units.some(
+      unit =>
+        unit.shortLabel.toLowerCase() ===
+        newLineItemUnitQuery.trim().toLowerCase()
+    );
+
+  const registerLineItemUnit = (value: string) => {
+    const trimmedUnit = value.trim();
+
+    if (!trimmedUnit) return newLineItemUnit;
+
+    const existingUnit = units.find(
+      unit => unit.shortLabel.toLowerCase() === trimmedUnit.toLowerCase()
+    );
+
+    if (existingUnit) {
+      setNewLineItemUnit(existingUnit.shortLabel);
+      setNewLineItemUnitQuery('');
+      setIsNewLineItemUnitOpen(false);
+      return existingUnit.shortLabel;
+    }
+
+    const newUnit: CostEstimateUnit = {
+      id: createId('estimate-unit'),
+      label: trimmedUnit,
+      shortLabel: trimmedUnit,
+      isCustom: true,
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      saveCostEstimateUnitsToStorage(nextUnits);
+      return nextUnits;
+    });
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewLineItemUnitQuery('');
+    setIsNewLineItemUnitOpen(false);
+
+    return newUnit.shortLabel;
+  };
+
   const canAddNewPresetCategory =
     newPresetCategoryQuery.trim().length > 0 &&
     !itemCategoryOptions.some(
@@ -802,15 +969,6 @@ export function CostEstimateSection({
     setIsNewItemPresetFormOpen(false);
   };
 
-  const handleUnitSelectionChange = (unitValue: string) => {
-    if (unitValue === ADD_NEW_UNIT_ID) {
-      setIsNewUnitFormOpen(true);
-      return;
-    }
-
-    setNewLineItemUnit(unitValue);
-  };
-
   const handleAddCustomUnit = () => {
     const trimmedUnit = newUnitName.trim();
 
@@ -834,7 +992,11 @@ export function CostEstimateSection({
       isCustom: true,
     };
 
-    setUnits(current => [...current, newUnit]);
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      saveCostEstimateUnitsToStorage(nextUnits);
+      return nextUnits;
+    });
     setNewLineItemUnit(newUnit.shortLabel);
     setNewUnitName('');
     setIsNewUnitFormOpen(false);
@@ -866,6 +1028,55 @@ export function CostEstimateSection({
     setNewLineItemRate('500');
     setNewLineItemRemarks('');
     markEstimateDirty();
+  };
+
+  const getMatchingSavedRowUnits = () => {
+    const searchValue = savedRowUnitQuery.trim().toLowerCase();
+
+    return searchValue
+      ? units.filter(unit => unit.shortLabel.toLowerCase().includes(searchValue))
+      : units;
+  };
+
+  const canAddSavedRowUnit =
+    savedRowUnitQuery.trim().length > 0 &&
+    !units.some(
+      unit =>
+        unit.shortLabel.toLowerCase() === savedRowUnitQuery.trim().toLowerCase()
+    );
+
+  const registerSavedRowUnit = (lineItemId: string, value: string) => {
+    const trimmedUnit = value.trim();
+
+    if (!trimmedUnit) return;
+
+    const existingUnit = units.find(
+      unit => unit.shortLabel.toLowerCase() === trimmedUnit.toLowerCase()
+    );
+
+    if (existingUnit) {
+      handleUpdateLineItem(lineItemId, { unitLabel: existingUnit.shortLabel });
+      setSavedRowUnitQuery('');
+      setSavedRowUnitDropdownId(null);
+      return;
+    }
+
+    const newUnit: CostEstimateUnit = {
+      id: createId('estimate-unit'),
+      label: trimmedUnit,
+      shortLabel: trimmedUnit,
+      isCustom: true,
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      saveCostEstimateUnitsToStorage(nextUnits);
+      return nextUnits;
+    });
+
+    handleUpdateLineItem(lineItemId, { unitLabel: newUnit.shortLabel });
+    setSavedRowUnitQuery('');
+    setSavedRowUnitDropdownId(null);
   };
 
   const handleUpdateLineItem = (
@@ -1530,23 +1741,88 @@ export function CostEstimateSection({
                                   )}
                                 </label>
 
-                                <label className="grid gap-2">
+                                <label className="relative grid gap-2">
                                   <span className="text-sm font-medium text-foreground">
                                     Default Unit
                                   </span>
-                                  <select
-                                    value={newPresetUnit}
-                                    onChange={event =>
-                                      setNewPresetUnit(event.target.value)
+
+                                  <input
+                                    value={
+                                      isNewPresetUnitOpen
+                                        ? newPresetUnitQuery
+                                        : newPresetUnit
                                     }
-                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                                  >
-                                    {units.map(unit => (
-                                      <option key={unit.id} value={unit.shortLabel}>
-                                        {unit.shortLabel}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    onFocus={() => {
+                                      setNewPresetUnitQuery('');
+                                      setIsNewPresetUnitOpen(true);
+                                    }}
+                                    onBlur={() => {
+                                      window.setTimeout(() => {
+                                        setIsNewPresetUnitOpen(false);
+                                      }, 120);
+                                    }}
+                                    onChange={event => {
+                                      setNewPresetUnitQuery(event.target.value);
+                                      setIsNewPresetUnitOpen(true);
+                                    }}
+                                    onKeyDown={event => {
+                                      if (
+                                        event.key === 'Enter' &&
+                                        canAddNewPresetUnit
+                                      ) {
+                                        event.preventDefault();
+                                        registerNewPresetUnit(newPresetUnitQuery);
+                                      }
+                                    }}
+                                    placeholder="Search or add unit"
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                  />
+
+                                  {isNewPresetUnitOpen && (
+                                    <div className="absolute left-0 right-0 top-[68px] z-[140] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+                                      {matchingNewPresetUnitOptions.map(unit => (
+                                        <button
+                                          key={unit.id}
+                                          type="button"
+                                          onMouseDown={event =>
+                                            event.preventDefault()
+                                          }
+                                          onClick={() => {
+                                            setNewPresetUnit(unit.shortLabel);
+                                            setNewPresetUnitQuery('');
+                                            setIsNewPresetUnitOpen(false);
+                                          }}
+                                          className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                        >
+                                          {unit.shortLabel}
+                                        </button>
+                                      ))}
+
+                                      {canAddNewPresetUnit && (
+                                        <button
+                                          type="button"
+                                          onMouseDown={event =>
+                                            event.preventDefault()
+                                          }
+                                          onClick={() =>
+                                            registerNewPresetUnit(
+                                              newPresetUnitQuery
+                                            )
+                                          }
+                                          className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                        >
+                                          Add Unit: {newPresetUnitQuery.trim()}
+                                        </button>
+                                      )}
+
+                                      {matchingNewPresetUnitOptions.length === 0 &&
+                                        !canAddNewPresetUnit && (
+                                          <p className="px-3 py-2 text-sm text-muted-foreground">
+                                            No units found.
+                                          </p>
+                                        )}
+                                    </div>
+                                  )}
                                 </label>
                               </div>
 
@@ -1671,21 +1947,75 @@ export function CostEstimateSection({
                       className="h-10 w-full min-w-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                     />
 
-                    <div className="min-w-0 self-center">
-                      <select
-                        value={newLineItemUnit}
-                        onChange={event =>
-                          handleUnitSelectionChange(event.target.value)
+                    <div className="relative min-w-0 self-center">
+                      <input
+                        value={
+                          isNewLineItemUnitOpen
+                            ? newLineItemUnitQuery
+                            : newLineItemUnit
                         }
-                        className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      >
-                        {units.map(unit => (
-                          <option key={unit.id} value={unit.shortLabel}>
-                            {unit.shortLabel}
-                          </option>
-                        ))}
-                        <option value={ADD_NEW_UNIT_ID}>+ Add New Unit</option>
-                      </select>
+                        onFocus={() => {
+                          setNewLineItemUnitQuery('');
+                          setIsNewLineItemUnitOpen(true);
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            setIsNewLineItemUnitOpen(false);
+                          }, 120);
+                        }}
+                        onChange={event => {
+                          setNewLineItemUnitQuery(event.target.value);
+                          setIsNewLineItemUnitOpen(true);
+                        }}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' && canAddNewLineItemUnit) {
+                            event.preventDefault();
+                            registerLineItemUnit(newLineItemUnitQuery);
+                          }
+                        }}
+                        placeholder="Unit"
+                        className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+
+                      {isNewLineItemUnitOpen && (
+                        <div className="absolute left-0 right-0 top-11 z-[100] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+                          {matchingLineItemUnitOptions.map(unit => (
+                            <button
+                              key={unit.id}
+                              type="button"
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() => {
+                                setNewLineItemUnit(unit.shortLabel);
+                                setNewLineItemUnitQuery('');
+                                setIsNewLineItemUnitOpen(false);
+                              }}
+                              className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                            >
+                              {unit.shortLabel}
+                            </button>
+                          ))}
+
+                          {canAddNewLineItemUnit && (
+                            <button
+                              type="button"
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() =>
+                                registerLineItemUnit(newLineItemUnitQuery)
+                              }
+                              className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                            >
+                              Add Unit: {newLineItemUnitQuery.trim()}
+                            </button>
+                          )}
+
+                          {matchingLineItemUnitOptions.length === 0 &&
+                            !canAddNewLineItemUnit && (
+                              <p className="px-3 py-2 text-sm text-muted-foreground">
+                                No units found.
+                              </p>
+                            )}
+                        </div>
+                      )}
 
                       {isNewUnitFormOpen && (
                         <div className="mt-2 rounded-xl border border-border bg-muted/30 p-2">
@@ -1793,21 +2123,78 @@ export function CostEstimateSection({
                         className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
 
-                      <select
-                        value={lineItem.unitLabel}
-                        onChange={event =>
-                          handleUpdateLineItem(lineItem.id, {
-                            unitLabel: event.target.value,
-                          })
-                        }
-                        className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      >
-                        {units.map(unit => (
-                          <option key={unit.id} value={unit.shortLabel}>
-                            {unit.shortLabel}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative self-center">
+                        <input
+                          value={
+                            savedRowUnitDropdownId === lineItem.id
+                              ? savedRowUnitQuery
+                              : lineItem.unitLabel
+                          }
+                          onFocus={() => {
+                            setSavedRowUnitDropdownId(lineItem.id);
+                            setSavedRowUnitQuery('');
+                          }}
+                          onBlur={() => {
+                            window.setTimeout(() => {
+                              setSavedRowUnitDropdownId(null);
+                            }, 120);
+                          }}
+                          onChange={event => {
+                            setSavedRowUnitDropdownId(lineItem.id);
+                            setSavedRowUnitQuery(event.target.value);
+                          }}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter' && canAddSavedRowUnit) {
+                              event.preventDefault();
+                              registerSavedRowUnit(lineItem.id, savedRowUnitQuery);
+                            }
+                          }}
+                          placeholder="Unit"
+                          className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                        />
+
+                        {savedRowUnitDropdownId === lineItem.id && (
+                          <div className="absolute left-0 right-0 top-11 z-[100] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+                            {getMatchingSavedRowUnits().map(unit => (
+                              <button
+                                key={unit.id}
+                                type="button"
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={() => {
+                                  handleUpdateLineItem(lineItem.id, {
+                                    unitLabel: unit.shortLabel,
+                                  });
+                                  setSavedRowUnitQuery('');
+                                  setSavedRowUnitDropdownId(null);
+                                }}
+                                className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                              >
+                                {unit.shortLabel}
+                              </button>
+                            ))}
+
+                            {canAddSavedRowUnit && (
+                              <button
+                                type="button"
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={() =>
+                                  registerSavedRowUnit(lineItem.id, savedRowUnitQuery)
+                                }
+                                className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                              >
+                                Add Unit: {savedRowUnitQuery.trim()}
+                              </button>
+                            )}
+
+                            {getMatchingSavedRowUnits().length === 0 &&
+                              !canAddSavedRowUnit && (
+                                <p className="px-3 py-2 text-sm text-muted-foreground">
+                                  No units found.
+                                </p>
+                              )}
+                          </div>
+                        )}
+                      </div>
 
                       <input
                         type="number"
