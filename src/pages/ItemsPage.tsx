@@ -717,31 +717,33 @@ export default function ItemsPage() {
           {filteredItems.map(item => (
             <div
               key={item.id}
-              className="flex h-full flex-col rounded-2xl border border-border bg-background p-4 shadow-sm"
+              className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm sm:p-4"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-lg font-semibold text-foreground">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                <div className="order-2 min-w-0 flex-1 sm:order-1">
+                  <p className="break-words text-base font-semibold leading-snug text-foreground sm:truncate sm:text-lg">
                     {item.name}
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 break-words text-xs text-muted-foreground sm:text-sm">
                     {formatCategory(item.category)} - {item.defaultUnitLabel}
                   </p>
                 </div>
 
-                <StatusBadge
-                  variant={item.status === 'active' ? 'success' : 'warning'}
-                >
-                  {item.status === 'active' ? 'Active' : 'Inactive'}
-                </StatusBadge>
+                <div className="order-1 self-start sm:order-2">
+                  <StatusBadge
+                    variant={item.status === 'active' ? 'success' : 'warning'}
+                  >
+                    {item.status === 'active' ? 'Active' : 'Inactive'}
+                  </StatusBadge>
+                </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-border bg-muted/30 p-3">
+              <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 rounded-xl border border-border bg-muted/30 p-3 min-[390px]:grid-cols-3 sm:gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground sm:text-xs">
                     Cost Rate
                   </p>
-                  <p className="mt-1 font-semibold text-foreground">
+                  <p className="mt-1 break-words text-sm font-semibold text-foreground sm:text-base">
                     {formatINR(item.purchaseRatePerUnit)}
                   </p>
                 </div>
@@ -765,7 +767,7 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              <p className="mt-4 line-clamp-2 text-sm leading-6 text-muted-foreground">
+              <p className="mt-4 line-clamp-3 break-words text-sm leading-6 text-muted-foreground sm:line-clamp-2">
                 {item.defaultDescription || 'No default description added yet.'}
               </p>
 
