@@ -1176,7 +1176,7 @@ export function CostEstimateSection({
           </StatusBadge>
         </div>
       }
-      description="Project-level estimate source for execution scope, COGS, pricing, GST, and future timeline generation."
+      description="Prepare project-level estimates with area-wise scope, costs, pricing, GST, and approval-ready totals."
       actions={
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {status === 'approved' ? (
@@ -1264,30 +1264,21 @@ export function CostEstimateSection({
         disabled={isEstimateReadOnly}
         className="grid gap-4 disabled:opacity-75 sm:gap-5"
       >
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="rounded-2xl border border-border bg-muted/30 p-3 sm:p-4">
-            <p className="text-sm font-medium text-foreground">
-              Future source of truth
-            </p>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Select areas first, then add estimate line items under each area.
-              Timeline will later convert approved area groups into work packages.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
-            <p className="text-sm font-medium text-foreground">
-              Estimate Project
-            </p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Create as an unassigned draft or attach to a project without an
-              existing cost estimate.
-            </p>
+        <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Estimate Project
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Link this estimate to a project or keep it as an unassigned draft.
+              </p>
+            </div>
 
             <select
               value={selectedProjectId}
               onChange={event => handleProjectSelectionChange(event.target.value)}
-              className="mt-3 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             >
               <option value={UNASSIGNED_PROJECT_ID}>Unassigned Draft</option>
               {availableProjectsForNewEstimate.map(project => (
@@ -1296,27 +1287,25 @@ export function CostEstimateSection({
                 </option>
               ))}
             </select>
-
-            <div className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs leading-5 text-muted-foreground">
-              {selectedProject ? (
-                <>
-                  Linked to{' '}
-                  <span className="font-medium text-foreground">
-                    {selectedProject.name}
-                  </span>
-                  . Projects that already have a cost estimate are hidden from
-                  this create list.
-                </>
-              ) : (
-                <>
-                  This estimate is currently not linked to any project. It can be
-                  converted to a new or existing project later.
-                </>
-              )}
-            </div>
           </div>
-        </div>
 
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {selectedProject ? (
+              <>
+                Linked to{' '}
+                <span className="font-medium text-foreground">
+                  {selectedProject.name}
+                </span>
+                . Projects with an existing estimate are not shown here.
+              </>
+            ) : (
+              <>
+                This estimate is currently not linked to any project. It can be
+                converted to a new or existing project later.
+              </>
+            )}
+          </p>
+        </div>
         {supersededVersions.length > 0 && (
           <div className="rounded-2xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
             Superseded versions:{' '}
@@ -1409,7 +1398,7 @@ export function CostEstimateSection({
               className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
             <span className="text-xs text-muted-foreground">
-              Later this will sync with project financials.
+              Used to validate the estimated grand total against the project value.
             </span>
           </label>
         </div>
@@ -1487,7 +1476,7 @@ export function CostEstimateSection({
             </div>
 
             <p className="text-xs leading-5 text-muted-foreground sm:text-right">
-              Line items are now added inside each area group below.
+              Line items are managed inside each selected area.
             </p>
           </div>
 
