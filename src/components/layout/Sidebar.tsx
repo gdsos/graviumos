@@ -13,6 +13,7 @@ import {
   Megaphone,
   ReceiptIndianRupee,
   Store,
+  Package,
   CalendarClock,
   ClipboardList
 } from "lucide-react";
@@ -50,6 +51,7 @@ const adminNavGroups: NavGroup[] = [
   {
     label: "Procurement",
     items: [
+      { label: "Items", icon: Package, path: "/admin/items" },
       { label: "Vendors", icon: Store, path: "/admin/vendors" },
       { label: "Cost Estimates", icon: ClipboardList, path: "/admin/cost-estimates" },
     ],
@@ -83,6 +85,7 @@ const employeeNavGroups: NavGroup[] = [
   {
     label: "Procurement",
     items: [
+      { label: "Items", icon: Package, path: "/portal/items" },
       { label: "Vendors", icon: Store, path: "/portal/vendors" },
       { label: "Cost Estimates", icon: ClipboardList, path: "/portal/cost-estimates" },
     ],
