@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   FilePlus2,
+  MinusCircle,
   Plus,
   RefreshCcw,
   Save,
@@ -366,6 +367,14 @@ interface CostEstimateSavePayload {
   targetProjectRevenue: number;
 }
 
+interface CostEstimateConfirmDialog {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  tone: 'default' | 'destructive';
+  onConfirm: () => void;
+}
+
 interface CostEstimateSectionProps {
   initialAreas?: CostEstimateArea[];
   initialLineItems?: CostEstimateLineItem[];
@@ -457,6 +466,8 @@ export function CostEstimateSection({
   const saveMenuRef = useRef<HTMLDivElement | null>(null);
   const [isBottomSaveMenuOpen, setIsBottomSaveMenuOpen] = useState(false);
   const bottomSaveMenuRef = useRef<HTMLDivElement | null>(null);
+  const [confirmDialog, setConfirmDialog] =
+    useState<CostEstimateConfirmDialog | null>(null);
   const [areas, setAreas] = useState<CostEstimateArea[]>(initialAreaList);
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     initialLineItems ?? []
@@ -802,15 +813,7 @@ export function CostEstimateSection({
     onSaveAndClose?.(createSavePayload(nextStatus));
   };
 
-  const handleDeleteDraft = () => {
-    const confirmed = window.confirm(
-      isRevisionDraft
-        ? 'Delete this revision draft? This will remove the revision estimate.'
-        : 'Delete this draft estimate? This will remove the estimate.'
-    );
-
-    if (!confirmed) return;
-
+  const executeDeleteDraft = () => {
     if (onDeleteDraft) {
       onDeleteDraft();
       return;
@@ -839,13 +842,19 @@ export function CostEstimateSection({
     setNewLineItemRemarks('');
   };
 
-  const handleCreateRevision = () => {
-    const confirmed = window.confirm(
-      'Create a revision draft from this approved estimate? The current approved version will stay locked until the revision is approved.'
-    );
+  const handleDeleteDraft = () => {
+    setConfirmDialog({
+      title: isRevisionDraft ? 'Delete revision draft?' : 'Delete draft estimate?',
+      message: isRevisionDraft
+        ? 'This will remove the revision draft and restore the approved estimate if one exists.'
+        : 'This will remove this draft estimate. This action cannot be undone.',
+      confirmLabel: isRevisionDraft ? 'Delete Revision' : 'Delete Draft',
+      tone: 'destructive',
+      onConfirm: executeDeleteDraft,
+    });
+  };
 
-    if (!confirmed) return;
-
+  const executeCreateRevision = () => {
     const nextVersion = estimateVersion + 1;
 
     setStatus('draft');
@@ -855,6 +864,17 @@ export function CostEstimateSection({
     setEstimateVersion(nextVersion);
 
     onCreateRevision?.(createSavePayload('revision', nextVersion));
+  };
+
+  const handleCreateRevision = () => {
+    setConfirmDialog({
+      title: 'Create revision draft?',
+      message:
+        'The current approved version will stay locked while you prepare a new revision draft.',
+      confirmLabel: 'Create Revision',
+      tone: 'default',
+      onConfirm: executeCreateRevision,
+    });
   };
 
   const handleProjectSelectionChange = (projectId: string) => {
@@ -914,6 +934,18 @@ export function CostEstimateSection({
   const handleItemNameChange = (itemName: string) => {
     setNewLineItemName(itemName);
     setIsItemSuggestionOpen(true);
+  };
+
+  const handleClearNewLineItem = () => {
+    setNewLineItemName('');
+    setNewLineItemDescription('');
+    setNewLineItemQuantity('1');
+    setNewLineItemUnit('sqft');
+    setNewLineItemUnitQuery('');
+    setIsNewLineItemUnitOpen(false);
+    setNewLineItemRate('500');
+    setNewLineItemRemarks('');
+    setIsItemSuggestionOpen(false);
   };
 
   const handleOpenNewItemPresetForm = () => {
@@ -1573,8 +1605,20 @@ export function CostEstimateSection({
                             handleItemNameChange(event.target.value)
                           }
                           placeholder="Type item name or search preset"
-                          className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                          className="min-h-10 w-full rounded-lg border border-border bg-background px-3 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                         />
+
+                        {newLineItemName.trim() && (
+                          <button
+                            type="button"
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={handleClearNewLineItem}
+                            className="absolute right-2 top-5 z-[60] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive transition hover:bg-destructive/10"
+                            aria-label="Clear selected item"
+                          >
+                            <MinusCircle className="h-4 w-4" />
+                          </button>
+                        )}
 
                         {isItemSuggestionOpen && (
                           <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
@@ -2315,6 +2359,46 @@ export function CostEstimateSection({
         )}
       </div>
     </SectionCard>
+
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+            <h2 className="text-lg font-semibold text-foreground">
+              {confirmDialog.title}
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {confirmDialog.message}
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmDialog(null)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                variant={
+                  confirmDialog.tone === 'destructive'
+                    ? 'destructive'
+                    : 'default'
+                }
+                onClick={() => {
+                  const { onConfirm } = confirmDialog;
+                  setConfirmDialog(null);
+                  onConfirm();
+                }}
+              >
+                {confirmDialog.confirmLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

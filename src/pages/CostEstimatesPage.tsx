@@ -219,6 +219,7 @@ export default function CostEstimatesPage() {
   const [approvedSnapshotReturnTarget, setApprovedSnapshotReturnTarget] =
     useState<'list' | 'revision'>('revision');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
   const [createStep, setCreateStep] = useState<'project' | 'areas'>('project');
   const [selectedProjectId, setSelectedProjectId] = useState(
     UNASSIGNED_PROJECT_ID
@@ -539,10 +540,6 @@ export default function CostEstimatesPage() {
   };
 
   const handleDeleteRecord = (recordId: string) => {
-    const confirmed = window.confirm('Delete this cost estimate card?');
-
-    if (!confirmed) return;
-
     setRecords(current => current.filter(record => record.id !== recordId));
 
     if (selectedRecordId === recordId) {
@@ -800,7 +797,7 @@ export default function CostEstimatesPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleDeleteRecord(record.id)}
+                  onClick={() => setDeleteRecordId(record.id)}
                   className="h-10 w-full justify-center gap-2 px-4 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4 shrink-0" />
@@ -810,6 +807,42 @@ export default function CostEstimatesPage() {
             </div>
         ))}
       </div>
+
+      {deleteRecordId && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+            <h2 className="text-lg font-semibold text-foreground">
+              Delete cost estimate?
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              This will remove this cost estimate card and its saved local data.
+              This action cannot be undone.
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeleteRecordId(null)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  handleDeleteRecord(deleteRecordId);
+                  setDeleteRecordId(null);
+                }}
+              >
+                Delete Estimate
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 p-4 backdrop-blur-md">
