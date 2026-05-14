@@ -24,7 +24,7 @@ export interface CostEstimateProject {
 export interface CostEstimateItemPreset {
   id: string;
   name: string;
-  category: 'carpentry' | 'civil' | 'electrical' | 'plumbing' | 'painting' | 'decor' | 'custom';
+  category: string;
   defaultUnitLabel: string;
   purchaseRatePerUnit: number;
   markupPercent: number;

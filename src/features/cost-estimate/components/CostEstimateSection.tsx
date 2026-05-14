@@ -13,6 +13,9 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
+import { demoProcurementItems } from '@/features/items/data';
+import type { ProcurementItem } from '@/features/items/types';
+
 import {
   DEFAULT_GST_PERCENT,
   DEFAULT_MISC_CHARGE_PERCENT,
@@ -24,7 +27,6 @@ import {
 import {
   defaultCostEstimateUnits,
   demoCostEstimateAreas,
-  demoCostEstimateItemPresets,
   demoCostEstimateProjects,
 } from '../data';
 
@@ -55,6 +57,78 @@ function createId(prefix: string) {
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
 const ADD_NEW_UNIT_ID = 'add-new-unit';
+const ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
+
+function mapProcurementItemToPreset(item: ProcurementItem): CostEstimateItemPreset {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    defaultUnitLabel: item.defaultUnitLabel,
+    purchaseRatePerUnit: item.purchaseRatePerUnit,
+    markupPercent: item.markupPercent,
+    sellingRatePerUnit: item.sellingRatePerUnit,
+    defaultDescription: item.defaultDescription,
+  };
+}
+
+function getStoredItemPresets() {
+  if (typeof window === 'undefined') {
+    return demoProcurementItems.map(mapProcurementItemToPreset);
+  }
+
+  try {
+    const storedItems = localStorage.getItem(ITEMS_STORAGE_KEY);
+
+    if (!storedItems) {
+      return demoProcurementItems.map(mapProcurementItemToPreset);
+    }
+
+    const parsedItems = JSON.parse(storedItems);
+
+    if (!Array.isArray(parsedItems)) {
+      return demoProcurementItems.map(mapProcurementItemToPreset);
+    }
+
+    const validItems = parsedItems.filter(item => {
+      return (
+        item &&
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.category === 'string' &&
+        typeof item.defaultUnitLabel === 'string' &&
+        typeof item.purchaseRatePerUnit === 'number' &&
+        typeof item.markupPercent === 'number' &&
+        typeof item.sellingRatePerUnit === 'number' &&
+        typeof item.defaultDescription === 'string' &&
+        item.status === 'active'
+      );
+    }) as ProcurementItem[];
+
+    return validItems.map(mapProcurementItemToPreset);
+  } catch {
+    return demoProcurementItems.map(mapProcurementItemToPreset);
+  }
+}
+
+function saveItemPresetsToItemsMaster(presets: CostEstimateItemPreset[]) {
+  if (typeof window === 'undefined') return;
+
+  const items: ProcurementItem[] = presets.map(preset => ({
+    id: preset.id,
+    name: preset.name,
+    category: preset.category,
+    defaultUnitLabel: preset.defaultUnitLabel,
+    purchaseRatePerUnit: preset.purchaseRatePerUnit,
+    markupPercent: preset.markupPercent,
+    sellingRatePerUnit: preset.sellingRatePerUnit,
+    defaultDescription: preset.defaultDescription,
+    status: 'active',
+    updatedAt: new Date().toISOString(),
+  }));
+
+  localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items));
+}
 
 interface CostEstimateSavePayload {
   grandTotal: number;
@@ -161,7 +235,7 @@ export function CostEstimateSection({
   );
   const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
   const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
-    demoCostEstimateItemPresets
+    () => getStoredItemPresets()
   );
   const [serviceChargePercent, setServiceChargePercent] = useState<number | ''>(
     initialServiceChargePercent ?? DEFAULT_SERVICE_CHARGE_PERCENT
@@ -482,7 +556,11 @@ export function CostEstimateSection({
         }),
     };
 
-    setItemPresets(current => [...current, newPreset]);
+    setItemPresets(current => {
+      const nextPresets = [...current, newPreset];
+      saveItemPresetsToItemsMaster(nextPresets);
+      return nextPresets;
+    });
     setNewLineItemName(newPreset.name);
     setNewLineItemUnit(newPreset.defaultUnitLabel);
     setNewLineItemRate(String(newPreset.sellingRatePerUnit));
