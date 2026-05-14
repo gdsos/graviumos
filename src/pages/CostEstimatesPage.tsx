@@ -955,42 +955,46 @@ export default function CostEstimatesPage() {
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 sm:px-6">
-                  <div className="max-h-[260px] overflow-y-auto rounded-2xl border border-border">
-                  {modalAreas.map(area => {
-                    const isSelected = selectedAreaIds.includes(area.id);
+                  <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-border bg-muted/25 p-2">
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {modalAreas.map(area => {
+                      const isSelected = selectedAreaIds.includes(area.id);
 
-                    return (
-                      <button
-                        key={area.id}
-                        type="button"
-                        onClick={() => handleToggleArea(area.id)}
-                        className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-3 py-2.5 text-left transition last:border-b-0 ${
-                          isSelected
-                            ? 'bg-foreground text-background'
-                            : 'bg-background text-foreground hover:bg-muted'
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <span className="block truncate text-sm font-medium">
-                            {area.name}
-                          </span>
-                          <span className="mt-0.5 block text-xs opacity-75">
-                            {getAreaTypeLabel(area.name, area.type)}
-                          </span>
-                        </div>
-
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-xs ${
+                      return (
+                        <button
+                          key={area.id}
+                          type="button"
+                          onClick={() => handleToggleArea(area.id)}
+                          className={`min-h-[86px] rounded-xl border p-3 text-left transition ${
                             isSelected
-                              ? 'border-background/40 text-background'
-                              : 'border-border text-muted-foreground'
+                              ? 'border-emerald-500/35 bg-emerald-500/10 text-foreground shadow-sm dark:border-emerald-400/35 dark:bg-emerald-400/10'
+                              : 'border-border bg-card text-foreground hover:border-foreground/30 hover:bg-muted'
                           }`}
                         >
-                          {isSelected ? 'Selected' : 'Add'}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <div className="flex h-full flex-col justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm font-medium">
+                                {area.name}
+                              </span>
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                {getAreaTypeLabel(area.name, area.type)}
+                              </span>
+                            </div>
+
+                            <span
+                              className={`w-fit rounded-full border px-2 py-0.5 text-xs ${
+                                isSelected
+                                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
+                                  : 'border-border text-muted-foreground'
+                              }`}
+                            >
+                              {isSelected ? 'Selected' : 'Add'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-muted/30 p-3">
