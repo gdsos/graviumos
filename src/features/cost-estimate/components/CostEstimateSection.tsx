@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowUp,
   CheckCircle2,
   ChevronDown,
   FilePlus2,
@@ -451,8 +452,11 @@ export function CostEstimateSection({
   const [selectedProjectId, setSelectedProjectId] = useState(
     initialProjectId ?? UNASSIGNED_PROJECT_ID
   );
+  const estimateTopRef = useRef<HTMLDivElement | null>(null);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isBottomSaveMenuOpen, setIsBottomSaveMenuOpen] = useState(false);
+  const bottomSaveMenuRef = useRef<HTMLDivElement | null>(null);
   const [areas, setAreas] = useState<CostEstimateArea[]>(initialAreaList);
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
     initialLineItems ?? []
@@ -733,14 +737,16 @@ export function CostEstimateSection({
   );
 
   useEffect(() => {
-    if (!isSaveMenuOpen) return;
+    if (!isSaveMenuOpen && !isBottomSaveMenuOpen) return;
 
     const handleDocumentMouseDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
 
       if (target && saveMenuRef.current?.contains(target)) return;
+      if (target && bottomSaveMenuRef.current?.contains(target)) return;
 
       setIsSaveMenuOpen(false);
+      setIsBottomSaveMenuOpen(false);
     };
 
     document.addEventListener('mousedown', handleDocumentMouseDown);
@@ -748,12 +754,19 @@ export function CostEstimateSection({
     return () => {
       document.removeEventListener('mousedown', handleDocumentMouseDown);
     };
-  }, [isSaveMenuOpen]);
+  }, [isBottomSaveMenuOpen, isSaveMenuOpen]);
 
   const markEstimateDirty = () => {
     setStatus('draft');
     setHasSavedEstimate(false);
     setIsEditingEstimate(true);
+  };
+
+  const handleBackToEstimateTop = () => {
+    estimateTopRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
   };
 
   const createSavePayload = (
@@ -1121,7 +1134,8 @@ export function CostEstimateSection({
   };
 
   return (
-    <SectionCard
+    <div ref={estimateTopRef} className="scroll-mt-6">
+      <SectionCard
       title={
         <div className="flex items-center gap-2">
           <span>Cost Estimate</span>
@@ -2233,6 +2247,74 @@ export function CostEstimateSection({
           ))}
         </div>
       </fieldset>
+
+      <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleBackToEstimateTop}
+          className="h-10 gap-2"
+        >
+          <ArrowUp className="h-4 w-4" />
+          Back to Top
+        </Button>
+
+        {status !== 'approved' && (
+          <>
+            <div
+              ref={bottomSaveMenuRef}
+              className="relative inline-flex h-10 min-w-0 items-stretch"
+            >
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSaveDraft}
+                className="h-10 rounded-r-none border-r-0 bg-background text-foreground hover:bg-muted gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {saveButtonLabel}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsBottomSaveMenuOpen(current => !current)}
+                className="h-10 rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
+                aria-label="Open bottom save options"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+
+              {isBottomSaveMenuOpen && (
+                <div className="absolute bottom-11 right-0 z-[100] w-max overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                  <button
+                    type="button"
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={() => {
+                      setIsBottomSaveMenuOpen(false);
+                      handleSaveAndClose();
+                    }}
+                    className="whitespace-nowrap px-3 py-2 text-left text-sm transition hover:bg-muted"
+                  >
+                    Save and Close
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDeleteDraft}
+              className="h-10 gap-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleteButtonLabel}
+            </Button>
+          </>
+        )}
+      </div>
     </SectionCard>
+    </div>
   );
 }
