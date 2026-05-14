@@ -57,14 +57,28 @@ function createId(prefix: string) {
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
 const ADD_NEW_UNIT_ID = 'add-new-unit';
 
+interface CostEstimateSavePayload {
+  grandTotal: number;
+  status: 'draft' | 'approved' | 'revision';
+  version: number;
+  areas: CostEstimateArea[];
+  lineItems: CostEstimateLineItem[];
+  serviceChargePercent: number;
+  miscChargePercent: number;
+  targetProjectRevenue: number;
+}
+
 interface CostEstimateSectionProps {
   initialAreas?: CostEstimateArea[];
+  initialLineItems?: CostEstimateLineItem[];
   initialProjectId?: string;
-  onSaveAndClose?: (payload: {
-    grandTotal: number;
-    status: 'draft' | 'approved' | 'revision';
-    version: number;
-  }) => void;
+  initialStatus?: 'draft' | 'approved' | 'revision';
+  initialVersion?: number;
+  initialServiceChargePercent?: number;
+  initialMiscChargePercent?: number;
+  initialTargetProjectRevenue?: number;
+  onSaveDraft?: (payload: CostEstimateSavePayload) => void;
+  onSaveAndClose?: (payload: CostEstimateSavePayload) => void;
 }
 
 function getAreaName(areas: CostEstimateArea[], areaId: string) {
@@ -100,37 +114,51 @@ function createDefaultDescription({
 
 export function CostEstimateSection({
   initialAreas,
+  initialLineItems,
   initialProjectId,
+  initialStatus,
+  initialVersion,
+  initialServiceChargePercent,
+  initialMiscChargePercent,
+  initialTargetProjectRevenue,
+  onSaveDraft,
   onSaveAndClose,
 }: CostEstimateSectionProps) {
-  const [status, setStatus] = useState<CostEstimateStatus>('draft');
+  const initialAreaList =
+    initialAreas && initialAreas.length > 0 ? initialAreas : demoCostEstimateAreas;
+  const initialPrimaryAreaId = initialAreaList[0]?.id ?? '';
+  const [status, setStatus] = useState<CostEstimateStatus>(
+    initialStatus === 'approved' ? 'approved' : 'draft'
+  );
   const [hasSavedEstimate, setHasSavedEstimate] = useState(false);
   const [isEditingEstimate, setIsEditingEstimate] = useState(true);
-  const [estimateVersion, setEstimateVersion] = useState(1);
-  const [isRevisionDraft, setIsRevisionDraft] = useState(false);
+  const [estimateVersion, setEstimateVersion] = useState(initialVersion ?? 1);
+  const [isRevisionDraft, setIsRevisionDraft] = useState(
+    initialStatus === 'revision'
+  );
   const [supersededVersions, setSupersededVersions] = useState<number[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState(
     initialProjectId ?? UNASSIGNED_PROJECT_ID
   );
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement | null>(null);
-  const [areas, setAreas] = useState<CostEstimateArea[]>(
-    initialAreas && initialAreas.length > 0 ? initialAreas : demoCostEstimateAreas
-  );
+  const [areas, setAreas] = useState<CostEstimateArea[]>(initialAreaList);
   const [lineItems, setLineItems] = useState<CostEstimateLineItem[]>(
-    demoCostEstimateLineItems
+    initialLineItems ?? []
   );
   const [units, setUnits] = useState<CostEstimateUnit[]>(defaultCostEstimateUnits);
   const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
     demoCostEstimateItemPresets
   );
-  const [serviceChargePercent, setServiceChargePercent] = useState(
-    DEFAULT_SERVICE_CHARGE_PERCENT
+  const [serviceChargePercent, setServiceChargePercent] = useState<number | ''>(
+    initialServiceChargePercent ?? DEFAULT_SERVICE_CHARGE_PERCENT
   );
-  const [miscChargePercent, setMiscChargePercent] = useState(
-    DEFAULT_MISC_CHARGE_PERCENT
+  const [miscChargePercent, setMiscChargePercent] = useState<number | ''>(
+    initialMiscChargePercent ?? DEFAULT_MISC_CHARGE_PERCENT
   );
-  const [targetProjectRevenue, setTargetProjectRevenue] = useState(950000);
+  const [targetProjectRevenue, setTargetProjectRevenue] = useState<number | ''>(
+    initialTargetProjectRevenue ?? 950000
+  );
   const [newAreaName, setNewAreaName] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
   const [isNewUnitFormOpen, setIsNewUnitFormOpen] = useState(false);
@@ -142,10 +170,10 @@ export function CostEstimateSection({
   const [newPresetMarkupPercent, setNewPresetMarkupPercent] = useState('35');
   const [newPresetDescription, setNewPresetDescription] = useState('');
   const [newLineItemAreaId, setNewLineItemAreaId] = useState(
-    demoCostEstimateAreas[0]?.id ?? ''
+    initialPrimaryAreaId
   );
   const [activeLineItemAreaId, setActiveLineItemAreaId] = useState(
-    demoCostEstimateAreas[0]?.id ?? ''
+    initialPrimaryAreaId
   );
   const [newLineItemName, setNewLineItemName] = useState('');
   const [newLineItemDescription, setNewLineItemDescription] = useState('');
@@ -154,16 +182,27 @@ export function CostEstimateSection({
   const [newLineItemRate, setNewLineItemRate] = useState('500');
   const [newLineItemRemarks, setNewLineItemRemarks] = useState('');
 
+  const numericServiceChargePercent =
+    serviceChargePercent === '' ? 0 : serviceChargePercent;
+  const numericMiscChargePercent = miscChargePercent === '' ? 0 : miscChargePercent;
+  const numericTargetProjectRevenue =
+    targetProjectRevenue === '' ? 0 : targetProjectRevenue;
+
   const summary = useMemo(
     () =>
       calculateCostEstimateSummary({
         lineItems,
-        serviceChargePercent,
-        miscChargePercent,
+        serviceChargePercent: numericServiceChargePercent,
+        miscChargePercent: numericMiscChargePercent,
         gstPercent: DEFAULT_GST_PERCENT,
-        targetProjectRevenue,
+        targetProjectRevenue: numericTargetProjectRevenue,
       }),
-    [lineItems, miscChargePercent, serviceChargePercent, targetProjectRevenue]
+    [
+      lineItems,
+      numericMiscChargePercent,
+      numericServiceChargePercent,
+      numericTargetProjectRevenue,
+    ]
   );
 
   const selectedAreaName = getAreaName(areas, newLineItemAreaId);
@@ -250,10 +289,27 @@ export function CostEstimateSection({
     setIsEditingEstimate(true);
   };
 
+  const createSavePayload = (
+    nextStatus: 'draft' | 'approved' | 'revision'
+  ): CostEstimateSavePayload => ({
+    grandTotal: summary.estimatedGrossRevenue,
+    status: nextStatus,
+    version: estimateVersion,
+    areas,
+    lineItems,
+    serviceChargePercent: numericServiceChargePercent,
+    miscChargePercent: numericMiscChargePercent,
+    targetProjectRevenue: numericTargetProjectRevenue,
+  });
+
   const handleSaveDraft = () => {
+    const nextStatus = isRevisionDraft ? 'revision' : 'draft';
+
     setHasSavedEstimate(true);
     setIsEditingEstimate(true);
     setStatus('draft');
+
+    onSaveDraft?.(createSavePayload(nextStatus));
   };
 
   const handleSaveAndClose = () => {
@@ -262,11 +318,7 @@ export function CostEstimateSection({
     setHasSavedEstimate(true);
     setIsEditingEstimate(true);
 
-    onSaveAndClose?.({
-      grandTotal: summary.estimatedGrossRevenue,
-      status: nextStatus,
-      version: estimateVersion,
-    });
+    onSaveAndClose?.(createSavePayload(nextStatus));
   };
 
   const handleDeleteDraft = () => {
@@ -706,7 +758,9 @@ export function CostEstimateSection({
               max="20"
               value={serviceChargePercent}
               onChange={event => {
-                setServiceChargePercent(Number(event.target.value));
+                const nextValue = event.target.value;
+
+                setServiceChargePercent(nextValue === '' ? '' : Number(nextValue));
                 markEstimateDirty();
               }}
               className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -722,7 +776,9 @@ export function CostEstimateSection({
               max="15"
               value={miscChargePercent}
               onChange={event => {
-                setMiscChargePercent(Number(event.target.value));
+                const nextValue = event.target.value;
+
+                setMiscChargePercent(nextValue === '' ? '' : Number(nextValue));
                 markEstimateDirty();
               }}
               className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -739,7 +795,9 @@ export function CostEstimateSection({
               min="0"
               value={targetProjectRevenue}
               onChange={event => {
-                setTargetProjectRevenue(Number(event.target.value));
+                const nextValue = event.target.value;
+
+                setTargetProjectRevenue(nextValue === '' ? '' : Number(nextValue));
                 markEstimateDirty();
               }}
               className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"

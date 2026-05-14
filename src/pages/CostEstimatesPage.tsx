@@ -11,10 +11,18 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { CostEstimateSection } from '@/features/cost-estimate/components/CostEstimateSection';
 import {
+  DEFAULT_MISC_CHARGE_PERCENT,
+  DEFAULT_SERVICE_CHARGE_PERCENT,
+} from '@/features/cost-estimate/calculator';
+import {
   demoCostEstimateAreas,
   demoCostEstimateProjects,
+  demoCostEstimateLineItems,
 } from '@/features/cost-estimate/data';
-import type { CostEstimateArea } from '@/features/cost-estimate/types';
+import type {
+  CostEstimateArea,
+  CostEstimateLineItem,
+} from '@/features/cost-estimate/types';
 
 type EstimateCardStatus = 'draft' | 'approved' | 'revision';
 
@@ -28,6 +36,10 @@ interface EstimateCardRecord {
   grandTotal: number;
   updatedAt: string;
   areas: CostEstimateArea[];
+  lineItems: CostEstimateLineItem[];
+  serviceChargePercent: number;
+  miscChargePercent: number;
+  targetProjectRevenue: number;
 }
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
@@ -53,6 +65,10 @@ const initialEstimateCards: EstimateCardRecord[] = [
     grandTotal: 0,
     updatedAt: 'Just now',
     areas: demoCostEstimateAreas,
+    lineItems: [],
+    serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
+    miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
+    targetProjectRevenue: 950000,
   },
   {
     id: 'estimate-villa-athani',
@@ -64,6 +80,10 @@ const initialEstimateCards: EstimateCardRecord[] = [
     grandTotal: 1870215,
     updatedAt: 'Today',
     areas: demoCostEstimateAreas,
+    lineItems: demoCostEstimateLineItems,
+    serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
+    miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
+    targetProjectRevenue: 1870215,
   },
 ];
 
@@ -137,7 +157,11 @@ function getStoredEstimateCards() {
         typeof record.version === 'number' &&
         typeof record.grandTotal === 'number' &&
         typeof record.updatedAt === 'string' &&
-        Array.isArray(record.areas)
+        Array.isArray(record.areas) &&
+        Array.isArray(record.lineItems) &&
+        typeof record.serviceChargePercent === 'number' &&
+        typeof record.miscChargePercent === 'number' &&
+        typeof record.targetProjectRevenue === 'number'
       );
     }) as EstimateCardRecord[];
   } catch {
@@ -351,6 +375,10 @@ export default function CostEstimatesPage() {
       grandTotal: 0,
       updatedAt: 'Just now',
       areas: selectedAreas,
+      lineItems: [],
+      serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
+      miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
+      targetProjectRevenue: 950000,
     };
 
     setRecords(current => [nextRecord, ...current]);
@@ -358,10 +386,15 @@ export default function CostEstimatesPage() {
     setIsCreateModalOpen(false);
   };
 
-  const handleSaveAndCloseEstimate = (payload: {
+  const handleSaveEstimate = (payload: {
     grandTotal: number;
     status: EstimateCardStatus;
     version: number;
+    areas: CostEstimateArea[];
+    lineItems: CostEstimateLineItem[];
+    serviceChargePercent: number;
+    miscChargePercent: number;
+    targetProjectRevenue: number;
   }) => {
     if (!selectedRecordId) return;
 
@@ -374,11 +407,28 @@ export default function CostEstimatesPage() {
               status: payload.status,
               version: payload.version,
               updatedAt: 'Just now',
+              areas: payload.areas,
+              lineItems: payload.lineItems,
+              serviceChargePercent: payload.serviceChargePercent,
+              miscChargePercent: payload.miscChargePercent,
+              targetProjectRevenue: payload.targetProjectRevenue,
             }
           : record
       )
     );
+  };
 
+  const handleSaveAndCloseEstimate = (payload: {
+    grandTotal: number;
+    status: EstimateCardStatus;
+    version: number;
+    areas: CostEstimateArea[];
+    lineItems: CostEstimateLineItem[];
+    serviceChargePercent: number;
+    miscChargePercent: number;
+    targetProjectRevenue: number;
+  }) => {
+    handleSaveEstimate(payload);
     setSelectedRecordId(null);
   };
 
@@ -436,7 +486,14 @@ export default function CostEstimatesPage() {
 
         <CostEstimateSection
           initialAreas={selectedRecord.areas}
+          initialLineItems={selectedRecord.lineItems}
           initialProjectId={selectedRecord.projectId}
+          initialStatus={selectedRecord.status}
+          initialVersion={selectedRecord.version}
+          initialServiceChargePercent={selectedRecord.serviceChargePercent}
+          initialMiscChargePercent={selectedRecord.miscChargePercent}
+          initialTargetProjectRevenue={selectedRecord.targetProjectRevenue}
+          onSaveDraft={handleSaveEstimate}
           onSaveAndClose={handleSaveAndCloseEstimate}
         />
       </div>
