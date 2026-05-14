@@ -1300,8 +1300,7 @@ export function CostEstimateSection({
               </>
             ) : (
               <>
-                This estimate is currently not linked to any project. It can be
-                converted to a new or existing project later.
+                This estimate is currently unassigned. Assign it to a project when the estimate is ready.
               </>
             )}
           </p>
