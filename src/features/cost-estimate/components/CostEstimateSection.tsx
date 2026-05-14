@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 
 import { demoProcurementItems } from '@/features/items/data';
 import type { ProcurementItem } from '@/features/items/types';
+import { vendorCategoryLabels } from '@/features/vendors/data';
 
 import {
   DEFAULT_GST_PERCENT,
@@ -55,9 +56,137 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}`;
 }
 
+function createItemMasterDefaultDescription(itemName: string) {
+  const trimmedName = itemName.trim();
+
+  if (!trimmedName) return '';
+
+  const parts = trimmedName
+    .split('|')
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  const baseName = parts[0] ?? trimmedName;
+  const materialType = parts[1];
+
+  if (materialType) {
+    return `Supply and installation of ${baseName} using ${materialType} as per approved design and site measurements.`;
+  }
+
+  return `Supply and installation of ${baseName} as per approved design and site measurements.`;
+}
+function createEstimateLineItemDescription({
+  areaName,
+  itemDescription,
+}: {
+  areaName: string;
+  itemDescription: string;
+}) {
+  const cleanAreaName = areaName.trim() || 'Selected Area';
+  const cleanItemDescription = itemDescription.trim().replace(/\.$/, '');
+
+  if (!cleanItemDescription) return '';
+
+  return `For ${cleanAreaName}, ${cleanItemDescription}. Includes labour charges, required fittings, fixing materials, alignment, finishing touch-ups, and final site installation.`;
+}
+
+
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
 const ADD_NEW_UNIT_ID = 'add-new-unit';
 const ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
+const PROCUREMENT_CATEGORIES_STORAGE_KEY =
+  'gravium-os-procurement-categories-demo';
+
+interface ProcurementCategoryOption {
+  value: string;
+  label: string;
+}
+
+function getDefaultCategoryOptions(): ProcurementCategoryOption[] {
+  return [
+    { value: 'custom', label: 'Custom' },
+    ...Object.entries(vendorCategoryLabels).map(([value, label]) => ({
+      value,
+      label,
+    })),
+  ];
+}
+
+function formatProcurementCategoryLabel(value: string) {
+  return value
+    .trim()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function normalizeProcurementCategoryValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function createProcurementCategoryOption(value: string): ProcurementCategoryOption {
+  const trimmedValue = value.trim();
+
+  return {
+    value: normalizeProcurementCategoryValue(trimmedValue),
+    label: formatProcurementCategoryLabel(trimmedValue),
+  };
+}
+
+function saveProcurementCategoryOptions(options: ProcurementCategoryOption[]) {
+  if (typeof window === 'undefined') return;
+
+  localStorage.setItem(
+    PROCUREMENT_CATEGORIES_STORAGE_KEY,
+    JSON.stringify(options.filter(option => option.value !== 'all'))
+  );
+}
+
+function getProcurementCategoryLabel(
+  options: ProcurementCategoryOption[],
+  value: string
+) {
+  return (
+    options.find(option => option.value === value)?.label ??
+    formatProcurementCategoryLabel(value)
+  );
+}
+
+function getStoredCategoryOptions() {
+  if (typeof window === 'undefined') return getDefaultCategoryOptions();
+
+  try {
+    const storedCategories = localStorage.getItem(
+      PROCUREMENT_CATEGORIES_STORAGE_KEY
+    );
+
+    if (!storedCategories) return getDefaultCategoryOptions();
+
+    const parsedCategories = JSON.parse(storedCategories);
+
+    if (!Array.isArray(parsedCategories)) return getDefaultCategoryOptions();
+
+    const optionMap = new Map<string, string>();
+
+    getDefaultCategoryOptions().forEach(option => {
+      optionMap.set(option.value, option.label);
+    });
+
+    parsedCategories.forEach(option => {
+      if (
+        option &&
+        typeof option.value === 'string' &&
+        typeof option.label === 'string' &&
+        option.value !== 'all'
+      ) {
+        optionMap.set(option.value, option.label);
+      }
+    });
+
+    return Array.from(optionMap, ([value, label]) => ({ value, label }));
+  } catch {
+    return getDefaultCategoryOptions();
+  }
+}
 
 function mapProcurementItemToPreset(item: ProcurementItem): CostEstimateItemPreset {
   return {
@@ -111,10 +240,36 @@ function getStoredItemPresets() {
   }
 }
 
-function saveItemPresetsToItemsMaster(presets: CostEstimateItemPreset[]) {
+function saveItemPresetToItemsMaster(preset: CostEstimateItemPreset) {
   if (typeof window === 'undefined') return;
 
-  const items: ProcurementItem[] = presets.map(preset => ({
+  let currentItems: ProcurementItem[] = [];
+
+  try {
+    const storedItems = localStorage.getItem(ITEMS_STORAGE_KEY);
+    const parsedItems = storedItems ? JSON.parse(storedItems) : demoProcurementItems;
+
+    currentItems = Array.isArray(parsedItems)
+      ? (parsedItems.filter(item => {
+          return (
+            item &&
+            typeof item.id === 'string' &&
+            typeof item.name === 'string' &&
+            typeof item.category === 'string' &&
+            typeof item.defaultUnitLabel === 'string' &&
+            typeof item.purchaseRatePerUnit === 'number' &&
+            typeof item.markupPercent === 'number' &&
+            typeof item.sellingRatePerUnit === 'number' &&
+            typeof item.defaultDescription === 'string' &&
+            ['active', 'inactive'].includes(item.status)
+          );
+        }) as ProcurementItem[])
+      : demoProcurementItems;
+  } catch {
+    currentItems = demoProcurementItems;
+  }
+
+  const nextItem: ProcurementItem = {
     id: preset.id,
     name: preset.name,
     category: preset.category,
@@ -125,9 +280,19 @@ function saveItemPresetsToItemsMaster(presets: CostEstimateItemPreset[]) {
     defaultDescription: preset.defaultDescription,
     status: 'active',
     updatedAt: new Date().toISOString(),
-  }));
+  };
 
-  localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items));
+  const nextItems = [
+    nextItem,
+    ...currentItems.filter(item => {
+      return (
+        item.id !== nextItem.id &&
+        item.name.trim().toLowerCase() !== nextItem.name.trim().toLowerCase()
+      );
+    }),
+  ];
+
+  localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(nextItems));
 }
 
 interface CostEstimateSavePayload {
@@ -237,6 +402,9 @@ export function CostEstimateSection({
   const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
     () => getStoredItemPresets()
   );
+  const [itemCategoryOptions, setItemCategoryOptions] = useState(() =>
+    getStoredCategoryOptions()
+  );
   const [serviceChargePercent, setServiceChargePercent] = useState<number | ''>(
     initialServiceChargePercent ?? DEFAULT_SERVICE_CHARGE_PERCENT
   );
@@ -252,6 +420,9 @@ export function CostEstimateSection({
   const [isItemSuggestionOpen, setIsItemSuggestionOpen] = useState(false);
   const [isNewItemPresetFormOpen, setIsNewItemPresetFormOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetCategory, setNewPresetCategory] = useState('custom');
+  const [newPresetCategoryQuery, setNewPresetCategoryQuery] = useState('');
+  const [isNewPresetCategoryOpen, setIsNewPresetCategoryOpen] = useState(false);
   const [newPresetUnit, setNewPresetUnit] = useState('sqft');
   const [newPresetPurchaseRate, setNewPresetPurchaseRate] = useState('500');
   const [newPresetMarkupPercent, setNewPresetMarkupPercent] = useState('35');
@@ -299,6 +470,48 @@ export function CostEstimateSection({
     quantity: Number(newLineItemQuantity) || 0,
     unitLabel: newLineItemUnit,
   });
+  const newPresetCategorySearchValue = newPresetCategoryQuery
+    .trim()
+    .toLowerCase();
+  const matchingNewPresetCategoryOptions = newPresetCategorySearchValue
+    ? itemCategoryOptions.filter(option =>
+        option.label.toLowerCase().includes(newPresetCategorySearchValue)
+      )
+    : itemCategoryOptions;
+  const selectedNewPresetCategoryLabel = getProcurementCategoryLabel(
+    itemCategoryOptions,
+    newPresetCategory
+  );
+  const canAddNewPresetCategory =
+    newPresetCategoryQuery.trim().length > 0 &&
+    !itemCategoryOptions.some(
+      option =>
+        option.label.toLowerCase() ===
+        newPresetCategoryQuery.trim().toLowerCase()
+    );
+
+  const registerNewPresetCategory = (value: string) => {
+    const option = createProcurementCategoryOption(value);
+
+    setItemCategoryOptions(currentOptions => {
+      const exists = currentOptions.some(
+        currentOption => currentOption.value === option.value
+      );
+
+      if (exists) return currentOptions;
+
+      const nextOptions = [...currentOptions, option];
+      saveProcurementCategoryOptions(nextOptions);
+      return nextOptions;
+    });
+
+    setNewPresetCategory(option.value);
+    setNewPresetCategoryQuery('');
+    setIsNewPresetCategoryOpen(false);
+
+    return option.value;
+  };
+
   const shouldShowLineItemDetails = newLineItemName.trim().length > 0;
 
   const availableProjectsForNewEstimate = demoCostEstimateProjects.filter(
@@ -509,7 +722,12 @@ export function CostEstimateSection({
     setNewLineItemName(preset.name);
     setNewLineItemUnit(preset.defaultUnitLabel);
     setNewLineItemRate(String(preset.sellingRatePerUnit));
-    setNewLineItemDescription(preset.defaultDescription);
+    setNewLineItemDescription(
+      createEstimateLineItemDescription({
+        areaName: selectedAreaName,
+        itemDescription: preset.defaultDescription,
+      })
+    );
     setIsItemSuggestionOpen(false);
   };
 
@@ -519,6 +737,11 @@ export function CostEstimateSection({
   };
 
   const handleOpenNewItemPresetForm = () => {
+    const typedItemName = newLineItemName.trim();
+
+    setNewPresetName(typedItemName);
+    setNewPresetDescription(createItemMasterDefaultDescription(typedItemName));
+
     setIsNewItemPresetFormOpen(true);
     setIsItemSuggestionOpen(false);
   };
@@ -541,31 +764,38 @@ export function CostEstimateSection({
     const newPreset: CostEstimateItemPreset = {
       id: createId('estimate-item-preset'),
       name: trimmedName,
-      category: 'custom',
+      category: newPresetCategory,
       defaultUnitLabel: newPresetUnit,
       purchaseRatePerUnit,
       markupPercent,
       sellingRatePerUnit,
       defaultDescription:
         newPresetDescription.trim() ||
-        createDefaultDescription({
-          areaName: 'selected area',
-          itemName: trimmedName,
-          quantity: 1,
-          unitLabel: newPresetUnit,
-        }),
+        createItemMasterDefaultDescription(trimmedName),
     };
 
-    setItemPresets(current => {
-      const nextPresets = [...current, newPreset];
-      saveItemPresetsToItemsMaster(nextPresets);
-      return nextPresets;
-    });
+    setItemPresets(current => [
+      newPreset,
+      ...current.filter(preset => {
+        return (
+          preset.id !== newPreset.id &&
+          preset.name.trim().toLowerCase() !==
+            newPreset.name.trim().toLowerCase()
+        );
+      }),
+    ]);
+    saveItemPresetToItemsMaster(newPreset);
     setNewLineItemName(newPreset.name);
     setNewLineItemUnit(newPreset.defaultUnitLabel);
     setNewLineItemRate(String(newPreset.sellingRatePerUnit));
-    setNewLineItemDescription(newPreset.defaultDescription);
+    setNewLineItemDescription(
+      createEstimateLineItemDescription({
+        areaName: selectedAreaName,
+        itemDescription: newPreset.defaultDescription,
+      })
+    );
     setNewPresetName('');
+    setNewPresetCategory('custom');
     setNewPresetPurchaseRate('500');
     setNewPresetMarkupPercent('35');
     setNewPresetDescription('');
@@ -1161,84 +1391,230 @@ export function CostEstimateSection({
                           </div>
                         )}
                       </div>
-
                       {isNewItemPresetFormOpen && (
-                        <div className="rounded-2xl border border-border bg-muted/30 p-3">
-                          <p className="text-sm font-medium text-foreground">
-                            Add New Item Preset
-                          </p>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            This is temporary here. Later, item presets will move
-                            to Procurement &gt; Items.
-                          </p>
-
-                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <input
-                              value={newPresetName}
-                              onChange={event => setNewPresetName(event.target.value)}
-                              placeholder="Item name"
-                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                            />
-
-                            <select
-                              value={newPresetUnit}
-                              onChange={event => setNewPresetUnit(event.target.value)}
-                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                            >
-                              {units.map(unit => (
-                                <option key={unit.id} value={unit.shortLabel}>
-                                  {unit.shortLabel}
-                                </option>
-                              ))}
-                            </select>
-
-                            <input
-                              type="number"
-                              min="0"
-                              value={newPresetPurchaseRate}
-                              onChange={event =>
-                                setNewPresetPurchaseRate(event.target.value)
-                              }
-                              placeholder="Purchase rate"
-                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                            />
-
-                            <input
-                              type="number"
-                              min="0"
-                              value={newPresetMarkupPercent}
-                              onChange={event =>
-                                setNewPresetMarkupPercent(event.target.value)
-                              }
-                              placeholder="Markup %"
-                              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                            />
-                          </div>
-
-                          <textarea
-                            value={newPresetDescription}
-                            onChange={event =>
-                              setNewPresetDescription(event.target.value)
-                            }
-                            placeholder="Default description optional"
-                            rows={2}
-                            className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                          />
-
-                          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-muted-foreground">
-                              Selling rate preview:{' '}
-                              <span className="font-semibold text-foreground">
-                                {formatINR(
-                                  calculateSellingRate(
-                                    Number(newPresetPurchaseRate) || 0,
-                                    Number(newPresetMarkupPercent) || 0
-                                  )
-                                )}
-                              </span>
+                        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6">
+                          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+                            <h2 className="text-lg font-semibold text-foreground">
+                              Add Item
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Save this item to Procurement - Items and use it in this estimate row.
                             </p>
 
-                            <div className="flex gap-2">
+                            <div className="mt-5 grid gap-4">
+                              <label className="grid gap-2">
+                                <span className="text-sm font-medium text-foreground">
+                                  Item Name
+                                </span>
+                                <input
+                                  value={newPresetName}
+                                  onChange={event => {
+                                    const previousName = newPresetName;
+                                    const nextName = event.target.value;
+
+                                    setNewPresetName(nextName);
+                                    setNewPresetDescription(currentDescription => {
+                                      const previousAutoDescription =
+                                        createItemMasterDefaultDescription(
+                                          previousName
+                                        );
+                                      const isOldGeneratedDescription =
+                                        currentDescription.includes(
+                                          'configured as an execution-ready interior item'
+                                        ) ||
+                                        currentDescription.includes(
+                                          'configured with'
+                                        );
+
+                                      if (
+                                        currentDescription.trim() &&
+                                        currentDescription !== previousAutoDescription &&
+                                        !isOldGeneratedDescription
+                                      ) {
+                                        return currentDescription;
+                                      }
+
+                                      return createItemMasterDefaultDescription(nextName);
+                                    });
+                                  }}
+                                  placeholder="e.g. TV Unit"
+                                  className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                />
+                              </label>
+
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="relative grid gap-2">
+                                  <span className="text-sm font-medium text-foreground">
+                                    Scope / Category
+                                  </span>
+
+                                  <input
+                                    value={
+                                      isNewPresetCategoryOpen
+                                        ? newPresetCategoryQuery
+                                        : selectedNewPresetCategoryLabel
+                                    }
+                                    onFocus={() => {
+                                      setNewPresetCategoryQuery('');
+                                      setIsNewPresetCategoryOpen(true);
+                                    }}
+                                    onBlur={() => {
+                                      window.setTimeout(() => {
+                                        setIsNewPresetCategoryOpen(false);
+                                      }, 120);
+                                    }}
+                                    onChange={event => {
+                                      setNewPresetCategoryQuery(event.target.value);
+                                      setIsNewPresetCategoryOpen(true);
+                                    }}
+                                    onKeyDown={event => {
+                                      if (
+                                        event.key === 'Enter' &&
+                                        canAddNewPresetCategory
+                                      ) {
+                                        event.preventDefault();
+                                        registerNewPresetCategory(
+                                          newPresetCategoryQuery
+                                        );
+                                      }
+                                    }}
+                                    placeholder="Search or add category"
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                  />
+
+                                  {isNewPresetCategoryOpen && (
+                                    <div className="absolute left-0 right-0 top-[68px] z-[140] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+                                      {matchingNewPresetCategoryOptions.map(option => (
+                                        <button
+                                          key={option.value}
+                                          type="button"
+                                          onMouseDown={event =>
+                                            event.preventDefault()
+                                          }
+                                          onClick={() => {
+                                            setNewPresetCategory(option.value);
+                                            setNewPresetCategoryQuery('');
+                                            setIsNewPresetCategoryOpen(false);
+                                          }}
+                                          className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                        >
+                                          {option.label}
+                                        </button>
+                                      ))}
+
+                                      {canAddNewPresetCategory && (
+                                        <button
+                                          type="button"
+                                          onMouseDown={event =>
+                                            event.preventDefault()
+                                          }
+                                          onClick={() =>
+                                            registerNewPresetCategory(
+                                              newPresetCategoryQuery
+                                            )
+                                          }
+                                          className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                        >
+                                          Add Category: {newPresetCategoryQuery.trim()}
+                                        </button>
+                                      )}
+
+                                      {matchingNewPresetCategoryOptions.length ===
+                                        0 &&
+                                        !canAddNewPresetCategory && (
+                                          <p className="px-3 py-2 text-sm text-muted-foreground">
+                                            No categories found.
+                                          </p>
+                                        )}
+                                    </div>
+                                  )}
+                                </label>
+
+                                <label className="grid gap-2">
+                                  <span className="text-sm font-medium text-foreground">
+                                    Default Unit
+                                  </span>
+                                  <select
+                                    value={newPresetUnit}
+                                    onChange={event =>
+                                      setNewPresetUnit(event.target.value)
+                                    }
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                                  >
+                                    {units.map(unit => (
+                                      <option key={unit.id} value={unit.shortLabel}>
+                                        {unit.shortLabel}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="grid gap-2">
+                                  <span className="text-sm font-medium text-foreground">
+                                    Cost Rate
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={newPresetPurchaseRate}
+                                    onChange={event =>
+                                      setNewPresetPurchaseRate(event.target.value)
+                                    }
+                                    placeholder="500"
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                  />
+                                </label>
+
+                                <label className="grid gap-2">
+                                  <span className="text-sm font-medium text-foreground">
+                                    Markup %
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={newPresetMarkupPercent}
+                                    onChange={event =>
+                                      setNewPresetMarkupPercent(event.target.value)
+                                    }
+                                    placeholder="35"
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                  Calculated Sale Rate
+                                </p>
+                                <p className="mt-1 text-xl font-semibold text-foreground">
+                                  {formatINR(
+                                    calculateSellingRate(
+                                      Number(newPresetPurchaseRate) || 0,
+                                      Number(newPresetMarkupPercent) || 0
+                                    )
+                                  )}
+                                </p>
+                              </div>
+
+                              <label className="grid gap-2">
+                                <span className="text-sm font-medium text-foreground">
+                                  Default Description
+                                </span>
+                                <textarea
+                                  value={newPresetDescription}
+                                  onChange={event =>
+                                    setNewPresetDescription(event.target.value)
+                                  }
+                                  rows={4}
+                                  placeholder="Default estimate description for this item"
+                                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1246,6 +1622,7 @@ export function CostEstimateSection({
                               >
                                 Cancel
                               </Button>
+
                               <Button
                                 type="button"
                                 onClick={handleAddItemPreset}
