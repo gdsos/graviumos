@@ -1,22 +1,7 @@
-﻿export type VendorStatus = 'active' | 'inactive' | 'blacklisted';
+export type VendorStatus = 'active' | 'inactive' | 'blacklisted';
 export type VendorAvailability = 'available' | 'busy' | 'on_hold';
 
-export type VendorCategory =
-  | 'civil'
-  | 'electrical'
-  | 'plumbing'
-  | 'painting'
-  | 'false_ceiling'
-  | 'glass_windows'
-  | 'carpentry'
-  | 'modular_kitchen'
-  | 'wardrobe'
-  | 'flooring'
-  | 'stone'
-  | 'metal'
-  | 'fabrication'
-  | 'lighting'
-  | 'other';
+export type VendorCategory = string;
 
 export interface Vendor {
   id: string;
@@ -31,7 +16,6 @@ export interface Vendor {
   status: VendorStatus;
   availability: VendorAvailability;
   assignedProjectCount: number;
-  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

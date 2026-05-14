@@ -1,12 +1,11 @@
-﻿import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronDown, X } from 'lucide-react';
 
 import { FormField } from '@/components/common/FormField';
 import { Button } from '@/components/ui/button';
 
 import {
   vendorAvailabilityLabels,
-  vendorCategoryLabels,
   vendorStatusLabels,
 } from '../data';
 
@@ -19,10 +18,17 @@ import type {
 
 type VendorFormMode = 'create' | 'edit';
 
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+
 interface VendorFormModalProps {
   open: boolean;
   mode: VendorFormMode;
   vendor?: Vendor | null;
+  categoryOptions: DropdownOption[];
+  onCreateCategory: (value: string) => VendorCategory;
   onClose: () => void;
   onSubmit: (vendor: Vendor) => void;
 }
@@ -40,7 +46,6 @@ interface VendorFormState {
   status: VendorStatus;
   availability: VendorAvailability;
   assignedProjectCount: string;
-  notes: string;
 }
 
 const emptyForm: VendorFormState = {
@@ -56,7 +61,6 @@ const emptyForm: VendorFormState = {
   status: 'active',
   availability: 'available',
   assignedProjectCount: '0',
-  notes: '',
 };
 
 const inputClass =
@@ -70,6 +74,129 @@ const phoneCountryCodes = [
   { value: '+965', label: 'KW +965' },
   { value: '+968', label: 'OM +968' },
 ];
+
+interface DropdownFieldProps {
+  value: string;
+  options: DropdownOption[];
+  onChange: (value: string) => void;
+  searchable?: boolean;
+  allowCustom?: boolean;
+  placeholder?: string;
+}
+
+function formatCategoryLabel(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function DropdownField({
+  value,
+  options,
+  onChange,
+  searchable = false,
+  allowCustom = false,
+  placeholder = 'Select option',
+}: DropdownFieldProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selectedOption = options.find(option => option.value === value);
+  const displayValue = selectedOption?.label ?? formatCategoryLabel(value);
+  const searchValue = query.trim().toLowerCase();
+  const matchingOptions = searchValue
+    ? options.filter(option => option.label.toLowerCase().includes(searchValue))
+    : options;
+  const canUseCustom =
+    allowCustom &&
+    query.trim().length > 0 &&
+    !options.some(
+      option => option.label.toLowerCase() === query.trim().toLowerCase()
+    );
+
+  const handleSelect = (nextValue: string) => {
+    onChange(nextValue);
+    setQuery('');
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative min-w-0">
+      {searchable ? (
+        <div className="relative">
+          <input
+            value={isOpen ? query : displayValue}
+            onFocus={() => {
+              setQuery('');
+              setIsOpen(true);
+            }}
+            onBlur={() => {
+              window.setTimeout(() => setIsOpen(false), 120);
+            }}
+            onChange={event => {
+              setQuery(event.target.value);
+              setIsOpen(true);
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Enter' && canUseCustom) {
+                event.preventDefault();
+                handleSelect(query.trim());
+              }
+            }}
+            placeholder={placeholder}
+            className={`${inputClass} pr-9`}
+          />
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsOpen(current => !current)}
+          onBlur={() => {
+            window.setTimeout(() => setIsOpen(false), 120);
+          }}
+          className="flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition focus:border-foreground"
+        >
+          <span className="truncate">{displayValue}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      )}
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-11 z-[100] max-h-56 min-w-full overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+          {matchingOptions.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => handleSelect(option.value)}
+              className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+            >
+              {option.label}
+            </button>
+          ))}
+
+          {canUseCustom && (
+            <button
+              type="button"
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => handleSelect(query.trim())}
+              className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+            >
+              Add Category: {query.trim()}
+            </button>
+          )}
+
+          {matchingOptions.length === 0 && !canUseCustom && (
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              No options found.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function createId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -118,7 +245,6 @@ function mapVendorToForm(vendor: Vendor): VendorFormState {
     status: vendor.status,
     availability: vendor.availability,
     assignedProjectCount: String(vendor.assignedProjectCount),
-    notes: vendor.notes ?? '',
   };
 }
 
@@ -126,6 +252,8 @@ export function VendorFormModal({
   open,
   mode,
   vendor,
+  categoryOptions,
+  onCreateCategory,
   onClose,
   onSubmit,
 }: VendorFormModalProps) {
@@ -143,10 +271,6 @@ export function VendorFormModal({
   }, [mode, open, vendor]);
 
   if (!open) return null;
-
-  const categories = Object.entries(vendorCategoryLabels) as Array<
-    [VendorCategory, string]
-  >;
 
   const statuses = Object.entries(vendorStatusLabels) as Array<
     [VendorStatus, string]
@@ -171,7 +295,7 @@ export function VendorFormModal({
     const nextVendor: Vendor = {
       id: vendor?.id ?? createId(),
       name: form.name.trim(),
-      category: form.category,
+      category: onCreateCategory(form.category),
       scopeOfWork: form.scopeOfWork.trim(),
       contactPerson: form.contactPerson.trim(),
       phone: `${form.phoneCountryCode} ${form.phoneNumber.trim()}`,
@@ -181,7 +305,6 @@ export function VendorFormModal({
       status: form.status,
       availability: form.availability,
       assignedProjectCount: Number(form.assignedProjectCount) || 0,
-      notes: form.notes.trim() || undefined,
       createdAt: vendor?.createdAt ?? now,
       updatedAt: now,
     };
@@ -227,20 +350,15 @@ export function VendorFormModal({
               />
             </FormField>
 
-            <FormField label="Category" required>
-              <select
+            <FormField label="Scope / Category" required>
+              <DropdownField
                 value={form.category}
-                onChange={event =>
-                  updateForm('category', event.target.value as VendorCategory)
-                }
-                className={inputClass}
-              >
-                {categories.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                options={categoryOptions}
+                searchable
+                allowCustom
+                placeholder="Search or add category"
+                onChange={value => updateForm('category', onCreateCategory(value))}
+              />
             </FormField>
 
             <FormField label="Contact Person" required>
@@ -308,38 +426,24 @@ export function VendorFormModal({
             </FormField>
 
             <FormField label="Status" required>
-              <select
+              <DropdownField
                 value={form.status}
-                onChange={event =>
-                  updateForm('status', event.target.value as VendorStatus)
-                }
-                className={inputClass}
-              >
-                {statuses.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                options={statuses.map(([value, label]) => ({ value, label }))}
+                onChange={value => updateForm('status', value as VendorStatus)}
+              />
             </FormField>
 
             <FormField label="Availability" required>
-              <select
+              <DropdownField
                 value={form.availability}
-                onChange={event =>
-                  updateForm(
-                    'availability',
-                    event.target.value as VendorAvailability
-                  )
+                options={availabilities.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={value =>
+                  updateForm('availability', value as VendorAvailability)
                 }
-                className={inputClass}
-              >
-                {availabilities.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              />
             </FormField>
 
             <FormField label="Rating">
@@ -379,20 +483,7 @@ export function VendorFormModal({
                   placeholder="Describe the vendor scope..."
                 />
               </FormField>
-            </div>
-
-            <div className="sm:col-span-2">
-              <FormField label="Notes">
-                <textarea
-                  value={form.notes}
-                  onChange={event => updateForm('notes', event.target.value)}
-                  rows={3}
-                  className={inputClass}
-                  placeholder="Internal notes, quality comments, coordination details..."
-                />
-              </FormField>
-            </div>
-          </div>
+            </div>          </div>
 
           <div className="mt-6 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={onClose}>

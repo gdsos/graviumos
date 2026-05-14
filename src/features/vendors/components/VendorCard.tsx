@@ -1,4 +1,4 @@
-﻿import { Mail, MapPin, Phone, Star, UserRound, BriefcaseBusiness } from 'lucide-react';
+﻿import { BriefcaseBusiness, Mail, MapPin, Pencil, Phone, Star, Trash2, UserRound } from 'lucide-react';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { Vendor } from '../types';
 import {
@@ -19,6 +19,12 @@ function getAvailabilityVariant(availability: Vendor['availability']) {
   return 'muted';
 }
 
+function formatCategoryLabel(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
 function getStatusVariant(status: Vendor['status']) {
   if (status === 'active') return 'success';
   if (status === 'blacklisted') return 'danger';
@@ -27,7 +33,7 @@ function getStatusVariant(status: Vendor['status']) {
 
 export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
   return (
-    <article className="group rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -46,7 +52,7 @@ export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
 
           <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
             <BriefcaseBusiness className="h-3.5 w-3.5" />
-            {vendorCategoryLabels[vendor.category]}
+            {vendorCategoryLabels[vendor.category] ?? formatCategoryLabel(vendor.category)}
           </p>
         </div>
 
@@ -83,42 +89,33 @@ export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
           <span className="truncate">{vendor.location}</span>
         </div>
       </div>
-
-      {vendor.notes && (
-        <div className="mt-5 rounded-xl border border-border bg-muted/30 p-3">
-          <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-            {vendor.notes}
-          </p>
-        </div>
-      )}
-
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
+      <div className="mt-auto grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_120px_120px] sm:items-center">
         <p className="text-xs text-muted-foreground">
           {vendor.assignedProjectCount} assigned project
           {vendor.assignedProjectCount === 1 ? '' : 's'}
         </p>
 
-        <div className="flex items-center gap-2">
-          {onEdit && (
-            <button
-              type="button"
-              onClick={() => onEdit(vendor)}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
-            >
-              Edit
-            </button>
-          )}
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(vendor)}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </button>
+        )}
 
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(vendor)}
-              className="rounded-lg border border-destructive/30 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive/10"
-            >
-              Delete
-            </button>
-          )}
-        </div>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(vendor)}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-3 text-sm font-medium text-destructive transition hover:bg-destructive/10"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        )}
       </div>
     </article>
   );

@@ -7,7 +7,7 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
-import { demoVendors } from '@/features/vendors/data';
+import { demoVendors, vendorCategoryLabels } from '@/features/vendors/data';
 import { VendorCard } from '@/features/vendors/components/VendorCard';
 import { VendorFilters } from '@/features/vendors/components/VendorFilters';
 import { VendorFormModal } from '@/features/vendors/components/VendorFormModal';
@@ -23,7 +23,84 @@ type VendorModalState =
   | { mode: 'edit'; vendor: Vendor }
   | null;
 const VENDORS_STORAGE_KEY = 'gravium-os-vendors-demo';
+const PROCUREMENT_CATEGORIES_STORAGE_KEY =
+  'gravium-os-procurement-categories-demo';
+
+interface ProcurementCategoryOption {
+  value: string;
+  label: string;
+}
+
+function normalizeCategoryValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function formatCategoryLabel(value: string) {
+  return value
+    .trim()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function createCategoryOption(value: string): ProcurementCategoryOption {
+  const trimmedValue = value.trim();
+
+  return {
+    value: normalizeCategoryValue(trimmedValue),
+    label: formatCategoryLabel(trimmedValue),
+  };
+}
+
+function getDefaultCategoryOptions(): ProcurementCategoryOption[] {
+  return [
+    { value: 'all', label: 'All Categories' },
+    ...Object.entries(vendorCategoryLabels).map(([value, label]) => ({
+      value,
+      label,
+    })),
+  ];
+}
+
+function getStoredCategoryOptions() {
+  if (typeof window === 'undefined') return getDefaultCategoryOptions();
+
+  try {
+    const storedCategories = localStorage.getItem(
+      PROCUREMENT_CATEGORIES_STORAGE_KEY
+    );
+
+    if (!storedCategories) return getDefaultCategoryOptions();
+
+    const parsedCategories = JSON.parse(storedCategories);
+
+    if (!Array.isArray(parsedCategories)) return getDefaultCategoryOptions();
+
+    const optionMap = new Map<string, string>();
+
+    getDefaultCategoryOptions().forEach(option => {
+      optionMap.set(option.value, option.label);
+    });
+
+    parsedCategories.forEach(option => {
+      if (
+        option &&
+        typeof option.value === 'string' &&
+        typeof option.label === 'string' &&
+        option.value !== 'all'
+      ) {
+        optionMap.set(option.value, option.label);
+      }
+    });
+
+    return Array.from(optionMap, ([value, label]) => ({ value, label }));
+  } catch {
+    return getDefaultCategoryOptions();
+  }
+}
 export default function VendorsPage() {
+  const [categoryOptions, setCategoryOptions] = useState(() =>
+    getStoredCategoryOptions()
+  );
   const [vendors, setVendors] = useState<Vendor[]>(() => {
     if (typeof window === 'undefined') return demoVendors;
 
@@ -50,6 +127,49 @@ export default function VendorsPage() {
     localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(vendors));
   }, [vendors]);
 
+  useEffect(() => {
+    localStorage.setItem(
+      PROCUREMENT_CATEGORIES_STORAGE_KEY,
+      JSON.stringify(categoryOptions.filter(option => option.value !== 'all'))
+    );
+  }, [categoryOptions]);
+
+  const categoryFilterOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+
+    categoryOptions.forEach(option => {
+      optionMap.set(option.value, option.label);
+    });
+
+    vendors.forEach(vendor => {
+      if (!optionMap.has(vendor.category)) {
+        optionMap.set(vendor.category, formatCategoryLabel(vendor.category));
+      }
+    });
+
+    return Array.from(optionMap, ([value, label]) => ({ value, label }));
+  }, [categoryOptions, vendors]);
+
+  const formCategoryOptions = categoryFilterOptions.filter(
+    option => option.value !== 'all'
+  );
+
+  const registerCategoryOption = (value: string): VendorCategory => {
+    const nextOption = createCategoryOption(value);
+
+    setCategoryOptions(currentOptions => {
+      const exists = currentOptions.some(
+        option => option.value === nextOption.value
+      );
+
+      if (exists) return currentOptions;
+
+      return [...currentOptions, nextOption];
+    });
+
+    return nextOption.value;
+  };
+
   const filteredVendors = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
 
@@ -63,7 +183,6 @@ export default function VendorsPage() {
           vendor.phone,
           vendor.email,
           vendor.location,
-          vendor.notes,
         ]
           .filter(Boolean)
           .join(' ')
@@ -218,6 +337,7 @@ export default function VendorsPage() {
           category={category}
           status={status}
           availability={availability}
+          categoryOptions={categoryFilterOptions}
           onSearchChange={setSearch}
           onCategoryChange={setCategory}
           onStatusChange={setStatus}
@@ -264,6 +384,8 @@ export default function VendorsPage() {
         open={modalState !== null}
         mode={modalState?.mode ?? 'create'}
         vendor={modalState?.vendor ?? null}
+        categoryOptions={formCategoryOptions}
+        onCreateCategory={registerCategoryOption}
         onClose={() => setModalState(null)}
         onSubmit={handleSubmitVendor}
       />

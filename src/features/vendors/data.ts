@@ -1,4 +1,4 @@
-﻿import type { Vendor } from './types';
+import type { Vendor } from './types';
 
 export const demoVendors: Vendor[] = [
   {
@@ -14,7 +14,6 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'busy',
     assignedProjectCount: 2,
-    notes: 'Reliable for premium texture finishes. Requires clear surface preparation before arrival.',
     createdAt: '2026-03-01',
     updatedAt: '2026-05-10',
   },
@@ -31,7 +30,6 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'available',
     assignedProjectCount: 1,
-    notes: 'Also handles selected kitchen cabinet glass shutter works.',
     createdAt: '2026-03-02',
     updatedAt: '2026-05-10',
   },
@@ -48,7 +46,6 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'busy',
     assignedProjectCount: 3,
-    notes: 'Good finish quality. Needs final design freeze before production.',
     createdAt: '2026-03-03',
     updatedAt: '2026-05-10',
   },
@@ -65,7 +62,6 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'available',
     assignedProjectCount: 1,
-    notes: 'Best used with clear lighting layout and marked site drawings.',
     createdAt: '2026-03-04',
     updatedAt: '2026-05-10',
   },
@@ -81,7 +77,6 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'on_hold',
     assignedProjectCount: 1,
-    notes: 'Needs supervision during concealed line changes.',
     createdAt: '2026-03-05',
     updatedAt: '2026-05-10',
   },
@@ -98,7 +93,6 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'available',
     assignedProjectCount: 2,
-    notes: 'Coordinates well with electrical team when drawings are clear.',
     createdAt: '2026-03-06',
     updatedAt: '2026-05-10',
   },
@@ -114,13 +108,12 @@ export const demoVendors: Vendor[] = [
     status: 'active',
     availability: 'busy',
     assignedProjectCount: 2,
-    notes: 'Good for early-stage execution corrections and site preparation.',
     createdAt: '2026-03-07',
     updatedAt: '2026-05-10',
   },
 ];
 
-export const vendorCategoryLabels: Record<Vendor['category'], string> = {
+export const vendorCategoryLabels: Record<string, string> = {
   civil: 'Civil',
   electrical: 'Electrical',
   plumbing: 'Plumbing',
