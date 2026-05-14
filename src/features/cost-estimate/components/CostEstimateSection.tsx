@@ -4,7 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   FilePlus2,
-  MinusCircle,
+  Minus,
   Plus,
   RefreshCcw,
   Save,
@@ -1178,7 +1178,7 @@ export function CostEstimateSection({
       }
       description="Prepare project-level estimates with area-wise scope, costs, pricing, GST, and approval-ready totals."
       actions={
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           {status === 'approved' ? (
             isHistoricalView ? null : (
               <Button
@@ -1192,13 +1192,13 @@ export function CostEstimateSection({
               </Button>
             )
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
               {isRevisionDraft && onViewApprovedVersion && (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={onViewApprovedVersion}
-                  className="h-10 gap-2"
+                  className="h-10 w-full gap-2 sm:w-auto"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   View Approved
@@ -1207,13 +1207,13 @@ export function CostEstimateSection({
 
               <div
                 ref={saveMenuRef}
-                className="relative inline-flex h-10 min-w-0 items-stretch"
+                className="relative flex h-10 w-full min-w-0 items-stretch sm:inline-flex sm:w-auto"
               >
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleSaveDraft}
-                  className="h-10 rounded-r-none border-r-0 bg-background text-foreground hover:bg-muted gap-2"
+                  className="h-10 flex-1 justify-center rounded-r-none border-r-0 bg-background pl-13 pr-3 text-foreground hover:bg-muted gap-2 sm:flex-none sm:pl-4"
                 >
                   <Save className="h-4 w-4" />
                   {saveButtonLabel}
@@ -1223,14 +1223,14 @@ export function CostEstimateSection({
                   type="button"
                   variant="outline"
                   onClick={() => setIsSaveMenuOpen(current => !current)}
-                  className="h-10 rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
+                  className="h-10 flex-none rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
                   aria-label="Open save options"
                 >
                   <ChevronDown className="h-4 w-4" />
                 </Button>
 
                 {isSaveMenuOpen && (
-                  <div className="absolute right-0 top-11 z-[100] w-max overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                  <div className="absolute left-0 right-0 top-11 z-[100] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
                     <button
                       type="button"
                       onMouseDown={event => event.preventDefault()}
@@ -1238,7 +1238,7 @@ export function CostEstimateSection({
                         setIsSaveMenuOpen(false);
                         handleSaveAndClose();
                       }}
-                      className="whitespace-nowrap px-3 py-2 text-left text-sm transition hover:bg-muted"
+                      className="w-full whitespace-nowrap px-3 py-2 text-center text-sm transition hover:bg-muted"
                     >
                       Save and Close
                     </button>
@@ -1250,7 +1250,7 @@ export function CostEstimateSection({
                 type="button"
                 variant="outline"
                 onClick={handleDeleteDraft}
-                className="h-10 gap-2 text-destructive hover:text-destructive"
+                className="h-10 w-full gap-2 text-destructive hover:text-destructive sm:w-auto"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleteButtonLabel}
@@ -1601,10 +1601,10 @@ export function CostEstimateSection({
                             type="button"
                             onMouseDown={event => event.preventDefault()}
                             onClick={handleClearNewLineItem}
-                            className="absolute right-2 top-5 z-[60] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-destructive/40 bg-background text-destructive transition hover:bg-destructive/10"
+                            className="absolute right-2 top-5 z-[60] flex h-[18px] w-[18px] -translate-y-1/2 items-center justify-center rounded-full border-[2.5px] border-destructive/90 bg-background text-destructive transition hover:border-destructive hover:bg-destructive/10"
                             aria-label="Clear selected item"
                           >
-                            <MinusCircle className="h-4 w-4" />
+                            <Minus className="h-[11px] w-[11px]" strokeWidth={5} />
                           </button>
                         )}
 
@@ -2295,13 +2295,13 @@ export function CostEstimateSection({
           <>
             <div
               ref={bottomSaveMenuRef}
-              className="relative inline-flex h-10 min-w-0 items-stretch"
+              className="relative flex h-10 w-full min-w-0 items-stretch sm:inline-flex sm:w-auto"
             >
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleSaveDraft}
-                className="h-10 rounded-r-none border-r-0 bg-background text-foreground hover:bg-muted gap-2"
+                className="h-10 flex-1 justify-center rounded-r-none border-r-0 bg-background pl-13 pr-3 text-foreground hover:bg-muted gap-2 sm:flex-none sm:pl-4"
               >
                 <Save className="h-4 w-4" />
                 {saveButtonLabel}
@@ -2311,14 +2311,14 @@ export function CostEstimateSection({
                 type="button"
                 variant="outline"
                 onClick={() => setIsBottomSaveMenuOpen(current => !current)}
-                className="h-10 rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
+                className="h-10 flex-none rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
                 aria-label="Open bottom save options"
               >
                 <ChevronDown className="h-4 w-4" />
               </Button>
 
               {isBottomSaveMenuOpen && (
-                <div className="absolute bottom-11 right-0 z-[100] w-max overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                <div className="absolute left-0 right-0 top-11 z-[100] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
                   <button
                     type="button"
                     onMouseDown={event => event.preventDefault()}
@@ -2326,7 +2326,7 @@ export function CostEstimateSection({
                       setIsBottomSaveMenuOpen(false);
                       handleSaveAndClose();
                     }}
-                    className="whitespace-nowrap px-3 py-2 text-left text-sm transition hover:bg-muted"
+                    className="w-full whitespace-nowrap px-3 py-2 text-center text-sm transition hover:bg-muted"
                   >
                     Save and Close
                   </button>
