@@ -6,7 +6,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import { SectionCard } from '@/components/common/SectionCard';
+import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { CostEstimateSection } from '@/features/cost-estimate/components/CostEstimateSection';
@@ -444,8 +444,9 @@ export default function CostEstimatesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <SectionCard
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        eyebrow="Gravium OS"
         title="Cost Estimates"
         description="Create, review, approve, and revise project cost estimates before execution timelines are generated."
         actions={
@@ -454,9 +455,10 @@ export default function CostEstimatesPage() {
             Create Estimate
           </Button>
         }
-      >
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {records.map(record => (
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {records.map(record => (
             <div
               key={record.id}
               className="rounded-2xl border border-border bg-background p-4 shadow-sm"
@@ -532,9 +534,8 @@ export default function CostEstimatesPage() {
                 </Button>
               </div>
             </div>
-          ))}
-        </div>
-      </SectionCard>
+        ))}
+      </div>
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 p-4 backdrop-blur-md">
