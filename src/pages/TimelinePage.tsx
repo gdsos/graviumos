@@ -324,6 +324,15 @@ export default function TimelinePage() {
   const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
     demoTimelineProject.id
   );
+  const [timelineStartDate, setTimelineStartDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [isContractSigned, setIsContractSigned] = useState(false);
+  const [isBookingPaymentCollected, setIsBookingPaymentCollected] = useState(false);
+  const [bookingPaymentPercent, setBookingPaymentPercent] = useState('35');
+  const [stageOnePaymentPercent, setStageOnePaymentPercent] = useState('30');
+  const [stageTwoPaymentPercent, setStageTwoPaymentPercent] = useState('25');
+  const [handoverPaymentPercent, setHandoverPaymentPercent] = useState('10');
 
   useEffect(() => {
     localStorage.setItem(
@@ -401,6 +410,27 @@ export default function TimelinePage() {
   );
   const isTimelineEstimateApproved = linkedCostEstimate?.status === 'approved';
   const timelineSourceMessage = getTimelineSourceMessage(linkedCostEstimate);
+  const paymentPercentageValues = {
+    booking: bookingPaymentPercent === '' ? 0 : Number(bookingPaymentPercent) || 0,
+    stageOne:
+      stageOnePaymentPercent === '' ? 0 : Number(stageOnePaymentPercent) || 0,
+    stageTwo:
+      stageTwoPaymentPercent === '' ? 0 : Number(stageTwoPaymentPercent) || 0,
+    handover:
+      handoverPaymentPercent === '' ? 0 : Number(handoverPaymentPercent) || 0,
+  };
+  const paymentPercentageTotal =
+    paymentPercentageValues.booking +
+    paymentPercentageValues.stageOne +
+    paymentPercentageValues.stageTwo +
+    paymentPercentageValues.handover;
+  const isPaymentPercentageMatched = paymentPercentageTotal === 100;
+  const canBuildTimeline =
+    isTimelineEstimateApproved &&
+    isContractSigned &&
+    isBookingPaymentCollected &&
+    Boolean(timelineStartDate) &&
+    isPaymentPercentageMatched;
 
   const handleMarkPaymentReceived = (paymentGate: PaymentGate) => {
     const today = new Date().toISOString().slice(0, 10);
@@ -441,11 +471,12 @@ export default function TimelinePage() {
   };
 
   const handleOpenTimelineWizard = () => {
-    if (!isTimelineEstimateApproved || !linkedCostEstimate) return;
+    if (!canBuildTimeline || !linkedCostEstimate) return;
 
     const generatedTimeline = generateTimelineFromApprovedEstimate({
       source: linkedCostEstimate,
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: timelineStartDate,
+      paymentPercentages: paymentPercentageValues,
     });
 
     setPaymentGates(generatedTimeline.paymentGates);
@@ -464,6 +495,8 @@ export default function TimelinePage() {
     if (!projectId) return;
 
     setSelectedTimelineProjectId(projectId);
+    setIsContractSigned(false);
+    setIsBookingPaymentCollected(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -865,7 +898,7 @@ export default function TimelinePage() {
               <Button
                 type="button"
                 onClick={handleOpenTimelineWizard}
-                disabled={!isTimelineEstimateApproved}
+                disabled={!canBuildTimeline}
                 className="gap-2"
               >
                 <Plus className="h-4 w-4" />
@@ -1056,6 +1089,129 @@ export default function TimelinePage() {
         )}
       </div>
 
+      <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Timeline Planning Controls
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Confirm contract and booking payment before building the execution timeline.
+            </p>
+          </div>
+
+          <StatusBadge variant={canBuildTimeline ? 'success' : 'warning'}>
+            {canBuildTimeline ? 'Ready To Build' : 'Waiting'}
+          </StatusBadge>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_180px]">
+          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-background px-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={isContractSigned}
+              onChange={event => setIsContractSigned(event.target.checked)}
+              disabled={!isTimelineEstimateApproved}
+            />
+            Contract Signed
+          </label>
+
+          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-background px-3 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={isBookingPaymentCollected}
+              onChange={event =>
+                setIsBookingPaymentCollected(event.target.checked)
+              }
+              disabled={!isTimelineEstimateApproved}
+            />
+            Booking Payment Collected
+          </label>
+
+          <label className="grid gap-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              Timeline Start Date
+            </span>
+            <input
+              type="date"
+              value={timelineStartDate}
+              onChange={event => setTimelineStartDate(event.target.value)}
+              disabled={!isTimelineEstimateApproved}
+              className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground disabled:opacity-50"
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-border bg-background p-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-foreground">
+              Payment Gate Percentages
+            </p>
+            <p
+              className={`text-xs ${
+                isPaymentPercentageMatched
+                  ? 'text-emerald-600 dark:text-emerald-300'
+                  : 'text-amber-700 dark:text-amber-300'
+              }`}
+            >
+              Total: {paymentPercentageTotal}%
+            </p>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Booking</span>
+              <input
+                type="number"
+                min="0"
+                value={bookingPaymentPercent}
+                onChange={event => setBookingPaymentPercent(event.target.value)}
+                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Stage 1</span>
+              <input
+                type="number"
+                min="0"
+                value={stageOnePaymentPercent}
+                onChange={event => setStageOnePaymentPercent(event.target.value)}
+                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Stage 2</span>
+              <input
+                type="number"
+                min="0"
+                value={stageTwoPaymentPercent}
+                onChange={event => setStageTwoPaymentPercent(event.target.value)}
+                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-xs text-muted-foreground">Handover</span>
+              <input
+                type="number"
+                min="0"
+                value={handoverPaymentPercent}
+                onChange={event => setHandoverPaymentPercent(event.target.value)}
+                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </label>
+          </div>
+
+          {!isPaymentPercentageMatched && (
+            <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+              Payment gate percentages must total 100% before building the timeline.
+            </p>
+          )}
+        </div>
+      </div>
+
       {showCreateWizard && isTimelineEstimateApproved && (
         <div className="mb-6">
           <CreateTimelineWizard
@@ -1074,7 +1230,7 @@ export default function TimelinePage() {
             <Button
               type="button"
               onClick={handleOpenTimelineWizard}
-              disabled={!isTimelineEstimateApproved}
+              disabled={!canBuildTimeline}
               className="gap-2"
             >
               <Plus className="h-4 w-4" />

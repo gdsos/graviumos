@@ -91,10 +91,23 @@ function createPaymentGateFromEstimate({
 export function generateTimelineFromApprovedEstimate({
   source,
   startDate,
+  paymentPercentages,
 }: {
   source: ApprovedEstimateTimelineSource;
   startDate: string;
+  paymentPercentages?: {
+    booking: number;
+    stageOne: number;
+    stageTwo: number;
+    handover: number;
+  };
 }): GeneratedTimeline {
+  const resolvedPaymentPercentages = paymentPercentages ?? {
+    booking: 35,
+    stageOne: 30,
+    stageTwo: 25,
+    handover: 10,
+  };
   const projectId = source.projectId ?? source.id;
   const generatedWorkPackages: WorkPackage[] = [];
 
@@ -159,7 +172,7 @@ export function generateTimelineFromApprovedEstimate({
         type: 'execution_booking',
         title: 'Booking Payment',
         description: 'Collect on contract signing before timeline confirmation.',
-        percentage: 35,
+        percentage: resolvedPaymentPercentages.booking,
         dueDate: gate1Date,
       }),
       createPaymentGateFromEstimate({
@@ -168,7 +181,7 @@ export function generateTimelineFromApprovedEstimate({
         type: 'procurement_start',
         title: 'Stage 1 Completion',
         description: 'Collect after the first execution stage is completed.',
-        percentage: 30,
+        percentage: resolvedPaymentPercentages.stageOne,
         dueDate: gate2Date,
       }),
       createPaymentGateFromEstimate({
@@ -177,7 +190,7 @@ export function generateTimelineFromApprovedEstimate({
         type: 'final_installation',
         title: 'Stage 2 Completion',
         description: 'Collect before the final execution stage begins.',
-        percentage: 25,
+        percentage: resolvedPaymentPercentages.stageTwo,
         dueDate: gate3Date,
       }),
       createPaymentGateFromEstimate({
@@ -186,7 +199,7 @@ export function generateTimelineFromApprovedEstimate({
         type: 'handover',
         title: 'Final Handover',
         description: 'Collect at final completion and handover.',
-        percentage: 10,
+        percentage: resolvedPaymentPercentages.handover,
         dueDate: gate4Date,
       }),
     ],
