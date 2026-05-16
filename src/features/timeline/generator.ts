@@ -1,4 +1,4 @@
-﻿import type { PaymentGate, WorkPackage } from './types';
+import type { PaymentGate, WorkPackage } from './types';
 import type {
   PaymentTemplateItem,
   SelectedScopeItem,
@@ -10,6 +10,195 @@ interface GeneratedTimeline {
   paymentGates: PaymentGate[];
   workPackages: WorkPackage[];
 }
+
+type ApprovedEstimateArea = {
+  id: string;
+  name: string;
+};
+
+type ApprovedEstimateLineItem = {
+  id: string;
+  areaId: string;
+  name: string;
+  description: string;
+  quantity: number;
+  unitLabel: string;
+  ratePerUnit: number;
+  vendorName?: string;
+  remarks?: string;
+};
+
+export type ApprovedEstimateTimelineSource = {
+  id: string;
+  projectId?: string;
+  projectName: string;
+  clientName?: string;
+  version: number;
+  grandTotal: number;
+  areas: ApprovedEstimateArea[];
+  lineItems: ApprovedEstimateLineItem[];
+};
+
+function getAreaNameFromEstimate(
+  areas: ApprovedEstimateArea[],
+  areaId: string
+) {
+  return areas.find(area => area.id === areaId)?.name ?? 'Selected Area';
+}
+
+function getEstimateWorkDuration(lineItem: ApprovedEstimateLineItem) {
+  const quantity = Number(lineItem.quantity) || 1;
+
+  if (lineItem.unitLabel.toLowerCase().includes('set')) return 4;
+  if (quantity >= 250) return 7;
+  if (quantity >= 100) return 5;
+  if (quantity >= 25) return 3;
+
+  return 2;
+}
+
+function createPaymentGateFromEstimate({
+  source,
+  index,
+  type,
+  title,
+  description,
+  percentage,
+  dueDate,
+}: {
+  source: ApprovedEstimateTimelineSource;
+  index: number;
+  type: PaymentGate['type'];
+  title: string;
+  description: string;
+  percentage: number;
+  dueDate: string;
+}): PaymentGate {
+  return {
+    id: `gate-approved-estimate-${index + 1}`,
+    projectId: source.projectId ?? source.id,
+    type,
+    title,
+    description,
+    percentage,
+    amount: Math.round((source.grandTotal * percentage) / 100),
+    dueDate,
+    status: 'pending',
+    blocksWorkPackageIds: [],
+  };
+}
+
+export function generateTimelineFromApprovedEstimate({
+  source,
+  startDate,
+}: {
+  source: ApprovedEstimateTimelineSource;
+  startDate: string;
+}): GeneratedTimeline {
+  const projectId = source.projectId ?? source.id;
+  const generatedWorkPackages: WorkPackage[] = [];
+
+  let cursorDate = startDate;
+
+  source.lineItems.forEach((lineItem, index) => {
+    const durationDays = getEstimateWorkDuration(lineItem);
+    const estimatedStartDate = cursorDate;
+    const estimatedEndDate = addDays(estimatedStartDate, durationDays - 1);
+    const areaName = getAreaNameFromEstimate(source.areas, lineItem.areaId);
+    const paymentGateId =
+      index === 0
+        ? 'gate-approved-estimate-1'
+        : index < Math.ceil(source.lineItems.length * 0.5)
+          ? 'gate-approved-estimate-2'
+          : index < Math.ceil(source.lineItems.length * 0.85)
+            ? 'gate-approved-estimate-3'
+            : 'gate-approved-estimate-4';
+
+    generatedWorkPackages.push({
+      id: `wp-approved-estimate-${lineItem.id}`,
+      projectId,
+      phase: 'execution',
+      title: `${areaName} - ${lineItem.name}`,
+      description: lineItem.description,
+      assigneeName: lineItem.vendorName ?? 'Assign Vendor',
+      department: lineItem.vendorName ? 'procurement_logistics' : 'design_execution',
+      estimatedStartDate,
+      estimatedEndDate,
+      estimatedDurationDays: durationDays,
+      status: 'blocked_by_payment',
+      priority: index === 0 ? 'critical' : 'medium',
+      paymentGateId,
+      dependsOnWorkPackageIds:
+        generatedWorkPackages.length > 0
+          ? [generatedWorkPackages[generatedWorkPackages.length - 1].id]
+          : [],
+      pausePeriods: [],
+      manualOverrideEnabled: false,
+      notes: lineItem.remarks,
+    });
+
+    cursorDate = addDays(estimatedEndDate, 1);
+  });
+
+  const gate1Date = startDate;
+  const gate2Date =
+    generatedWorkPackages[Math.max(0, Math.floor(generatedWorkPackages.length * 0.25))]
+      ?.estimatedStartDate ?? startDate;
+  const gate3Date =
+    generatedWorkPackages[Math.max(0, Math.floor(generatedWorkPackages.length * 0.6))]
+      ?.estimatedStartDate ?? gate2Date;
+  const gate4Date =
+    generatedWorkPackages[generatedWorkPackages.length - 1]?.estimatedEndDate ??
+    gate3Date;
+
+  const paymentGates = attachPaymentGateBlockers(
+    [
+      createPaymentGateFromEstimate({
+        source,
+        index: 0,
+        type: 'execution_booking',
+        title: 'Booking Payment',
+        description: 'Collect on contract signing before timeline confirmation.',
+        percentage: 35,
+        dueDate: gate1Date,
+      }),
+      createPaymentGateFromEstimate({
+        source,
+        index: 1,
+        type: 'procurement_start',
+        title: 'Stage 1 Completion',
+        description: 'Collect after the first execution stage is completed.',
+        percentage: 30,
+        dueDate: gate2Date,
+      }),
+      createPaymentGateFromEstimate({
+        source,
+        index: 2,
+        type: 'final_installation',
+        title: 'Stage 2 Completion',
+        description: 'Collect before the final execution stage begins.',
+        percentage: 25,
+        dueDate: gate3Date,
+      }),
+      createPaymentGateFromEstimate({
+        source,
+        index: 3,
+        type: 'handover',
+        title: 'Final Handover',
+        description: 'Collect at final completion and handover.',
+        percentage: 10,
+        dueDate: gate4Date,
+      }),
+    ],
+    generatedWorkPackages
+  );
+
+  return {
+    paymentGates,
+    workPackages: generatedWorkPackages,
+  };
+}
+
 
 function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {

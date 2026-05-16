@@ -22,6 +22,7 @@ import {
 } from '@/features/timeline/engine';
 
 import { CreateTimelineWizard } from '@/features/timeline/components/CreateTimelineWizard';
+import { generateTimelineFromApprovedEstimate } from '@/features/timeline/generator';
 import { IntelligentAssistPanel } from '@/features/timeline/components/IntelligentAssistPanel';
 import { NextActionsPanel } from '@/features/timeline/components/NextActionsPanel';
 import { PaymentGateBar } from '@/features/timeline/components/PaymentGateBar';
@@ -50,8 +51,21 @@ type StoredCostEstimateRecord = {
   version: number;
   grandTotal: number;
   updatedAt: string;
-  areas: unknown[];
-  lineItems: unknown[];
+  areas: Array<{
+    id: string;
+    name: string;
+  }>;
+  lineItems: Array<{
+    id: string;
+    areaId: string;
+    name: string;
+    description: string;
+    quantity: number;
+    unitLabel: string;
+    ratePerUnit: number;
+    vendorName?: string;
+    remarks?: string;
+  }>;
 };
 
 const fallbackCostEstimateRecords: StoredCostEstimateRecord[] = [
@@ -427,9 +441,19 @@ export default function TimelinePage() {
   };
 
   const handleOpenTimelineWizard = () => {
-    if (!isTimelineEstimateApproved) return;
+    if (!isTimelineEstimateApproved || !linkedCostEstimate) return;
 
-    setShowCreateWizard(true);
+    const generatedTimeline = generateTimelineFromApprovedEstimate({
+      source: linkedCostEstimate,
+      startDate: new Date().toISOString().slice(0, 10),
+    });
+
+    setPaymentGates(generatedTimeline.paymentGates);
+    setWorkPackages(generatedTimeline.workPackages);
+    setIgnoredAlertIds([]);
+    setHasTimeline(true);
+    setShowCreateWizard(false);
+    setActiveTab('overview');
   };
 
   const handleRefreshCostEstimateSources = () => {
@@ -1054,7 +1078,7 @@ export default function TimelinePage() {
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Create Timeline
+              Build Timeline
             </Button>
           </div>
         </SectionCard>
