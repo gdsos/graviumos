@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Plus, RotateCcw } from 'lucide-react';
+import { CalendarClock, FileCheck2, LockKeyhole, Plus, RotateCcw } from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
@@ -36,6 +36,103 @@ import type {
 } from '@/features/timeline/types';
 
 const TIMELINE_STORAGE_KEY = 'gravium-os-villa-athani-client-dummy-timeline';
+const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates-demo';
+
+type LinkedCostEstimateStatus = 'draft' | 'approved' | 'revision';
+
+type StoredCostEstimateRecord = {
+  id: string;
+  projectId?: string;
+  projectName: string;
+  clientName?: string;
+  status: LinkedCostEstimateStatus;
+  version: number;
+  grandTotal: number;
+  updatedAt: string;
+  areas: unknown[];
+  lineItems: unknown[];
+};
+
+const fallbackCostEstimateRecords: StoredCostEstimateRecord[] = [
+  {
+    id: 'estimate-villa-athani',
+    projectId: 'project-villa-athani',
+    projectName: 'Villa, Athani',
+    clientName: 'Rafeek Muhammed Ali',
+    status: 'approved',
+    version: 1,
+    grandTotal: 1870215,
+    updatedAt: new Date().toISOString(),
+    areas: [],
+    lineItems: [],
+  },
+];
+
+function getStoredCostEstimateRecords() {
+  if (typeof window === 'undefined') return fallbackCostEstimateRecords;
+
+  try {
+    const storedRecords = localStorage.getItem(COST_ESTIMATE_STORAGE_KEY);
+
+    if (!storedRecords) return fallbackCostEstimateRecords;
+
+    const parsedRecords = JSON.parse(storedRecords);
+
+    if (!Array.isArray(parsedRecords)) return fallbackCostEstimateRecords;
+
+    return parsedRecords.filter(record => {
+      return (
+        record &&
+        typeof record.id === 'string' &&
+        typeof record.projectName === 'string' &&
+        ['draft', 'approved', 'revision'].includes(record.status) &&
+        typeof record.version === 'number' &&
+        typeof record.grandTotal === 'number' &&
+        Array.isArray(record.areas) &&
+        Array.isArray(record.lineItems)
+      );
+    }) as StoredCostEstimateRecord[];
+  } catch {
+    return fallbackCostEstimateRecords;
+  }
+}
+
+function getLinkedCostEstimate(projectId: string) {
+  return getStoredCostEstimateRecords().find(record => record.projectId === projectId);
+}
+
+function getEstimateStatusTitle(status?: LinkedCostEstimateStatus) {
+  if (status === 'approved') return 'Approved';
+  if (status === 'revision') return 'Revision Draft';
+  if (status === 'draft') return 'Draft';
+
+  return 'No Estimate';
+}
+
+function getEstimateStatusVariant(status?: LinkedCostEstimateStatus) {
+  if (status === 'approved') return 'success';
+  if (status === 'revision') return 'warning';
+  if (status === 'draft') return 'warning';
+
+  return 'muted';
+}
+
+function getTimelineSourceMessage(record?: StoredCostEstimateRecord) {
+  if (!record) {
+    return 'Create and approve a linked cost estimate before building the project timeline.';
+  }
+
+  if (record.status === 'approved') {
+    return 'Approved cost estimate found. Timeline can be planned after contract signing and booking payment confirmation.';
+  }
+
+  if (record.status === 'revision') {
+    return 'A revision draft is active. Approve the revision before updating or creating the timeline.';
+  }
+
+  return 'This estimate is still a draft. Approve the estimate before creating the timeline.';
+}
+
 
 type StoredTimelineState = {
   hasTimeline: boolean;
@@ -95,6 +192,12 @@ function formatDate(dateString: string) {
     month: 'short',
     year: 'numeric',
   }).format(new Date(`${dateString}T00:00:00`));
+}
+
+function toTitleCase(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 function getDayDifference(startDate: string, endDate: string) {
@@ -242,6 +345,13 @@ export default function TimelinePage() {
     [workPackages]
   );
 
+  const linkedCostEstimate = useMemo(
+    () => getLinkedCostEstimate(demoTimelineProject.id),
+    []
+  );
+  const isTimelineEstimateApproved = linkedCostEstimate?.status === 'approved';
+  const timelineSourceMessage = getTimelineSourceMessage(linkedCostEstimate);
+
   const handleMarkPaymentReceived = (paymentGate: PaymentGate) => {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -278,6 +388,12 @@ export default function TimelinePage() {
 
   const handleIgnoreAlert = (alert: TimelineAlert) => {
     setIgnoredAlertIds(current => [...current, alert.id]);
+  };
+
+  const handleOpenTimelineWizard = () => {
+    if (!isTimelineEstimateApproved) return;
+
+    setShowCreateWizard(true);
   };
 
   const handleUseTimelineDraft = (generatedTimeline: {
@@ -676,7 +792,8 @@ export default function TimelinePage() {
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <Button
                 type="button"
-                onClick={() => setShowCreateWizard(true)}
+                onClick={handleOpenTimelineWizard}
+                disabled={!isTimelineEstimateApproved}
                 className="gap-2"
               >
                 <Plus className="h-4 w-4" />
@@ -735,7 +852,40 @@ export default function TimelinePage() {
         </div>
       </div>
 
-      {showCreateWizard && (
+      <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              {isTimelineEstimateApproved ? (
+                <FileCheck2 className="h-5 w-5" />
+              ) : (
+                <LockKeyhole className="h-5 w-5" />
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Timeline Source
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {timelineSourceMessage}
+              </p>
+              {linkedCostEstimate && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {linkedCostEstimate.projectName} - v{linkedCostEstimate.version} -{' '}
+                  {formatINR(linkedCostEstimate.grandTotal)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate?.status)}>
+            {getEstimateStatusTitle(linkedCostEstimate?.status)}
+          </StatusBadge>
+        </div>
+      </div>
+
+      {showCreateWizard && isTimelineEstimateApproved && (
         <div className="mb-6">
           <CreateTimelineWizard
             onClose={() => setShowCreateWizard(false)}
@@ -752,7 +902,8 @@ export default function TimelinePage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               type="button"
-              onClick={() => setShowCreateWizard(true)}
+              onClick={handleOpenTimelineWizard}
+              disabled={!isTimelineEstimateApproved}
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
@@ -768,7 +919,7 @@ export default function TimelinePage() {
             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <StatusBadge variant={getProjectStatusVariant(demoTimelineProject.status)}>
-                  {demoTimelineProject.status}
+                  {toTitleCase(demoTimelineProject.status)}
                 </StatusBadge>
 
                 <StatusBadge variant="outline">
