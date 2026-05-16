@@ -506,6 +506,40 @@ export default function TimelinePage() {
     );
   };
 
+  const handleMarkPaymentPending = (paymentGate: PaymentGate) => {
+    const confirmed = window.confirm(
+      'Unmark this payment? Related work packages will be blocked by payment again.'
+    );
+
+    if (!confirmed) return;
+
+    setPaymentGates(currentPaymentGates =>
+      currentPaymentGates.map(currentPaymentGate =>
+        currentPaymentGate.id === paymentGate.id
+          ? {
+              ...currentPaymentGate,
+              status: 'pending',
+              receivedDate: undefined,
+            }
+          : currentPaymentGate
+      )
+    );
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage =>
+        workPackage.paymentGateId === paymentGate.id
+          ? {
+              ...workPackage,
+              status: 'blocked_by_payment',
+              notes: workPackage.notes
+                ? `${workPackage.notes} Payment was unmarked and work was blocked again.`
+                : 'Payment was unmarked and work was blocked again.',
+            }
+          : workPackage
+      )
+    );
+  };
+
   const handleApplySuggestion = (alert: TimelineAlert) => {
     window.alert(
       `Timeline shift assistant will be added later. Suggested shift: ${
@@ -527,7 +561,37 @@ export default function TimelinePage() {
       paymentPercentages: paymentPercentageValues,
     });
 
-    setPendingTimelineDraft(generatedTimeline);
+    const today = new Date().toISOString().slice(0, 10);
+    const bookingGateId = generatedTimeline.paymentGates.find(
+      paymentGate => paymentGate.type === 'execution_booking'
+    )?.id;
+
+    const preparedTimeline = isBookingPaymentCollected && bookingGateId
+      ? {
+          paymentGates: markPaymentGateReceived(
+            generatedTimeline.paymentGates,
+            bookingGateId,
+            today
+          ),
+          workPackages: generatedTimeline.workPackages.map(workPackage =>
+            workPackage.paymentGateId === bookingGateId &&
+            workPackage.status === 'blocked_by_payment'
+              ? {
+                  ...workPackage,
+                  status: getNextStatusAfterPaymentUnlock(
+                    workPackage,
+                    generatedTimeline.workPackages
+                  ),
+                  notes: workPackage.notes
+                    ? `${workPackage.notes} Booking payment received on ${today}.`
+                    : `Booking payment received on ${today}.`,
+                }
+              : workPackage
+          ),
+        }
+      : generatedTimeline;
+
+    setPendingTimelineDraft(preparedTimeline);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
     setShowCreateWizard(false);
@@ -1098,6 +1162,7 @@ export default function TimelinePage() {
           <PaymentGateBar
             paymentGates={paymentGates}
             onMarkReceived={handleMarkPaymentReceived}
+            onMarkPending={handleMarkPaymentPending}
           />
 
           {renderAssistPreview()}
@@ -1116,6 +1181,7 @@ export default function TimelinePage() {
         <PaymentGateBar
           paymentGates={paymentGates}
           onMarkReceived={handleMarkPaymentReceived}
+          onMarkPending={handleMarkPaymentPending}
         />
       );
     }

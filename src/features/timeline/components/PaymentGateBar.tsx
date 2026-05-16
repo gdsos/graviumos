@@ -6,6 +6,7 @@ import type { PaymentGate } from '../types';
 interface PaymentGateBarProps {
   paymentGates: PaymentGate[];
   onMarkReceived?: (paymentGate: PaymentGate) => void;
+  onMarkPending?: (paymentGate: PaymentGate) => void;
 }
 
 function formatINR(amount: number) {
@@ -25,6 +26,7 @@ function getPaymentVariant(status: PaymentGate['status']) {
 export function PaymentGateBar({
   paymentGates,
   onMarkReceived,
+  onMarkPending,
 }: PaymentGateBarProps) {
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
@@ -108,7 +110,16 @@ export function PaymentGateBar({
                 </div>
 
                 <div className="mt-auto pt-4">
-                  {!isReceived && onMarkReceived && (
+                  {isReceived && onMarkPending ? (
+                    <button
+                      type="button"
+                      onClick={() => onMarkPending(paymentGate)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                    >
+                      <Icon className="h-4 w-4" />
+                      Unmark
+                    </button>
+                  ) : !isReceived && onMarkReceived ? (
                     <button
                       type="button"
                       onClick={() => onMarkReceived(paymentGate)}
@@ -117,7 +128,7 @@ export function PaymentGateBar({
                       <Icon className="h-4 w-4" />
                       Mark Received
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             );
