@@ -913,6 +913,45 @@ export function CostEstimateSection({
     markEstimateDirty();
   };
 
+  const executeDeleteArea = (areaId: string) => {
+    const remainingAreas = areas.filter(area => area.id !== areaId);
+    const fallbackAreaId = remainingAreas[0]?.id ?? '';
+
+    setAreas(remainingAreas);
+    setLineItems(current =>
+      current.filter(lineItem => lineItem.areaId !== areaId)
+    );
+    setNewLineItemAreaId(current => (current === areaId ? fallbackAreaId : current));
+    setActiveLineItemAreaId(current =>
+      current === areaId ? fallbackAreaId : current
+    );
+    markEstimateDirty();
+  };
+
+  const handleDeleteArea = (areaId: string) => {
+    if (isEstimateReadOnly) return;
+
+    const area = areas.find(currentArea => currentArea.id === areaId);
+    if (!area) return;
+
+    const areaLineItemCount = lineItems.filter(
+      lineItem => lineItem.areaId === areaId
+    ).length;
+
+    if (areaLineItemCount === 0) {
+      executeDeleteArea(areaId);
+      return;
+    }
+
+    setConfirmDialog({
+      title: 'Delete area?',
+      message: `This area has ${areaLineItemCount} row item(s). Deleting it will also remove all row items inside this area.`,
+      confirmLabel: 'Delete Area',
+      tone: 'destructive',
+      onConfirm: () => executeDeleteArea(areaId),
+    });
+  };
+
   const handleStartAreaLineItem = (areaId: string) => {
     setNewLineItemAreaId(areaId);
     setActiveLineItemAreaId(areaId);
@@ -1522,14 +1561,11 @@ export function CostEstimateSection({
             {groupedAreas.map(group => (
               <div
                 key={group.area.id}
-                className="grid gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px]"
+                className="grid gap-2 border-b border-border px-3 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px_44px] sm:items-center"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">
                     {group.area.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {group.area.type.replaceAll('_', ' ')}
                   </p>
                 </div>
 
@@ -1540,6 +1576,19 @@ export function CostEstimateSection({
                 <p className="text-sm font-semibold text-foreground sm:text-right">
                   {formatINR(group.total)}
                 </p>
+
+                <div className="flex justify-start sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteArea(group.area.id)}
+                    disabled={isEstimateReadOnly}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    aria-label={`Delete ${group.area.name}`}
+                    title="Delete area"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
