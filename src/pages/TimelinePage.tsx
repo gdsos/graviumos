@@ -31,6 +31,7 @@ import { TimelineWorkPackages } from '@/features/timeline/components/TimelineWor
 import type {
   PaymentGate,
   TimelineAlert,
+  TimelineProject,
   WorkPackage,
   WorkPackageStatus,
 } from '@/features/timeline/types';
@@ -97,8 +98,19 @@ function getStoredCostEstimateRecords() {
   }
 }
 
-function getLinkedCostEstimate(projectId: string) {
-  return getStoredCostEstimateRecords().find(record => record.projectId === projectId);
+function getLinkedCostEstimate(
+  records: StoredCostEstimateRecord[],
+  projectId: string
+) {
+  return records.find(record => record.projectId === projectId);
+}
+
+function getApprovedCostEstimateRecords(records: StoredCostEstimateRecord[]) {
+  return records.filter(record => record.projectId && record.status === 'approved');
+}
+
+function getWaitingCostEstimateRecords(records: StoredCostEstimateRecord[]) {
+  return records.filter(record => record.projectId && record.status !== 'approved');
 }
 
 function getEstimateStatusTitle(status?: LinkedCostEstimateStatus) {
@@ -292,6 +304,12 @@ export default function TimelinePage() {
   );
   const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
+  const [costEstimateRecords, setCostEstimateRecords] = useState<
+    StoredCostEstimateRecord[]
+  >(() => getStoredCostEstimateRecords());
+  const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
+    demoTimelineProject.id
+  );
 
   useEffect(() => {
     localStorage.setItem(
@@ -345,9 +363,27 @@ export default function TimelinePage() {
     [workPackages]
   );
 
+  const approvedCostEstimateRecords = useMemo(
+    () => getApprovedCostEstimateRecords(costEstimateRecords),
+    [costEstimateRecords]
+  );
+  const waitingCostEstimateRecords = useMemo(
+    () => getWaitingCostEstimateRecords(costEstimateRecords),
+    [costEstimateRecords]
+  );
   const linkedCostEstimate = useMemo(
-    () => getLinkedCostEstimate(demoTimelineProject.id),
-    []
+    () => getLinkedCostEstimate(costEstimateRecords, selectedTimelineProjectId),
+    [costEstimateRecords, selectedTimelineProjectId]
+  );
+  const activeTimelineProject = useMemo<TimelineProject>(
+    () => ({
+      ...demoTimelineProject,
+      id: linkedCostEstimate?.projectId ?? selectedTimelineProjectId,
+      name: linkedCostEstimate?.projectName ?? demoTimelineProject.name,
+      clientName: linkedCostEstimate?.clientName ?? demoTimelineProject.clientName,
+      revenue: linkedCostEstimate?.grandTotal ?? demoTimelineProject.revenue,
+    }),
+    [linkedCostEstimate, selectedTimelineProjectId]
   );
   const isTimelineEstimateApproved = linkedCostEstimate?.status === 'approved';
   const timelineSourceMessage = getTimelineSourceMessage(linkedCostEstimate);
@@ -394,6 +430,18 @@ export default function TimelinePage() {
     if (!isTimelineEstimateApproved) return;
 
     setShowCreateWizard(true);
+  };
+
+  const handleRefreshCostEstimateSources = () => {
+    setCostEstimateRecords(getStoredCostEstimateRecords());
+  };
+
+  const handleSelectTimelineSource = (projectId?: string) => {
+    if (!projectId) return;
+
+    setSelectedTimelineProjectId(projectId);
+    setShowCreateWizard(false);
+    setActiveTab('overview');
   };
 
   const handleUseTimelineDraft = (generatedTimeline: {
@@ -507,7 +555,7 @@ export default function TimelinePage() {
             Client
           </p>
           <p className="mt-2 truncate text-sm font-semibold text-foreground">
-            {demoTimelineProject.clientName}
+            {activeTimelineProject.clientName}
           </p>
         </div>
 
@@ -516,7 +564,7 @@ export default function TimelinePage() {
             Revenue
           </p>
           <p className="mt-2 text-sm font-semibold text-foreground">
-            {formatINR(demoTimelineProject.revenue)}
+            {formatINR(activeTimelineProject.revenue)}
           </p>
         </div>
 
@@ -525,7 +573,7 @@ export default function TimelinePage() {
             Expected
           </p>
           <p className="mt-2 text-sm font-semibold text-foreground">
-            {formatDate(demoTimelineProject.expectedHandoverDate)}
+            {formatDate(activeTimelineProject.expectedHandoverDate)}
           </p>
         </div>
 
@@ -534,7 +582,7 @@ export default function TimelinePage() {
             Projected
           </p>
           <p className="mt-2 text-sm font-semibold text-foreground">
-            {formatDate(demoTimelineProject.currentProjectedHandoverDate)}
+            {formatDate(activeTimelineProject.currentProjectedHandoverDate)}
           </p>
         </div>
       </div>
@@ -594,8 +642,8 @@ export default function TimelinePage() {
   };
 
   const renderGanttChart = () => {
-    const timelineStartDate = demoTimelineProject.startDate;
-    const timelineEndDate = demoTimelineProject.currentProjectedHandoverDate;
+    const timelineStartDate = activeTimelineProject.startDate;
+    const timelineEndDate = activeTimelineProject.currentProjectedHandoverDate;
     const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
 
     return (
@@ -611,7 +659,7 @@ export default function TimelinePage() {
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
                 {formatDate(timelineStartDate)} - {formatDate(timelineEndDate)} -{' '}
-                {totalDays} day(s) - {formatINR(demoTimelineProject.revenue)}
+                {totalDays} day(s) - {formatINR(activeTimelineProject.revenue)}
               </p>
             </div>
           </div>
@@ -777,7 +825,7 @@ export default function TimelinePage() {
     <div className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-5 sm:px-6 lg:px-8">
       <PageHeader
         eyebrow="Project Timeline Management"
-        title={demoTimelineProject.name}
+        title={activeTimelineProject.name}
         description={
           showCreateWizard
             ? hasTimeline
@@ -879,10 +927,109 @@ export default function TimelinePage() {
             </div>
           </div>
 
-          <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate?.status)}>
-            {getEstimateStatusTitle(linkedCostEstimate?.status)}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate?.status)}>
+              {getEstimateStatusTitle(linkedCostEstimate?.status)}
+            </StatusBadge>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleRefreshCostEstimateSources}
+              className="h-9"
+            >
+              Refresh Estimates
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Approved Estimate Sources
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Select an approved cost estimate before creating or updating a timeline.
+            </p>
+          </div>
+
+          <StatusBadge variant="outline">
+            {approvedCostEstimateRecords.length} Approved
           </StatusBadge>
         </div>
+
+        {approvedCostEstimateRecords.length > 0 ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {approvedCostEstimateRecords.map(record => {
+              const isSelected = record.projectId === selectedTimelineProjectId;
+
+              return (
+                <button
+                  key={record.id}
+                  type="button"
+                  onClick={() => handleSelectTimelineSource(record.projectId)}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    isSelected
+                      ? 'border-emerald-500/40 bg-emerald-500/10'
+                      : 'border-border bg-background hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {record.projectName}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {record.clientName ?? 'No client name'} - v{record.version}
+                      </p>
+                    </div>
+
+                    {isSelected && <StatusBadge variant="success">Selected</StatusBadge>}
+                  </div>
+
+                  <p className="mt-3 text-sm font-semibold text-foreground">
+                    {formatINR(record.grandTotal)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+            No approved cost estimates found. Approve an estimate first, then refresh this list.
+          </p>
+        )}
+
+        {waitingCostEstimateRecords.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              Waiting For Approval
+            </p>
+            <div className="mt-3 grid gap-2">
+              {waitingCostEstimateRecords.map(record => (
+                <div
+                  key={record.id}
+                  className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {record.projectName}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {record.clientName ?? 'No client name'} - v{record.version}
+                    </p>
+                  </div>
+
+                  <StatusBadge variant={getEstimateStatusVariant(record.status)}>
+                    {getEstimateStatusTitle(record.status)}
+                  </StatusBadge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {showCreateWizard && isTimelineEstimateApproved && (
@@ -918,24 +1065,24 @@ export default function TimelinePage() {
           <div className="mb-5 min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <StatusBadge variant={getProjectStatusVariant(demoTimelineProject.status)}>
-                  {toTitleCase(demoTimelineProject.status)}
+                <StatusBadge variant={getProjectStatusVariant(activeTimelineProject.status)}>
+                  {toTitleCase(activeTimelineProject.status)}
                 </StatusBadge>
 
                 <StatusBadge variant="outline">
-                  {demoTimelineProject.projectType}
+                  {activeTimelineProject.projectType}
                 </StatusBadge>
 
-                {demoTimelineProject.location && (
+                {activeTimelineProject.location && (
                   <StatusBadge variant="outline">
-                    {demoTimelineProject.location}
+                    {activeTimelineProject.location}
                   </StatusBadge>
                 )}
               </div>
 
               <div className="text-sm text-muted-foreground">
-                {formatDate(demoTimelineProject.startDate)} →{' '}
-                {formatDate(demoTimelineProject.currentProjectedHandoverDate)}
+                {formatDate(activeTimelineProject.startDate)} →{' '}
+                {formatDate(activeTimelineProject.currentProjectedHandoverDate)}
               </div>
             </div>
           </div>
