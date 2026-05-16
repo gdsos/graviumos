@@ -176,6 +176,22 @@ const tabs: Array<{ id: TimelineTab; label: string }> = [
   { id: 'alerts', label: 'Assist' },
 ];
 
+type GeneratedTimelineReviewDraft = {
+  paymentGates: PaymentGate[];
+  workPackages: WorkPackage[];
+};
+
+const workPackageStatusOptions: WorkPackageStatus[] = [
+  'not_started',
+  'ready',
+  'in_progress',
+  'paused',
+  'blocked_by_payment',
+  'blocked_by_dependency',
+  'completed',
+  'delayed',
+];
+
 function getStoredTimelineState(): StoredTimelineState | null {
   if (typeof window === 'undefined') return null;
 
@@ -318,6 +334,8 @@ export default function TimelinePage() {
   );
   const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
+  const [pendingTimelineDraft, setPendingTimelineDraft] =
+    useState<GeneratedTimelineReviewDraft | null>(null);
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
   >(() => getStoredCostEstimateRecords());
@@ -356,15 +374,15 @@ export default function TimelinePage() {
   );
 
   const alerts = useMemo(() => {
-    const combinedAlerts = [...demoTimelineAlerts, ...generatedAlerts];
+    const sourceAlerts = hasTimeline ? generatedAlerts : demoTimelineAlerts;
 
-    const uniqueAlerts = combinedAlerts.filter(
+    const uniqueAlerts = sourceAlerts.filter(
       (alert, index, array) =>
         array.findIndex(currentAlert => currentAlert.id === alert.id) === index
     );
 
     return uniqueAlerts.filter(alert => !ignoredAlertIds.includes(alert.id));
-  }, [generatedAlerts, ignoredAlertIds]);
+  }, [generatedAlerts, hasTimeline, ignoredAlertIds]);
 
   const blockedWorkPackages = useMemo(
     () =>
@@ -408,6 +426,36 @@ export default function TimelinePage() {
     }),
     [linkedCostEstimate, selectedTimelineProjectId]
   );
+  const timelineDateRange = useMemo(() => {
+    if (workPackages.length === 0) {
+      return {
+        startDate: activeTimelineProject.startDate,
+        endDate: activeTimelineProject.currentProjectedHandoverDate,
+      };
+    }
+
+    const startDates = workPackages
+      .map(workPackage => workPackage.estimatedStartDate)
+      .filter(Boolean)
+      .sort();
+
+    const endDates = workPackages
+      .map(workPackage => workPackage.estimatedEndDate)
+      .filter(Boolean)
+      .sort();
+
+    return {
+      startDate: startDates[0] ?? activeTimelineProject.startDate,
+      endDate:
+        endDates[endDates.length - 1] ??
+        activeTimelineProject.currentProjectedHandoverDate,
+    };
+  }, [
+    activeTimelineProject.currentProjectedHandoverDate,
+    activeTimelineProject.startDate,
+    workPackages,
+  ]);
+
   const isTimelineEstimateApproved = linkedCostEstimate?.status === 'approved';
   const timelineSourceMessage = getTimelineSourceMessage(linkedCostEstimate);
   const paymentPercentageValues = {
@@ -479,10 +527,9 @@ export default function TimelinePage() {
       paymentPercentages: paymentPercentageValues,
     });
 
-    setPaymentGates(generatedTimeline.paymentGates);
-    setWorkPackages(generatedTimeline.workPackages);
+    setPendingTimelineDraft(generatedTimeline);
     setIgnoredAlertIds([]);
-    setHasTimeline(true);
+    setHasTimeline(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -497,6 +544,7 @@ export default function TimelinePage() {
     setSelectedTimelineProjectId(projectId);
     setIsContractSigned(false);
     setIsBookingPaymentCollected(false);
+    setPendingTimelineDraft(null);
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -516,6 +564,7 @@ export default function TimelinePage() {
   const handleFetchDevTimelineData = () => {
     setPaymentGates(demoPaymentGates);
     setWorkPackages(demoWorkPackages);
+    setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(true);
     setShowCreateWizard(false);
@@ -526,6 +575,7 @@ export default function TimelinePage() {
     localStorage.removeItem(TIMELINE_STORAGE_KEY);
     setPaymentGates(demoPaymentGates);
     setWorkPackages(demoWorkPackages);
+    setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
     setShowCreateWizard(false);
@@ -542,10 +592,215 @@ export default function TimelinePage() {
     localStorage.removeItem(TIMELINE_STORAGE_KEY);
     setPaymentGates(demoPaymentGates);
     setWorkPackages(demoWorkPackages);
+    setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
+  };
+
+  const handleUpdatePendingWorkPackage = (
+    workPackageId: string,
+    updates: Partial<WorkPackage>
+  ) => {
+    setPendingTimelineDraft(current => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        workPackages: current.workPackages.map(workPackage =>
+          workPackage.id === workPackageId
+            ? { ...workPackage, ...updates }
+            : workPackage
+        ),
+      };
+    });
+  };
+
+  const handleConfirmPendingTimeline = () => {
+    if (!pendingTimelineDraft) return;
+
+    setPaymentGates(pendingTimelineDraft.paymentGates);
+    setWorkPackages(pendingTimelineDraft.workPackages);
+    setPendingTimelineDraft(null);
+    setIgnoredAlertIds([]);
+    setHasTimeline(true);
+    setShowCreateWizard(false);
+    setActiveTab('overview');
+  };
+
+  const handleCancelPendingTimeline = () => {
+    setPendingTimelineDraft(null);
+    setHasTimeline(false);
+    setActiveTab('overview');
+  };
+
+  const renderGeneratedTimelineReview = () => {
+    if (!pendingTimelineDraft) return null;
+
+    const firstStartDate =
+      pendingTimelineDraft.workPackages[0]?.estimatedStartDate ?? timelineStartDate;
+    const finalEndDate =
+      pendingTimelineDraft.workPackages[pendingTimelineDraft.workPackages.length - 1]
+        ?.estimatedEndDate ?? firstStartDate;
+
+    return (
+      <section className="mb-6 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <div className="border-b border-border px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Review Generated Timeline
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Adjust dates, assignee names, and statuses before confirming this timeline for execution.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatDate(firstStartDate)} - {formatDate(finalEndDate)} -{' '}
+                {pendingTimelineDraft.workPackages.length} work package(s)
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancelPendingTimeline}
+              >
+                Cancel Review
+              </Button>
+              <Button type="button" onClick={handleConfirmPendingTimeline}>
+                Confirm Timeline
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 p-3 sm:p-4">
+          {pendingTimelineDraft.workPackages.map(workPackage => (
+            <div
+              key={workPackage.id}
+              className="rounded-2xl border border-border bg-background p-3 sm:p-4"
+            >
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_150px_150px_180px_180px] xl:items-end">
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Work Package
+                  </span>
+                  <input
+                    value={workPackage.title}
+                    onChange={event =>
+                      handleUpdatePendingWorkPackage(workPackage.id, {
+                        title: event.target.value,
+                      })
+                    }
+                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                  />
+                </label>
+
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Start
+                  </span>
+                  <input
+                    type="date"
+                    value={workPackage.estimatedStartDate}
+                    onChange={event =>
+                      handleUpdatePendingWorkPackage(workPackage.id, {
+                        estimatedStartDate: event.target.value,
+                      })
+                    }
+                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                  />
+                </label>
+
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    End
+                  </span>
+                  <input
+                    type="date"
+                    value={workPackage.estimatedEndDate}
+                    onChange={event =>
+                      handleUpdatePendingWorkPackage(workPackage.id, {
+                        estimatedEndDate: event.target.value,
+                      })
+                    }
+                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                  />
+                </label>
+
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Assigned To
+                  </span>
+                  <input
+                    value={workPackage.assigneeName}
+                    onChange={event =>
+                      handleUpdatePendingWorkPackage(workPackage.id, {
+                        assigneeName: event.target.value,
+                      })
+                    }
+                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                  />
+                </label>
+
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Status
+                  </span>
+                  <select
+                    value={workPackage.status}
+                    onChange={event =>
+                      handleUpdatePendingWorkPackage(workPackage.id, {
+                        status: event.target.value as WorkPackageStatus,
+                      })
+                    }
+                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                  >
+                    {workPackageStatusOptions.map(statusOption => (
+                      <option key={statusOption} value={statusOption}>
+                        {toTitleCase(statusOption)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {workPackage.description && (
+                <p className="mt-3 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                  {workPackage.description}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-border px-4 py-4 sm:px-5">
+          <p className="mb-3 text-sm font-medium text-foreground">
+            Payment Gates Preview
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {pendingTimelineDraft.paymentGates.map(paymentGate => (
+              <div
+                key={paymentGate.id}
+                className="rounded-xl border border-border bg-background p-3"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  {paymentGate.title}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatDate(paymentGate.dueDate)}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {formatINR(paymentGate.amount)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
   };
 
   const renderCriticalWork = () => (
@@ -699,8 +954,8 @@ export default function TimelinePage() {
   };
 
   const renderGanttChart = () => {
-    const timelineStartDate = activeTimelineProject.startDate;
-    const timelineEndDate = activeTimelineProject.currentProjectedHandoverDate;
+    const timelineStartDate = timelineDateRange.startDate;
+    const timelineEndDate = timelineDateRange.endDate;
     const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
 
     return (
@@ -712,7 +967,7 @@ export default function TimelinePage() {
                 <h2 className="text-base font-semibold text-foreground">
                   Gantt Timeline
                 </h2>
-                <StatusBadge variant="outline">Villa - Athani</StatusBadge>
+                <StatusBadge variant="outline">{activeTimelineProject.name}</StatusBadge>
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
                 {formatDate(timelineStartDate)} - {formatDate(timelineEndDate)} -{' '}
@@ -1212,6 +1467,8 @@ export default function TimelinePage() {
         </div>
       </div>
 
+      {renderGeneratedTimelineReview()}
+
       {showCreateWizard && isTimelineEstimateApproved && (
         <div className="mb-6">
           <CreateTimelineWizard
@@ -1221,7 +1478,7 @@ export default function TimelinePage() {
         </div>
       )}
 
-      {!showCreateWizard && !hasTimeline && (
+      {!showCreateWizard && !hasTimeline && !pendingTimelineDraft && (
         <SectionCard
           title="No timeline created yet"
           description="Create a timeline from a design-only workflow or from an approved cost estimate before using dashboard, payment gates, work packages, or Intelligent Assist."
