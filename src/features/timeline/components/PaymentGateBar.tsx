@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, CircleDashed, LockKeyhole, WalletCards } from 'lucide-react';
+import { CheckCircle2, CircleDashed, LockKeyhole, WalletCards } from 'lucide-react';
 
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { PaymentGate } from '../types';
@@ -34,7 +34,7 @@ export function PaymentGateBar({
             Payment Gates
           </h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Swipe on mobile. Linked work is blocked until payment is received.
+            Payment gates linked to process stages. Related work stays blocked until payment is received.
           </p>
         </div>
 
@@ -44,8 +44,7 @@ export function PaymentGateBar({
         </div>
       </div>
 
-      <div className="min-w-0 overflow-x-auto overscroll-x-contain px-4 py-4 sm:px-5">
-        <div className="flex w-max gap-3">
+      <div className="grid min-w-0 grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
           {paymentGates.map((paymentGate, index) => {
             const isReceived = paymentGate.status === 'received';
             const Icon = isReceived ? CheckCircle2 : LockKeyhole;
@@ -53,7 +52,7 @@ export function PaymentGateBar({
             return (
               <div
                 key={paymentGate.id}
-                className="w-[78vw] max-w-[320px] shrink-0 rounded-2xl border border-border bg-background p-4 sm:w-[300px]"
+                className="flex min-w-0 h-full flex-col rounded-2xl border border-border bg-background p-4"
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
@@ -72,6 +71,11 @@ export function PaymentGateBar({
                       <p className="truncate text-sm font-semibold text-foreground">
                         {paymentGate.title}
                       </p>
+                      {paymentGate.description && (
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                          {paymentGate.description}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -85,13 +89,6 @@ export function PaymentGateBar({
                     <span className="text-muted-foreground">Amount</span>
                     <span className="font-medium text-foreground">
                       {formatINR(paymentGate.amount)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">Percent</span>
-                    <span className="font-medium text-foreground">
-                      {paymentGate.percentage}%
                     </span>
                   </div>
 
@@ -110,20 +107,21 @@ export function PaymentGateBar({
                   </div>
                 </div>
 
-                {!isReceived && onMarkReceived && (
-                  <button
-                    type="button"
-                    onClick={() => onMarkReceived(paymentGate)}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                  >
-                    <Icon className="h-4 w-4" />
-                    Mark Received
-                  </button>
-                )}
+                <div className="mt-auto pt-4">
+                  {!isReceived && onMarkReceived && (
+                    <button
+                      type="button"
+                      onClick={() => onMarkReceived(paymentGate)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                    >
+                      <Icon className="h-4 w-4" />
+                      Mark Received
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
-        </div>
       </div>
     </div>
   );

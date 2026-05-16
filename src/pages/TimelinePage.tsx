@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Plus, RotateCcw } from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
@@ -35,7 +35,7 @@ import type {
   WorkPackageStatus,
 } from '@/features/timeline/types';
 
-const TIMELINE_STORAGE_KEY = 'gravium-os-timeline-demo';
+const TIMELINE_STORAGE_KEY = 'gravium-os-villa-athani-client-dummy-timeline';
 
 type StoredTimelineState = {
   hasTimeline: boolean;
@@ -43,12 +43,13 @@ type StoredTimelineState = {
   workPackages: WorkPackage[];
 };
 
-type TimelineTab = 'overview' | 'work' | 'payments' | 'alerts';
+type TimelineTab = 'overview' | 'work' | 'payments' | 'gantt' | 'alerts';
 
 const tabs: Array<{ id: TimelineTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'work', label: 'Work' },
   { id: 'payments', label: 'Payments' },
+  { id: 'gantt', label: 'Gantt' },
   { id: 'alerts', label: 'Assist' },
 ];
 
@@ -94,6 +95,58 @@ function formatDate(dateString: string) {
     month: 'short',
     year: 'numeric',
   }).format(new Date(`${dateString}T00:00:00`));
+}
+
+function getDayDifference(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const dayInMs = 24 * 60 * 60 * 1000;
+
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / dayInMs));
+}
+
+function getTimelineSpanPercent(
+  dateString: string,
+  timelineStartDate: string,
+  timelineEndDate: string
+) {
+  const totalDays = Math.max(1, getDayDifference(timelineStartDate, timelineEndDate));
+  const offsetDays = getDayDifference(timelineStartDate, dateString);
+
+  return Math.min(100, Math.max(0, (offsetDays / totalDays) * 100));
+}
+
+function getWorkPackageBarStyle(
+  workPackage: WorkPackage,
+  timelineStartDate: string,
+  timelineEndDate: string
+) {
+  const totalDays = Math.max(1, getDayDifference(timelineStartDate, timelineEndDate));
+  const offsetDays = getDayDifference(
+    timelineStartDate,
+    workPackage.estimatedStartDate
+  );
+  const durationDays = Math.max(
+    1,
+    getDayDifference(workPackage.estimatedStartDate, workPackage.estimatedEndDate) + 1
+  );
+
+  return {
+    marginLeft: `${Math.min(96, Math.max(0, (offsetDays / totalDays) * 100))}%`,
+    width: `${Math.min(100, Math.max(3, (durationDays / totalDays) * 100))}%`,
+  };
+}
+
+function getGanttBarTone(status: WorkPackageStatus) {
+  if (status === 'blocked_by_payment' || status === 'blocked_by_dependency') {
+    return 'bg-amber-500/80';
+  }
+
+  if (status === 'in_progress') return 'bg-blue-500/80';
+  if (status === 'completed') return 'bg-emerald-500/80';
+  if (status === 'delayed') return 'bg-red-500/80';
+
+  return 'bg-primary';
 }
 
 function getProjectStatusVariant(status: string) {
@@ -235,6 +288,25 @@ export default function TimelinePage() {
     setWorkPackages(generatedTimeline.workPackages);
     setIgnoredAlertIds([]);
     setHasTimeline(true);
+    setShowCreateWizard(false);
+    setActiveTab('overview');
+  };
+
+  const handleFetchDevTimelineData = () => {
+    setPaymentGates(demoPaymentGates);
+    setWorkPackages(demoWorkPackages);
+    setIgnoredAlertIds([]);
+    setHasTimeline(true);
+    setShowCreateWizard(false);
+    setActiveTab('overview');
+  };
+
+  const handleHideDevTimelineData = () => {
+    localStorage.removeItem(TIMELINE_STORAGE_KEY);
+    setPaymentGates(demoPaymentGates);
+    setWorkPackages(demoWorkPackages);
+    setIgnoredAlertIds([]);
+    setHasTimeline(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -405,6 +477,134 @@ export default function TimelinePage() {
     );
   };
 
+  const renderGanttChart = () => {
+    const timelineStartDate = demoTimelineProject.startDate;
+    const timelineEndDate = demoTimelineProject.currentProjectedHandoverDate;
+    const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
+
+    return (
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <div className="border-b border-border px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-foreground">
+                  Gantt Timeline
+                </h2>
+                <StatusBadge variant="outline">Villa - Athani</StatusBadge>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
+                {formatDate(timelineStartDate)} - {formatDate(timelineEndDate)} -{' '}
+                {totalDays} day(s) - {formatINR(demoTimelineProject.revenue)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 overflow-x-auto overscroll-x-contain">
+          <div className="min-w-[820px]">
+            <div className="grid grid-cols-[240px_minmax(0,1fr)] border-b border-border bg-muted/20 text-xs font-medium text-muted-foreground">
+              <div className="sticky left-0 z-20 border-r border-border bg-card px-4 py-2">
+                Work Package
+              </div>
+              <div className="relative px-4 py-2">
+                <div className="flex items-center justify-between">
+                  <span>{formatDate(timelineStartDate)}</span>
+                  <span>{formatDate(timelineEndDate)}</span>
+                </div>
+
+                {paymentGates.map(paymentGate => {
+                  const left = getTimelineSpanPercent(
+                    paymentGate.dueDate,
+                    timelineStartDate,
+                    timelineEndDate
+                  );
+
+                  return (
+                    <div
+                      key={paymentGate.id}
+                      className="absolute bottom-0 top-0 w-px bg-primary/40"
+                      style={{ left: `${left}%` }}
+                      title={`${paymentGate.title} - ${formatINR(paymentGate.amount)}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              {workPackages.map(workPackage => (
+                <div
+                  key={workPackage.id}
+                  className="grid grid-cols-[240px_minmax(0,1fr)] border-b border-border last:border-b-0"
+                >
+                  <div className="sticky left-0 z-10 min-w-0 border-r border-border bg-card px-4 py-2.5">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {workPackage.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      Assigned to : {workPackage.assigneeName}
+                    </p>
+                  </div>
+
+                  <div className="relative min-h-14 bg-background px-4">
+                    <div className="absolute inset-y-0 left-1/4 border-l border-dashed border-border/70" />
+                    <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-border/70" />
+                    <div className="absolute inset-y-0 left-3/4 border-l border-dashed border-border/70" />
+
+                    {paymentGates.map(paymentGate => {
+                      const left = getTimelineSpanPercent(
+                        paymentGate.dueDate,
+                        timelineStartDate,
+                        timelineEndDate
+                      );
+
+                      return (
+                        <div
+                          key={`${workPackage.id}-${paymentGate.id}`}
+                          className="absolute inset-y-0 w-px bg-primary/15"
+                          style={{ left: `${left}%` }}
+                        />
+                      );
+                    })}
+
+                    <div
+                      className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${getGanttBarTone(
+                        workPackage.status
+                      )}`}
+                      style={getWorkPackageBarStyle(
+                        workPackage,
+                        timelineStartDate,
+                        timelineEndDate
+                      )}
+                    />
+
+                    <div className="absolute bottom-1 right-4 text-[11px] text-muted-foreground">
+                      {formatDate(workPackage.estimatedStartDate)} -{' '}
+                      {formatDate(workPackage.estimatedEndDate)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
+          {paymentGates.map(paymentGate => (
+            <span
+              key={paymentGate.id}
+              className="rounded-full border border-border bg-background px-2.5 py-1"
+            >
+              {paymentGate.title}: {formatINR(paymentGate.amount)}
+            </span>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
@@ -442,6 +642,10 @@ export default function TimelinePage() {
           onMarkReceived={handleMarkPaymentReceived}
         />
       );
+    }
+
+    if (activeTab === 'gantt') {
+      return renderGanttChart();
     }
 
     return (
@@ -498,6 +702,39 @@ export default function TimelinePage() {
         }
       />
 
+      <div className="mb-5 rounded-2xl border border-dashed border-border bg-muted/20 p-3 text-card-foreground">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Dev Client Timeline Data
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Use this temporary control to show or hide the Villa - Athani client timeline while the real timeline workflow is being built.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleFetchDevTimelineData}
+              className="h-10 justify-center"
+            >
+              Fetch Data
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleHideDevTimelineData}
+              className="h-10 justify-center"
+            >
+              Hide Data
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {showCreateWizard && (
         <div className="mb-6">
           <CreateTimelineWizard
@@ -553,7 +790,7 @@ export default function TimelinePage() {
           </div>
 
           <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
-            <div className="grid grid-cols-4 gap-1">
+            <div className="grid grid-cols-5 gap-1">
               {tabs.map(tab => {
                 const isActive = activeTab === tab.id;
 
