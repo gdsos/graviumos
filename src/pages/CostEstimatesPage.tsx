@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowUpRight,
   CheckCircle2,
   FilePlus2,
   Plus,
@@ -705,53 +706,63 @@ export default function CostEstimatesPage() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {records.map(record => (
+      <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_110px_280px] lg:items-center lg:gap-4">
+          <span>Estimate</span>
+          <span>Client</span>
+          <span>Amount</span>
+          <span>Updated</span>
+          <span className="pr-5 text-center">Actions</span>
+        </div>
+
+        <div className="divide-y divide-border">
+          {records.map(record => (
             <div
               key={record.id}
-              className="rounded-2xl border border-border bg-background p-4 shadow-sm"
+              className="grid gap-3 bg-background px-4 py-4 lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_110px_280px] lg:items-center lg:gap-4"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-foreground">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-foreground">
                     {record.projectName}
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {record.clientName ?? 'No project assigned'}
-                  </p>
+                  <StatusBadge variant={getEstimateStatusVariant(record.status)}>
+                    {getEstimateStatusLabel(record)}
+                  </StatusBadge>
                 </div>
-
-                <StatusBadge variant={getEstimateStatusVariant(record.status)}>
-                  {getEstimateStatusLabel(record)}
-                </StatusBadge>
+                <p className="mt-1 text-xs text-muted-foreground lg:hidden">
+                  {record.clientName ?? 'No project assigned'}
+                </p>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-border bg-muted/30 p-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Grand Total
-                  </p>
-                  <p className="mt-1 font-semibold text-foreground">
-                    {record.grandTotal ? formatINR(record.grandTotal) : 'Not set'}
-                  </p>
-                </div>
+              <p className="hidden truncate text-sm text-muted-foreground lg:block">
+                {record.clientName ?? 'No project assigned'}
+              </p>
 
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Updated
-                  </p>
-                  <p className="mt-1 font-semibold text-foreground">
-                    {formatUpdatedAt(record.updatedAt)}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between gap-3 lg:block">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground lg:hidden">
+                  Amount
+                </span>
+                <p className="text-sm font-semibold text-foreground">
+                  {record.grandTotal ? formatINR(record.grandTotal) : 'Not set'}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 lg:block">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground lg:hidden">
+                  Updated
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {formatUpdatedAt(record.updatedAt)}
+                </p>
               </div>
 
               <div
-                className={`mt-4 grid grid-cols-1 gap-2 ${
+                className={`grid gap-2 lg:flex lg:justify-center lg:pr-5 ${
                   record.status === 'approved' ||
                   (record.status === 'revision' && record.approvedSnapshot)
-                    ? 'sm:grid-cols-[repeat(3,minmax(0,1fr))]'
-                    : 'sm:grid-cols-[repeat(2,minmax(0,1fr))]'
+                    ? 'grid-cols-3'
+                    : 'grid-cols-2'
                 }`}
               >
                 <Button
@@ -761,9 +772,13 @@ export default function CostEstimatesPage() {
                     setApprovedSnapshotReturnTarget('revision');
                     setSelectedRecordId(record.id);
                   }}
-                  className="h-10 min-w-0 w-full justify-center overflow-hidden px-2 text-sm sm:px-3"
+                  className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3"
+                  aria-label={record.status === 'revision' ? 'Open revision' : 'Open estimate'}
                 >
-                  {record.status === 'revision' ? 'Open Revision' : 'Open Estimate'}
+                  <ArrowUpRight className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">
+                    {record.status === 'revision' ? 'Open Revision' : 'Open'}
+                  </span>
                 </Button>
 
                 {record.status === 'approved' && (
@@ -771,10 +786,11 @@ export default function CostEstimatesPage() {
                     type="button"
                     variant="outline"
                     onClick={() => handleCreateRevision(record)}
-                    className="h-10 min-w-0 w-full justify-center gap-1.5 overflow-hidden px-2 text-sm sm:gap-2 sm:px-3"
+                    className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3"
+                    aria-label="Create revision"
                   >
                     <FilePlus2 className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap">Revision</span>
+                    <span className="hidden sm:inline whitespace-nowrap">Revision</span>
                   </Button>
                 )}
 
@@ -787,10 +803,11 @@ export default function CostEstimatesPage() {
                       setApprovedSnapshotReturnTarget('list');
                       setIsViewingApprovedSnapshot(true);
                     }}
-                    className="h-10 min-w-0 w-full justify-center gap-1.5 overflow-hidden px-2 text-sm sm:gap-2 sm:px-3"
+                    className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3"
+                    aria-label="View approved version"
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap">View Approved</span>
+                    <span className="hidden sm:inline whitespace-nowrap">Approved</span>
                   </Button>
                 )}
 
@@ -798,14 +815,16 @@ export default function CostEstimatesPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setDeleteRecordId(record.id)}
-                  className="h-10 w-full justify-center gap-2 px-4 text-destructive hover:text-destructive"
+                  className="h-9 justify-center gap-1.5 px-2 text-destructive hover:text-destructive sm:px-3"
+                  aria-label="Delete estimate"
                 >
                   <Trash2 className="h-4 w-4 shrink-0" />
-                  <span className="whitespace-nowrap">Delete</span>
+                  <span className="hidden sm:inline whitespace-nowrap">Delete</span>
                 </Button>
               </div>
             </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {deleteRecordId && (
