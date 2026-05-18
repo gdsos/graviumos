@@ -10,15 +10,16 @@ Branch:
 
 Latest known clean checkpoint:
 
-- `7247ed8 Simplify cost estimate editor and area workflows`
-- `6932baa Convert cost estimates list to compact rows`
-- `3f9165f Update Gravium OS roadmap brief`
-- `c294fd7 Simplify timeline mobile planning UI`
-- `8ce0b69 Convert timeline work packages to list view`
-- Working tree was clean after commit `7247ed8`.
+- `294a97f Polish mobile topbar and theme switch`
+- `9b851ee Add mobile bottom navigation`
+- `1466c6d Simplify items list layout`
+- `9daf29b Add vendor details panel and quick actions`
+- `2edc795 Simplify vendors list and mobile rows`
+- `87e4649 Update Gravium OS roadmap after cost estimate cleanup`
+- Working tree was clean after commit `294a97f`.
 
 Current next module:
-- Vendors list simplification and mobile cleanup.
+- Mobile-lite restrictions documentation and next MVP workflow planning.
 
 ---
 
@@ -372,7 +373,7 @@ Completed:
 
 Latest committed Cost Estimate milestones:
 
-- `7247ed8 Simplify cost estimate editor and area workflows`
+- `294a97f Polish mobile topbar and theme switch`
 - `6932baa Convert cost estimates list to compact rows`
 
 ---
@@ -751,7 +752,7 @@ Immediate order from here:
 
 1. Confirm clean status after latest Cost Estimate commit.
 2. Continue core module UI baseline cleanup:
-   - Vendors next
+   - Mobile-lite restrictions and MVP workflow planning next
    - Items consistency pass after Vendors
    - Timeline/Cost Estimate only if phone testing shows regressions
 3. Vendors next goal:
@@ -790,15 +791,15 @@ Whenever moving to a new chat, include:
    - Build/status check after patches
 
 4. Latest clean commit:
-   - `7247ed8 Simplify cost estimate editor and area workflows`
+   - `294a97f Polish mobile topbar and theme switch`
 
 5. Current module being worked on:
-   - Vendors next
+   - Mobile-lite restrictions and MVP workflow planning next
 
 6. Current implementation goal:
-   - Convert Vendors from card-grid to list-first operational layout.
-   - Keep mobile compact.
-   - Preserve form modal/filter/category logic.
+   - Define mobile-lite restrictions per module.
+   - Plan next MVP workflow tasks after core module UI cleanup.
+   - Keep phone testing as the confirmation step for mobile changes.
 
 7. Important product/UI tracks:
    - Items/Vendors/Cost Estimate/Timeline as first design-system baseline
@@ -860,3 +861,116 @@ Then continue with Vendors:
 - keep mobile compact
 - preserve VendorFormModal, VendorFilters, category storage, and delete confirmation logic
 - test desktop and mobile
+
+
+---
+
+# Session Update - Vendors, Items, Mobile Navigation, TopBar
+
+Completed in latest session:
+
+1. Vendors mobile list cleanup
+   - Converted vendor card grid to compact operational rows.
+   - Mobile rows now show compact vendor info.
+   - Mobile contact info is collapsed by default.
+   - Tapping a vendor row expands contact info.
+   - Tapping again or outside collapses contact info.
+   - Edit/Delete remain grouped as mobile icon actions.
+   - Commit: `2edc795 Simplify vendors list and mobile rows`
+
+2. Vendors desktop details panel
+   - Added desktop-only right-side vendor details panel.
+   - Panel is hidden by default and opens only when a vendor row is selected.
+   - Row Edit/Delete actions hide while the panel is open.
+   - Edit/Delete moved into a three-dot manage menu.
+   - Added quick action buttons:
+     - Email
+     - WhatsApp
+     - Follow Up
+     - Request Pricing
+     - Assign Project
+     - Log Interaction
+     - Site Visit
+     - Pricing Outdated
+     - Procurement Task
+   - Added vendor contact details, scope, assigned project count.
+   - Rating pill moved beside category.
+   - Rating pill tier colors added:
+     - Gold for 4.5 to 5.0
+     - Silver for 3.5 to 4.4
+     - Bronze below 3.5
+   - WhatsApp icon changed to a custom WhatsApp-style icon.
+   - Commit: `9daf29b Add vendor details panel and quick actions`
+
+3. Items consistency pass
+   - Converted Items from large cards to compact operational rows.
+   - Hid item description from main list.
+   - Moved Edit/Delete into a three-dot menu.
+   - Improved rates layout.
+   - Desktop status badge placed beside item name.
+   - Mobile status badge placed beside category.
+   - Unit removed from category line.
+   - Rate values show as `amount / unit`.
+   - Mobile three-dot action button moved to top-right.
+   - Mobile rates simplified for readability.
+   - Summary cards converted to mobile grid.
+   - Commit: `1466c6d Simplify items list layout`
+
+4. Mobile bottom navigation
+   - Added `src/components/layout/MobileBottomNav.tsx`.
+   - Mobile sidebar hidden.
+   - Floating bottom nav added with:
+     - Home
+     - Projects
+     - Tasks
+     - Timeline
+     - More
+   - More menu includes:
+     - Cost Estimates
+     - Items
+     - Vendors
+     - Financials where allowed
+     - Leads where allowed
+     - Settings for admin
+   - Main content gets bottom padding on mobile so nav does not cover content.
+   - Desktop sidebar remains unchanged.
+   - Commit: `9b851ee Add mobile bottom navigation`
+
+5. TopBar, sidebar, and theme switch polish
+   - Removed redundant TopBar sidebar/logo trigger.
+   - Added mobile-only Gravium branding on the left side of TopBar.
+   - Removed duplicate TopBar branding on tablet/desktop.
+   - Removed TopBar bottom separator line.
+   - Restored cleaner TopBar height and utility placement.
+   - Removed sidebar header separator line.
+   - Centered sidebar branding with icon column.
+   - Converted theme mode control from horizontal switch to vertical in-place switch.
+   - Theme switch opens in-place with the selected theme on top.
+   - Final switch geometry was tuned manually.
+   - Commit: `294a97f Polish mobile topbar and theme switch`
+
+Current clean commit:
+- `294a97f Polish mobile topbar and theme switch`
+
+Current status:
+- Vendors mobile: cleared for now.
+- Vendors desktop details panel: cleared for now.
+- Items consistency pass: cleared for now.
+- Mobile bottom nav: added and phone-tested.
+- TopBar/sidebar/theme switch polish: committed and clean.
+
+Important testing note:
+- Mobile UI changes should still be phone-checked after future layout updates.
+- Do not mark future mobile changes fully cleared until user verifies on phone.
+
+Recommended next steps:
+
+1. Define mobile-lite restrictions per module.
+2. Decide which modules are visible in mobile bottom nav vs More.
+3. Begin Project Finance cleanup/integration planning.
+4. Continue MVP workflow planning:
+   - Approved estimate
+   - Contract/payment
+   - Planned timeline
+   - Basic execution/payment tracking
+5. Later use Codex for repo-wide Porsche/template cleanup and page standardization.
