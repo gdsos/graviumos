@@ -283,7 +283,7 @@ export default function VendorsPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <SectionCard className="shadow-none">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -312,7 +312,7 @@ export default function VendorsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard className="shadow-none">
+        <SectionCard className="col-span-2 shadow-none md:col-span-1">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Availability</p>
@@ -346,17 +346,26 @@ export default function VendorsPage() {
       </div>
 
       {filteredVendors.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filteredVendors.map(vendor => (
-            <VendorCard
-              key={vendor.id}
-              vendor={vendor}
-              onEdit={selectedVendor =>
-                setModalState({ mode: 'edit', vendor: selectedVendor })
-              }
-              onDelete={setDeleteTarget}
-            />
-          ))}
+        <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className="hidden grid-cols-[minmax(240px,1.15fr)_minmax(220px,1fr)_minmax(220px,1fr)_170px] items-center gap-4 border-b border-border bg-muted/35 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground lg:grid">
+            <span>Vendor</span>
+            <span>Scope</span>
+            <span>Contact</span>
+            <span className="text-center">Actions</span>
+          </div>
+
+          <div className="divide-y divide-border">
+            {filteredVendors.map(vendor => (
+              <VendorCard
+                key={vendor.id}
+                vendor={vendor}
+                onEdit={selectedVendor =>
+                  setModalState({ mode: 'edit', vendor: selectedVendor })
+                }
+                onDelete={setDeleteTarget}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <EmptyState

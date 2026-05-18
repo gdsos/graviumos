@@ -1,4 +1,14 @@
-﻿import { BriefcaseBusiness, Mail, MapPin, Pencil, Phone, Star, Trash2, UserRound } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  BriefcaseBusiness,
+  Mail,
+  Pencil,
+  Phone,
+  Star,
+  Trash2,
+  UserRound,
+} from 'lucide-react';
+
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { Vendor } from '../types';
 import {
@@ -31,78 +41,159 @@ function getStatusVariant(status: Vendor['status']) {
   return 'muted';
 }
 
-export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
-  return (
-    <article className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <StatusBadge variant={getStatusVariant(vendor.status)}>
-              {vendorStatusLabels[vendor.status]}
-            </StatusBadge>
+function isMobileViewport() {
+  if (typeof window === 'undefined') return false;
 
-            <StatusBadge variant={getAvailabilityVariant(vendor.availability)}>
-              {vendorAvailabilityLabels[vendor.availability]}
-            </StatusBadge>
+  return window.matchMedia('(max-width: 1023px)').matches;
+}
+
+export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
+  const [isMobileContactOpen, setIsMobileContactOpen] = useState(false);
+  const cardRef = useRef<HTMLElement | null>(null);
+  const categoryLabel =
+    vendorCategoryLabels[vendor.category] ?? formatCategoryLabel(vendor.category);
+
+  useEffect(() => {
+    if (!isMobileContactOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!isMobileViewport()) return;
+
+      const target = event.target as Node | null;
+
+      if (target && cardRef.current?.contains(target)) return;
+
+      setIsMobileContactOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isMobileContactOpen]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!isMobileViewport()) {
+        setIsMobileContactOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  const handleCardClick = () => {
+    if (!isMobileViewport()) return;
+
+    setIsMobileContactOpen(current => !current);
+  };
+
+  return (
+    <article
+      ref={cardRef}
+      onClick={handleCardClick}
+      className="relative grid cursor-pointer gap-3 bg-card px-4 py-4 text-card-foreground transition hover:bg-muted/25 lg:cursor-default lg:grid-cols-[minmax(240px,1.15fr)_minmax(220px,1fr)_minmax(220px,1fr)_170px] lg:items-center lg:gap-4"
+    >
+      <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium text-foreground lg:hidden">
+        <Star className="h-3.5 w-3.5 fill-current" />
+        {vendor.rating.toFixed(1)}
+      </div>
+
+      <div className="min-w-0 pr-16 lg:pr-0">
+        <h3 className="truncate text-sm font-semibold text-foreground sm:text-base">
+          {vendor.name}
+        </h3>
+
+        <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+          <div className="hidden shrink-0 items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium text-foreground lg:flex">
+            <Star className="h-3.5 w-3.5 fill-current" />
+            {vendor.rating.toFixed(1)}
           </div>
 
-          <h3 className="truncate text-base font-semibold text-foreground">
-            {vendor.name}
-          </h3>
-
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <BriefcaseBusiness className="h-3.5 w-3.5" />
-            {vendorCategoryLabels[vendor.category] ?? formatCategoryLabel(vendor.category)}
-          </p>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{categoryLabel}</span>
+          </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium text-foreground">
-          <Star className="h-3.5 w-3.5 fill-current" />
-          {vendor.rating.toFixed(1)}
+        {isMobileContactOpen && (
+          <div className="mt-2 grid min-w-0 gap-1 text-xs text-muted-foreground lg:hidden">
+            {vendor.email && (
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{vendor.email}</span>
+              </div>
+            )}
+
+            <div className="flex min-w-0 items-center gap-1.5">
+              <UserRound className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{vendor.contactPerson}</span>
+              <span className="shrink-0 text-muted-foreground/60">|</span>
+              <Phone className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{vendor.phone}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <StatusBadge variant={getStatusVariant(vendor.status)}>
+            {vendorStatusLabels[vendor.status]}
+          </StatusBadge>
+
+          <StatusBadge variant={getAvailabilityVariant(vendor.availability)}>
+            {vendorAvailabilityLabels[vendor.availability]}
+          </StatusBadge>
         </div>
       </div>
 
-      <p className="mt-4 line-clamp-2 text-sm leading-6 text-muted-foreground">
-        {vendor.scopeOfWork}
-      </p>
+      <div className="min-w-0">
+        <p className="line-clamp-2 text-sm leading-5 text-muted-foreground lg:line-clamp-1">
+          {vendor.scopeOfWork}
+        </p>
 
-      <div className="mt-5 grid gap-2 text-sm">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <UserRound className="h-4 w-4" />
+        <p className="mt-1 text-xs text-muted-foreground">
+          {vendor.assignedProjectCount} assigned project
+          {vendor.assignedProjectCount === 1 ? '' : 's'}
+        </p>
+      </div>
+
+      <div className="hidden min-w-0 gap-1.5 text-sm text-muted-foreground lg:grid">
+        <div className="flex min-w-0 items-center gap-2">
+          <UserRound className="h-4 w-4 shrink-0" />
           <span className="truncate">{vendor.contactPerson}</span>
         </div>
 
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Phone className="h-4 w-4" />
+        <div className="flex min-w-0 items-center gap-2">
+          <Phone className="h-4 w-4 shrink-0" />
           <span className="truncate">{vendor.phone}</span>
         </div>
 
         {vendor.email && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Mail className="h-4 w-4" />
+          <div className="flex min-w-0 items-center gap-2">
+            <Mail className="h-4 w-4 shrink-0" />
             <span className="truncate">{vendor.email}</span>
           </div>
         )}
-
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <MapPin className="h-4 w-4" />
-          <span className="truncate">{vendor.location}</span>
-        </div>
       </div>
-      <div className="mt-auto grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_120px_120px] sm:items-center">
-        <p className="text-xs text-muted-foreground">
-          {vendor.assignedProjectCount} assigned project
-          {vendor.assignedProjectCount === 1 ? '' : 's'}
-        </p>
 
+      <div
+        className="grid grid-cols-2 gap-2"
+        onClick={event => event.stopPropagation()}
+      >
         {onEdit && (
           <button
             type="button"
             onClick={() => onEdit(vendor)}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+            aria-label={`Edit ${vendor.name}`}
           >
-            <Pencil className="h-4 w-4" />
-            Edit
+            <Pencil className="h-4 w-4 shrink-0" />
+            <span className="hidden lg:inline">Edit</span>
           </button>
         )}
 
@@ -110,10 +201,11 @@ export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
           <button
             type="button"
             onClick={() => onDelete(vendor)}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-3 text-sm font-medium text-destructive transition hover:bg-destructive/10"
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-3 text-sm font-medium text-destructive transition hover:bg-destructive/10"
+            aria-label={`Delete ${vendor.name}`}
           >
-            <Trash2 className="h-4 w-4" />
-            Delete
+            <Trash2 className="h-4 w-4 shrink-0" />
+            <span className="hidden lg:inline">Delete</span>
           </button>
         )}
       </div>
