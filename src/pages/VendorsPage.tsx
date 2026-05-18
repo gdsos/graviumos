@@ -1,5 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, RotateCcw, Store, UsersRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type SVGProps } from 'react';
+import {
+  CalendarPlus,
+  Mail,
+  MapPin,
+  MessageCircle,
+  MoreHorizontal,
+  Pencil,
+  Phone,
+  Plus,
+  RefreshCcw,
+  RotateCcw,
+  Store,
+  Trash2,
+  UsersRound,
+  X,
+} from 'lucide-react';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -7,7 +22,12 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
-import { demoVendors, vendorCategoryLabels } from '@/features/vendors/data';
+import {
+  demoVendors,
+  vendorAvailabilityLabels,
+  vendorCategoryLabels,
+  vendorStatusLabels,
+} from '@/features/vendors/data';
 import { VendorCard } from '@/features/vendors/components/VendorCard';
 import { VendorFilters } from '@/features/vendors/components/VendorFilters';
 import { VendorFormModal } from '@/features/vendors/components/VendorFormModal';
@@ -31,15 +51,15 @@ interface ProcurementCategoryOption {
   label: string;
 }
 
-function normalizeCategoryValue(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, '_');
-}
-
 function formatCategoryLabel(value: string) {
   return value
     .trim()
     .replaceAll('_', ' ')
     .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function normalizeCategoryValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
 function createCategoryOption(value: string): ProcurementCategoryOption {
@@ -61,7 +81,7 @@ function getDefaultCategoryOptions(): ProcurementCategoryOption[] {
   ];
 }
 
-function getStoredCategoryOptions() {
+function getStoredCategoryOptions(): ProcurementCategoryOption[] {
   if (typeof window === 'undefined') return getDefaultCategoryOptions();
 
   try {
@@ -97,6 +117,356 @@ function getStoredCategoryOptions() {
     return getDefaultCategoryOptions();
   }
 }
+
+function getVendorAvailabilityVariant(availability: VendorAvailability) {
+  if (availability === 'available') return 'success';
+  if (availability === 'busy') return 'warning';
+  return 'muted';
+}
+
+function getVendorStatusVariant(status: VendorStatus) {
+  if (status === 'active') return 'success';
+  if (status === 'blacklisted') return 'danger';
+  return 'muted';
+}
+
+function getRatingPillClass(rating: number) {
+  if (rating >= 4.5) {
+    return 'border-amber-400/60 bg-amber-500/15 text-amber-700 dark:text-amber-200';
+  }
+
+  if (rating >= 3.5) {
+    return 'border-slate-300/70 bg-slate-400/15 text-slate-700 dark:text-slate-200';
+  }
+
+  return 'border-orange-500/50 bg-orange-600/15 text-orange-700 dark:text-orange-200';
+}
+
+function getWhatsAppUrl(phone: string) {
+  const cleanedPhone = phone.replace(/\D/g, '');
+
+  if (!cleanedPhone) return null;
+
+  return `https://wa.me/${cleanedPhone}`;
+}
+
+function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M16 3C8.8 3 3 8.55 3 15.4c0 2.4.72 4.65 1.96 6.55L3.5 29l7.25-1.9A13.64 13.64 0 0 0 16 28c7.2 0 13-5.55 13-12.6S23.2 3 16 3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.55 9.2c-.35 0-.9.12-1.34.58-.45.48-1.2 1.18-1.2 2.9 0 1.72 1.25 3.38 1.43 3.62.18.24 2.43 3.9 6.05 5.32 3 .98 3.63.78 4.28.73.65-.05 2.12-.86 2.42-1.7.3-.84.3-1.55.21-1.7-.09-.15-.33-.24-.69-.42-.36-.18-2.12-1.05-2.45-1.17-.33-.12-.57-.18-.81.18-.24.36-.93 1.17-1.14 1.41-.21.24-.42.27-.78.09-.36-.18-1.52-.56-2.9-1.78-1.07-.95-1.8-2.13-2.01-2.49-.21-.36-.02-.55.16-.73.16-.16.36-.42.54-.63.18-.21.24-.36.36-.6.12-.24.06-.45-.03-.63-.09-.18-.81-1.96-1.11-2.68-.29-.7-.59-.6-.81-.61-.21-.01-.45-.01-.69-.01Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function VendorDetailsPanel({
+  vendor,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  vendor: Vendor | null;
+  onClose: () => void;
+  onEdit: (vendor: Vendor) => void;
+  onDelete: (vendor: Vendor) => void;
+}) {
+  const [isManageOpen, setIsManageOpen] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!vendor) return;
+
+    setIsManageOpen(false);
+
+    window.requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest',
+      });
+    });
+  }, [vendor]);
+
+  if (!vendor) return null;
+
+  const categoryLabel =
+    vendorCategoryLabels[vendor.category] ?? formatCategoryLabel(vendor.category);
+  const whatsappUrl = getWhatsAppUrl(vendor.phone);
+
+  const handleFutureAction = (actionName: string) => {
+    window.alert(`${actionName} will be connected after the related module flow is finalised.`);
+  };
+
+  const contactIconButtonClass =
+    'flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground';
+
+  return (
+    <aside
+      ref={panelRef}
+      className="hidden overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm lg:block"
+    >
+      <div className="relative border-b border-border p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Vendor Details
+            </p>
+            <h2 className="mt-2 truncate text-xl font-semibold text-foreground">
+              {vendor.name}
+            </h2>
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm text-muted-foreground">{categoryLabel}</p>
+              <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${getRatingPillClass(vendor.rating)}`}>
+                Rating {vendor.rating.toFixed(1)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsManageOpen(current => !current)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Open vendor management actions"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Close vendor details"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {isManageOpen && (
+          <div className="absolute right-5 top-16 z-20 w-52 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+            <button
+              type="button"
+              onClick={() => {
+                setIsManageOpen(false);
+                onEdit(vendor);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition hover:bg-muted"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit Vendor
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsManageOpen(false);
+                onDelete(vendor);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Vendor
+            </button>
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <StatusBadge variant={getVendorStatusVariant(vendor.status)}>
+              {vendorStatusLabels[vendor.status]}
+            </StatusBadge>
+
+            <StatusBadge variant={getVendorAvailabilityVariant(vendor.availability)}>
+              {vendorAvailabilityLabels[vendor.availability]}
+            </StatusBadge>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            {vendor.email ? (
+              <a
+                href={`mailto:${vendor.email}`}
+                className={contactIconButtonClass}
+                aria-label={`Email ${vendor.name}`}
+                title="Email vendor"
+              >
+                <Mail className="h-4 w-4" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                className={contactIconButtonClass}
+                disabled
+                aria-label="Email unavailable"
+                title="Email unavailable"
+              >
+                <Mail className="h-4 w-4" />
+              </button>
+            )}
+
+            {whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={contactIconButtonClass}
+                aria-label={`WhatsApp ${vendor.name}`}
+                title="WhatsApp"
+              >
+                <WhatsAppIcon className="h-4 w-4" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                className={contactIconButtonClass}
+                disabled
+                aria-label="WhatsApp unavailable"
+                title="WhatsApp unavailable"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={contactIconButtonClass}
+              onClick={() => handleFutureAction('Create vendor follow-up task')}
+              aria-label={`Create follow-up for ${vendor.name}`}
+              title="Follow up"
+            >
+              <CalendarPlus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Quick Actions</h3>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-center gap-2"
+              onClick={() => handleFutureAction('Request updated pricing')}
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Request Pricing
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-center gap-2"
+              onClick={() => handleFutureAction('Assign vendor to project')}
+            >
+              <UsersRound className="h-4 w-4" />
+              Assign Project
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-center gap-2"
+              onClick={() => handleFutureAction('Log vendor interaction')}
+            >
+              <MessageCircle className="h-4 w-4" />
+              Log Interaction
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-center gap-2"
+              onClick={() => handleFutureAction('Schedule vendor site visit')}
+            >
+              <CalendarPlus className="h-4 w-4" />
+              Site Visit
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-center gap-2"
+              onClick={() => handleFutureAction('Mark vendor pricing as outdated')}
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Pricing Outdated
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-center gap-2"
+              onClick={() => handleFutureAction('Create procurement task')}
+            >
+              <Store className="h-4 w-4" />
+              Procurement Task
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Contact</h3>
+
+          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <p className="flex min-w-0 items-center gap-2">
+              <UsersRound className="h-4 w-4 shrink-0" />
+              <span className="truncate">{vendor.contactPerson}</span>
+            </p>
+
+            <p className="flex min-w-0 items-center gap-2">
+              <Phone className="h-4 w-4 shrink-0" />
+              <span className="truncate">{vendor.phone}</span>
+            </p>
+
+            {vendor.email && (
+              <p className="flex min-w-0 items-center gap-2">
+                <Mail className="h-4 w-4 shrink-0" />
+                <span className="break-all">{vendor.email}</span>
+              </p>
+            )}
+
+            <p className="flex items-start gap-2">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{vendor.location}</span>
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Scope</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {vendor.scopeOfWork}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border bg-background p-4">
+          <p className="text-xs text-muted-foreground">Assigned Projects</p>
+          <p className="mt-1 text-2xl font-semibold text-foreground">
+            {vendor.assignedProjectCount}
+          </p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export default function VendorsPage() {
   const [categoryOptions, setCategoryOptions] = useState(() =>
     getStoredCategoryOptions()
@@ -122,6 +492,7 @@ export default function VendorsPage() {
   const [availability, setAvailability] = useState<VendorAvailability | 'all'>('all');
   const [modalState, setModalState] = useState<VendorModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
 
   useEffect(() => {
     localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(vendors));
@@ -233,6 +604,10 @@ export default function VendorsPage() {
     setVendors(currentVendors =>
       currentVendors.filter(vendor => vendor.id !== deleteTarget.id)
     );
+
+    if (selectedVendor?.id === deleteTarget.id) {
+      setSelectedVendor(null);
+    }
 
     setDeleteTarget(null);
   };
@@ -346,26 +721,40 @@ export default function VendorsPage() {
       </div>
 
       {filteredVendors.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-          <div className="hidden grid-cols-[minmax(240px,1.15fr)_minmax(220px,1fr)_minmax(220px,1fr)_170px] items-center gap-4 border-b border-border bg-muted/35 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground lg:grid">
-            <span>Vendor</span>
-            <span>Scope</span>
-            <span>Contact</span>
-            <span className="text-center">Actions</span>
+        <div className={selectedVendor ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_460px]' : 'grid gap-4'}>
+          <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+            <div className="hidden grid-cols-[minmax(240px,1.15fr)_minmax(220px,1fr)_minmax(220px,1fr)_170px] items-center gap-4 border-b border-border bg-muted/35 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground lg:grid">
+              <span>Vendor</span>
+              <span>Scope</span>
+              <span>Contact</span>
+              {selectedVendor ? <span /> : <span className="text-center">Actions</span>}
+            </div>
+
+            <div className="divide-y divide-border">
+              {filteredVendors.map(vendor => (
+                <VendorCard
+                  key={vendor.id}
+                  vendor={vendor}
+                  isSelected={selectedVendor?.id === vendor.id}
+                  hideDesktopActions={Boolean(selectedVendor)}
+                  onSelect={setSelectedVendor}
+                  onEdit={selectedVendor =>
+                    setModalState({ mode: 'edit', vendor: selectedVendor })
+                  }
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
           </div>
 
-          <div className="divide-y divide-border">
-            {filteredVendors.map(vendor => (
-              <VendorCard
-                key={vendor.id}
-                vendor={vendor}
-                onEdit={selectedVendor =>
-                  setModalState({ mode: 'edit', vendor: selectedVendor })
-                }
-                onDelete={setDeleteTarget}
-              />
-            ))}
-          </div>
+          <VendorDetailsPanel
+            vendor={selectedVendor}
+            onClose={() => setSelectedVendor(null)}
+            onEdit={selectedVendor =>
+              setModalState({ mode: 'edit', vendor: selectedVendor })
+            }
+            onDelete={setDeleteTarget}
+          />
         </div>
       ) : (
         <EmptyState

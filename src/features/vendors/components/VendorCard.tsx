@@ -19,6 +19,9 @@ import {
 
 interface VendorCardProps {
   vendor: Vendor;
+  isSelected?: boolean;
+  hideDesktopActions?: boolean;
+  onSelect?: (vendor: Vendor) => void;
   onEdit?: (vendor: Vendor) => void;
   onDelete?: (vendor: Vendor) => void;
 }
@@ -41,13 +44,32 @@ function getStatusVariant(status: Vendor['status']) {
   return 'muted';
 }
 
+function getVendorRatingPillClass(rating: number) {
+  if (rating >= 4.5) {
+    return 'border-amber-400/60 bg-amber-500/15 text-amber-700 dark:text-amber-200';
+  }
+
+  if (rating >= 3.5) {
+    return 'border-slate-300/70 bg-slate-400/15 text-slate-700 dark:text-slate-200';
+  }
+
+  return 'border-orange-500/50 bg-orange-600/15 text-orange-700 dark:text-orange-200';
+}
+
 function isMobileViewport() {
   if (typeof window === 'undefined') return false;
 
   return window.matchMedia('(max-width: 1023px)').matches;
 }
 
-export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
+export function VendorCard({
+  vendor,
+  isSelected = false,
+  hideDesktopActions = false,
+  onSelect,
+  onEdit,
+  onDelete,
+}: VendorCardProps) {
   const [isMobileContactOpen, setIsMobileContactOpen] = useState(false);
   const cardRef = useRef<HTMLElement | null>(null);
   const categoryLabel =
@@ -88,18 +110,23 @@ export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
   }, []);
 
   const handleCardClick = () => {
-    if (!isMobileViewport()) return;
+    if (isMobileViewport()) {
+      setIsMobileContactOpen(current => !current);
+      return;
+    }
 
-    setIsMobileContactOpen(current => !current);
+    onSelect?.(vendor);
   };
 
   return (
     <article
       ref={cardRef}
       onClick={handleCardClick}
-      className="relative grid cursor-pointer gap-3 bg-card px-4 py-4 text-card-foreground transition hover:bg-muted/25 lg:cursor-default lg:grid-cols-[minmax(240px,1.15fr)_minmax(220px,1fr)_minmax(220px,1fr)_170px] lg:items-center lg:gap-4"
+      className={`relative grid cursor-pointer gap-3 px-4 py-4 text-card-foreground transition hover:bg-muted/25 lg:grid-cols-[minmax(240px,1.15fr)_minmax(220px,1fr)_minmax(220px,1fr)_170px] lg:items-center lg:gap-4 ${
+        isSelected ? 'bg-muted/35' : 'bg-card'
+      }`}
     >
-      <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium text-foreground lg:hidden">
+      <div className={`absolute right-4 top-4 flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold lg:hidden ${getVendorRatingPillClass(vendor.rating)}`}>
         <Star className="h-3.5 w-3.5 fill-current" />
         {vendor.rating.toFixed(1)}
       </div>
@@ -110,7 +137,7 @@ export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
         </h3>
 
         <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground sm:text-sm">
-          <div className="hidden shrink-0 items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs font-medium text-foreground lg:flex">
+          <div className={`hidden shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold lg:flex ${getVendorRatingPillClass(vendor.rating)}`}>
             <Star className="h-3.5 w-3.5 fill-current" />
             {vendor.rating.toFixed(1)}
           </div>
@@ -182,7 +209,9 @@ export function VendorCard({ vendor, onEdit, onDelete }: VendorCardProps) {
       </div>
 
       <div
-        className="grid grid-cols-2 gap-2"
+        className={`grid grid-cols-2 gap-2 ${
+          hideDesktopActions ? 'lg:hidden' : ''
+        }`}
         onClick={event => event.stopPropagation()}
       >
         {onEdit && (
