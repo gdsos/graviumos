@@ -24,7 +24,7 @@ export const demoPaymentGates: PaymentGate[] = [
     projectId: 'project-villa-athani',
     type: 'major_site_execution',
     title: 'Stage 1 Completion',
-    description: 'After Steel Roof Finishes',
+    description: 'After Fabrication Part-A',
     percentage: 35,
     amount: 166416,
     dueDate: '2026-05-23',
