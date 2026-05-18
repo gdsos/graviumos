@@ -1,4 +1,4 @@
-# Gravium OS Roadmap and Codex Brief - Updated
+# Gravium OS Roadmap and Codex Brief - Current
 
 This document is the working roadmap, implementation plan, UI direction, and Codex handoff brief for Gravium OS.
 
@@ -10,20 +10,25 @@ Branch:
 
 Latest known clean checkpoint:
 
+- `7247ed8 Simplify cost estimate editor and area workflows`
+- `6932baa Convert cost estimates list to compact rows`
+- `3f9165f Update Gravium OS roadmap brief`
+- `c294fd7 Simplify timeline mobile planning UI`
 - `8ce0b69 Convert timeline work packages to list view`
-- `cab8cea Add timeline confirmation state and execution actions`
-- `87bd4b4 Update Villa Athani stage 1 payment helper text`
-- Working tree was clean after commit.
+- Working tree was clean after commit `7247ed8`.
+
+Current next module:
+- Vendors list simplification and mobile cleanup.
 
 ---
 
 ## Development Rules
 
-- The user runs commands line-by-line in PowerShell.
+- User runs commands line-by-line in PowerShell.
 - Avoid Bash heredoc syntax like `python - <<'PY'`.
 - Use PowerShell-safe Python patches:
   `@' ... '@ | python -`
-- Avoid `Set-Content` for TS/TSX files unless explicitly UTF-8.
+- Avoid `Set-Content` for TS/TSX unless explicitly using UTF-8.
 - Prefer Python `Path.write_text(..., encoding="utf-8")`.
 - Include patch + build/status commands together in one PowerShell block when possible.
 - After patches, run:
@@ -31,16 +36,17 @@ Latest known clean checkpoint:
   - `git status --short`
   - `git diff --name-status`
   - `git diff --stat`
-- If final `git status --short` has no output, treat the working tree as clean.
+- If final `git status --short` has no output, treat working tree as clean.
 - Commit at logical milestones, not after every tiny patch.
 - UI fixes should be screenshot-driven and targeted.
 - For fetched/selectable data like Items, Vendors, Projects, Units, Categories, use searchable suggestion/typeahead dropdowns instead of native selects where possible.
 - Suggestion dropdowns must not be clipped. Use proper z-index, overflow-safe containers, or body/modal-safe rendering.
 - New module/list pages should follow the Vendors-style PageHeader layout.
-- Desktop card action rows should use full-width responsive button groups.
-- Number inputs should allow empty/backspace states. Avoid trapping users with forced zero values.
+- Desktop card/list action rows should use a consistent responsive button-group container.
+- Number inputs must allow empty/backspace states. Avoid trapping users with forced zero values.
 - Avoid unsafe/special UI separators that may render incorrectly. Prefer plain ASCII labels.
-- After UI/layout changes, remind the user to test both desktop and mobile UI.
+- After UI/layout changes, remind user to test both desktop and mobile UI.
+- Do not mark mobile UI fully cleared until user verifies on phone.
 
 ---
 
@@ -48,7 +54,7 @@ Latest known clean checkpoint:
 
 Gravium OS is an internal operating system for Gravium Design Studio.
 
-It should manage the full business workflow:
+It should manage the full workflow:
 
 1. Leads
 2. Projects
@@ -63,7 +69,7 @@ It should manage the full business workflow:
 11. Handover
 12. Reports and archive
 
-The app should feel premium, clean, practical, and operationally useful, not like a generic template or over-carded SaaS dashboard.
+The product should feel premium, clean, practical, and operationally useful, not like a generic template or over-carded SaaS dashboard.
 
 Current priority modules that define the initial Gravium design system:
 
@@ -74,28 +80,13 @@ Current priority modules that define the initial Gravium design system:
 
 Initial goal:
 
-- Fix and standardize Items, Vendors, Cost Estimate, and Timeline first.
-- Use the cleaned design system from these modules for the rest of the app, including already existing pages.
+- Fix and standardize Items, Vendors, Cost Estimates, and Timeline first.
+- Use the cleaned design system from these modules for the rest of the app.
 - Avoid continuing to polish old template/Porsche-style pages directly until the core Gravium UI direction is stable.
-
-Design system direction:
-
-- Tailwind
-- Neue Montreal
-- Gravium brand style
-- Clean operational UI
-- List/table-first layouts for data-heavy modules
-- PageHeader on module/list pages
-- Strong light/dark contrast
-- Compact rows by default
-- Details in drawers/sheets instead of giant cards
-- Mobile-lite experience instead of desktop squeezed into mobile
 
 ---
 
 # Product-Wide UI Direction
-
-## Avoid the Vibe-Coded SaaS Look
 
 Avoid:
 
@@ -114,7 +105,7 @@ Use instead:
 2. Tables where useful
 3. Clear hierarchy
 4. One smart primary action per row
-5. Secondary actions in a three-dot menu
+5. Secondary actions in a three-dot menu where useful
 6. Details in drawer, side panel, mobile sheet, or dedicated detail page
 7. Charts only when they explain something useful
 8. Fewer but more meaningful dashboard summaries
@@ -157,7 +148,7 @@ Mobile should focus on:
 7. Lightweight detail review
 8. Alerts and notifications
 
-Mobile should avoid showing full desktop complexity upfront.
+Mobile should avoid full desktop complexity upfront.
 
 Mobile pattern:
 
@@ -200,45 +191,6 @@ Suggested generic mobile nav:
 
 Future navigation should be permission-aware and department-specific.
 
-Examples:
-
-## Admin / Partner
-
-- Full navigation
-
-## Execution Team
-
-- Home
-- Projects
-- Timeline
-- Tasks
-- More
-
-## Finance Team
-
-- Home
-- Finance
-- Payments
-- Tasks
-- More
-
-## Marketing Team
-
-- Home
-- Leads
-- Follow-ups
-- Tasks
-- More
-
-## Design / Procurement
-
-- Home
-- Projects
-- Cost Estimates
-- Items
-- Vendors
-- Tasks / More
-
 ---
 
 # Module UI Rules
@@ -264,34 +216,42 @@ Default direction:
 - Main list shows vendor name, scope/category, contact/status, and primary action
 - Detailed vendor data should move to drawer/detail view
 - Mobile should prioritize quick contact/open/edit actions
+- Next immediate task: convert Vendors away from large vendor cards toward compact operational list rows.
+- Keep PageHeader pattern.
+- Use consistent action button group alignment similar to Cost Estimates.
 
 ## Cost Estimates
 
 Default direction:
 
-- Keep cost estimates as record cards/list where useful, but avoid oversized decorative cards
-- Estimate editor can stay structured because it is a complex workflow
-- Mobile should not attempt full complex estimate editing unless deliberately simplified
-- Mobile can view estimate status, totals, approval/revision state, and key actions
-- Desktop remains the main place for detailed estimate creation/editing
+- Keep cost estimates as records/list rows where useful, but avoid oversized decorative cards.
+- Estimate editor can stay structured because it is a complex workflow.
+- Mobile should not attempt full complex estimate editing unless deliberately simplified.
+- Mobile can view estimate status, totals, approval/revision state, and key actions.
+- Desktop remains main place for detailed estimate creation/editing.
+- Create Estimate modal should stay compact and operational.
+- Area selection modal should support compact rows/list on mobile, grid on desktop/tablet where useful.
+- Area selection modal now has Select/Deselect All and multi-step Undo.
+- Bedroom/Bathroom naming logic must be consistent in both Create Estimate modal and editor.
 
 ## Timeline
 
 Default direction:
 
-- Timeline Work tab should be list-first, not card-first
-- Generated timelines are Planned/Estimated timelines, not execution truth
-- Confirmed timeline becomes the Planned baseline
-- Execution actions update Actual progress
-- Forecast is a later layer
-- Desktop can show full Planned vs Actual detail
-- Mobile should show a simplified execution row/card with one primary action and a details sheet
+- Timeline Work tab should be list-first, not card-first.
+- Generated timelines are Planned/Estimated timelines, not execution truth.
+- Confirmed timeline becomes the Planned baseline.
+- Execution actions update Actual progress.
+- Forecast is a later layer.
+- Desktop can show full Planned vs Actual detail.
+- Mobile should show a simplified execution row/card with one primary action and a details sheet.
+- Gantt is hidden on mobile for now.
 
 ---
 
 # Timeline Current Implementation Status
 
-Completed recently:
+Completed:
 
 1. Temporary Villa Athani dummy timeline dev controls added.
    - Fetch Data / Hide Data controls remain intentionally available.
@@ -315,7 +275,7 @@ Completed recently:
    - Payments support Unmark
    - Unmark re-blocks linked work packages
 10. Side quest completed:
-   - In temporary Villa Athani dummy data, Stage 1 payment helper text changed from `After Steel Roof Finishes` to `After Fabrication Part-A`.
+   - Temporary Villa Athani Stage 1 payment helper text changed from `After Steel Roof Finishes` to `After Fabrication Part-A`.
 11. Timeline confirmation state polish added:
    - Review Draft Timeline state
    - Confirmed Planned Timeline banner
@@ -332,10 +292,88 @@ Completed recently:
    - Pause period tracking
 13. Timeline Work tab converted from detailed cards to list-first execution tracker.
 14. Work list alignment/clipping issues fixed.
+15. Timeline mobile planning/source UI simplified.
+16. Duplicate timeline source/summary blocks removed.
+17. Gantt tab hidden on mobile.
 
-Latest committed Timeline milestone:
+Latest committed Timeline milestones:
 
+- `c294fd7 Simplify timeline mobile planning UI`
 - `8ce0b69 Convert timeline work packages to list view`
+
+---
+
+# Cost Estimate Current Implementation Status
+
+Completed:
+
+1. Cost Estimates list page converted from heavy cards to compact row/list layout.
+2. Mobile Cost Estimate row actions are icon-only and compact.
+3. Desktop list action group alignment refined:
+   - Action group right-aligned.
+   - Two-action and three-action rows fit inside a consistent responsive container.
+   - Open button always says `Open`; no `Open Revision` label.
+4. Desktop status badges moved below estimate name.
+5. Mobile status badges moved to top-right and reduced.
+6. Cost Estimate editor mobile header/actions simplified:
+   - Top actions use compact icon + text buttons.
+   - Bottom actions use compact icon + text buttons.
+   - Save and Close dropdown hidden on mobile, still available on desktop.
+7. Estimate Project block helper descriptions removed.
+8. Summary price row simplified:
+   - Mobile no horizontal scroll.
+   - Compact 2x2 summary grid on mobile.
+   - Desktop retains 4-column summary.
+9. Service/Misc/Revenue controls simplified:
+   - Mobile in one row.
+   - Desktop stays normal form style.
+10. Area setup layout refined:
+   - Mobile compact two-row area cards.
+   - Desktop table-like alignment.
+   - Area name left on desktop.
+   - Amount larger on mobile.
+   - Delete action bottom-right on mobile.
+11. Area detail headers refined:
+   - Mobile Add Row button moved to top-right as `+ Add`.
+   - Desktop keeps normal `Add New Row`.
+12. Save Row action simplified:
+   - Mobile uses tick-only button.
+   - Desktop shows tick + `Save Row`.
+13. Area quick-add buttons added in editor:
+   - Bedroom Set
+   - Common Bathroom
+   - Add Bedroom
+   - Add Bathroom
+   - Mobile uses a two-column grid.
+14. Create Estimate modal area selector compacted:
+   - Select/Deselect All button.
+   - Multi-step Undo button.
+   - Compact area selector rows.
+   - Mobile list restored by user preference.
+   - Desktop/tablet can use grid.
+15. Create Estimate modal quick-add buttons added:
+   - Bedroom Set
+   - Common Bathroom
+   - Add Bedroom
+   - Add Bathroom
+16. Unified Bedroom/Bathroom/Master naming logic in both flows:
+   - Create Estimate modal
+   - Cost Estimate editor
+17. Naming rule:
+   - When adding Bedroom Set, Add Bedroom, or Add Bathroom:
+     - first existing bedroom becomes `Master Bedroom` if none exists
+     - first existing attached/general bathroom becomes `Master Bathroom` if none exists
+     - new bedrooms become `Bedroom 1`, `Bedroom 2`, etc.
+     - new attached bathrooms become `Attached Bathroom 1`, `Attached Bathroom 2`, etc.
+18. Unassigned draft numbering added:
+   - First: `Unassigned Draft`
+   - Second: `Unassigned Draft 2`
+   - Third: `Unassigned Draft 3`
+
+Latest committed Cost Estimate milestones:
+
+- `7247ed8 Simplify cost estimate editor and area workflows`
+- `6932baa Convert cost estimates list to compact rows`
 
 ---
 
@@ -440,29 +478,6 @@ Work package actions:
 4. Complete Work
 5. Mark Delayed
 6. Add / Update Delay Reason
-
-## Internal View
-
-Internal timeline should show:
-
-1. Estimated vs Actual dates
-2. Delay days
-3. Pause history
-4. Payment blockers
-5. Vendor blockers
-6. Dependency blockers
-7. Projected handover shift
-
-## Client-Facing View
-
-Client reports should show:
-
-1. Original Plan
-2. Current Progress
-3. Upcoming Works
-4. Payment Gates
-5. Expected Handover
-6. Concise delay notes
 
 ---
 
@@ -594,41 +609,6 @@ Dashboard direction:
 - Every KPI should be drillable to the records behind it.
 - Avoid decorative dashboard blocks that do not help decisions.
 
-## Admin Dashboard
-
-Should show:
-
-1. Projects
-2. Timeline delays
-3. Pending payments
-4. Employee task performance
-5. Cost estimates pending approval
-6. Vendor issues
-7. Lead status
-8. Finance overview
-
-## Employee Dashboard
-
-Should show:
-
-1. My tasks today
-2. Overdue tasks
-3. Project tasks assigned to me
-4. Internal tasks assigned to me
-5. Pending approvals
-6. Recently completed work
-7. Basic KPI snapshot
-
-## Department Head Dashboard
-
-Should show only department-relevant work.
-
-Examples:
-
-- Marketing head sees leads and marketing tasks.
-- Finance head sees finance and payment tasks.
-- Execution head sees site/timeline/vendor tasks.
-
 ---
 
 # Permissions
@@ -708,16 +688,6 @@ Use Codex for:
 9. Applying new list-first design patterns across old modules
 10. Implementing full mobile navigation architecture
 
-Best Codex tasks for Gravium OS:
-
-1. Find and remove legacy Porsche/template components.
-2. Standardize all module pages to Gravium style.
-3. Refactor large files like TimelinePage, CostEstimateSection, Projects, and Tasks.
-4. Prepare Supabase service/data layer after schema is finalized.
-5. Implement permissions guards after rules are finalized.
-6. Apply list/table-first module patterns across older pages.
-7. Build mobile bottom-nav architecture after design rules are finalized.
-
 ---
 
 # Supabase Migration Plan
@@ -779,21 +749,26 @@ Timeline report should include:
 
 Immediate order from here:
 
-1. Confirm clean status after latest Timeline list-view commit.
-2. Begin initial design-system cleanup across the four priority modules:
-   - Items
-   - Vendors
-   - Cost Estimates
-   - Timeline
-3. Simplify mobile UI for these four modules.
-4. Define mobile-lite feature restrictions:
+1. Confirm clean status after latest Cost Estimate commit.
+2. Continue core module UI baseline cleanup:
+   - Vendors next
+   - Items consistency pass after Vendors
+   - Timeline/Cost Estimate only if phone testing shows regressions
+3. Vendors next goal:
+   - Convert current card-grid vendor list to compact operational list/table rows.
+   - Keep mobile compact.
+   - Use consistent desktop action group alignment.
+   - Preserve existing form modal and category/filter logic.
+4. Items next goal:
+   - Check whether Items still matches the newer Cost Estimate/Timeline patterns.
+   - Fix only consistency gaps.
+5. Define mobile-lite restrictions:
    - What is mobile-visible
    - What is desktop-only
    - What can be quick-action only on mobile
-5. Plan and implement liquid-glass mobile bottom nav.
-6. Add row/detail drawer or mobile sheet pattern where needed.
-7. Start Project Finance cleanup/integration plan.
-8. Define MVP checklist in app or docs.
+6. Plan and implement liquid-glass mobile bottom nav.
+7. Add row/detail drawer or mobile sheet pattern where needed.
+8. Start Project Finance cleanup/integration plan.
 9. Use Codex for Porsche/template cleanup and page standardization when scope becomes repo-wide.
 
 ---
@@ -814,11 +789,16 @@ Whenever moving to a new chat, include:
    - Use UTF-8 writes
    - Build/status check after patches
 
-4. Latest clean commit and working tree status
+4. Latest clean commit:
+   - `7247ed8 Simplify cost estimate editor and area workflows`
 
-5. Current module being worked on
+5. Current module being worked on:
+   - Vendors next
 
-6. Current implementation goal
+6. Current implementation goal:
+   - Convert Vendors from card-grid to list-first operational layout.
+   - Keep mobile compact.
+   - Preserve form modal/filter/category logic.
 
 7. Important product/UI tracks:
    - Items/Vendors/Cost Estimate/Timeline as first design-system baseline
@@ -840,3 +820,43 @@ Whenever moving to a new chat, include:
 9. Testing reminder:
    - After UI/layout changes, test desktop and mobile.
    - Do not mark mobile UI fully cleared until user verifies on phone.
+
+---
+
+# Suggested First Message for New Chat
+
+We are continuing Gravium OS development.
+
+Repo:
+`D:\Gravium Design Studio\Web_App\graviumos`
+
+Branch:
+`featuretest`
+
+Latest clean checkpoint:
+`7247ed8 Simplify cost estimate editor and area workflows`
+
+Working tree was clean after the commit.
+
+Current next task:
+Vendors list simplification.
+
+Please start by asking me to run:
+
+```powershell
+cd "D:\Gravium Design Studio\Web_App\graviumos"
+git status --short
+git log --oneline -8
+npm run build
+git status --short
+git diff --name-status
+git diff --stat
+```
+
+Then continue with Vendors:
+- inspect `src/pages/VendorsPage.tsx`
+- inspect `src/features/vendors/components/VendorCard.tsx`
+- convert vendor card grid to compact operational list/table rows
+- keep mobile compact
+- preserve VendorFormModal, VendorFilters, category storage, and delete confirmation logic
+- test desktop and mobile
