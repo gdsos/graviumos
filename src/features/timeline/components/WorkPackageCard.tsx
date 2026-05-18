@@ -1,12 +1,29 @@
-﻿import { CalendarDays, Link2, PauseCircle, UserRound } from 'lucide-react';
+﻿import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Link2,
+  MessageSquareText,
+  PauseCircle,
+  PlayCircle,
+  RotateCcw,
+  UserRound,
+} from 'lucide-react';
 
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { Button } from '@/components/ui/button';
 import type { WorkPackage } from '../types';
 
 interface WorkPackageCardProps {
   workPackage: WorkPackage;
   vendorName?: string;
   dependencyCount?: number;
+  onStartWork?: (workPackageId: string) => void;
+  onPauseWork?: (workPackageId: string) => void;
+  onResumeWork?: (workPackageId: string) => void;
+  onCompleteWork?: (workPackageId: string) => void;
+  onMarkDelayed?: (workPackageId: string) => void;
+  onUpdateDelayReason?: (workPackageId: string) => void;
 }
 
 function getStatusVariant(status: WorkPackage['status']) {
@@ -38,9 +55,29 @@ export function WorkPackageCard({
   workPackage,
   vendorName,
   dependencyCount = workPackage.dependsOnWorkPackageIds.length,
+  onStartWork,
+  onPauseWork,
+  onResumeWork,
+  onCompleteWork,
+  onMarkDelayed,
+  onUpdateDelayReason,
 }: WorkPackageCardProps) {
   const hasActualTimeline =
     workPackage.actualStartDate || workPackage.actualEndDate;
+  const isBlocked =
+    workPackage.status === 'blocked_by_payment' ||
+    workPackage.status === 'blocked_by_dependency';
+  const isCompleted = workPackage.status === 'completed';
+  const canStart =
+    !isBlocked &&
+    !isCompleted &&
+    workPackage.status !== 'in_progress' &&
+    workPackage.status !== 'paused';
+  const canPause =
+    workPackage.status === 'in_progress' || workPackage.status === 'delayed';
+  const canResume = workPackage.status === 'paused';
+  const canComplete = !isBlocked && !isCompleted;
+  const canMarkDelayed = !isCompleted && workPackage.status !== 'delayed';
 
   return (
     <article className="min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-5">
@@ -162,6 +199,92 @@ export function WorkPackageCard({
           Override reason: {workPackage.overrideReason}
         </p>
       )}
+      <div className="mt-4 border-t border-border pt-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Execution Actions
+        </p>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {canStart && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onStartWork?.(workPackage.id)}
+              className="justify-center gap-2"
+            >
+              <PlayCircle className="h-4 w-4" />
+              Start Work
+            </Button>
+          )}
+
+          {canPause && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onPauseWork?.(workPackage.id)}
+              className="justify-center gap-2"
+            >
+              <PauseCircle className="h-4 w-4" />
+              Pause Work
+            </Button>
+          )}
+
+          {canResume && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onResumeWork?.(workPackage.id)}
+              className="justify-center gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Resume Work
+            </Button>
+          )}
+
+          {canComplete && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onCompleteWork?.(workPackage.id)}
+              className="justify-center gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Complete Work
+            </Button>
+          )}
+
+          {canMarkDelayed && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onMarkDelayed?.(workPackage.id)}
+              className="justify-center gap-2"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Mark Delayed
+            </Button>
+          )}
+
+          {(workPackage.status === 'delayed' || workPackage.overrideReason) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onUpdateDelayReason?.(workPackage.id)}
+              className="justify-center gap-2"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              Delay Reason
+            </Button>
+          )}
+        </div>
+
+        {workPackage.overrideReason && (
+          <p className="mt-3 rounded-xl border border-border bg-background px-3 py-2 text-xs leading-5 text-muted-foreground">
+            Delay Reason: {workPackage.overrideReason}
+          </p>
+        )}
+      </div>
+
     </article>
   );
 }

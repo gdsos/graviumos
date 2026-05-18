@@ -9,6 +9,12 @@ import type { WorkPackage } from '../types';
 
 interface TimelineWorkPackagesProps {
   workPackages: WorkPackage[];
+  onStartWork?: (workPackageId: string) => void;
+  onPauseWork?: (workPackageId: string) => void;
+  onResumeWork?: (workPackageId: string) => void;
+  onCompleteWork?: (workPackageId: string) => void;
+  onMarkDelayed?: (workPackageId: string) => void;
+  onUpdateDelayReason?: (workPackageId: string) => void;
 }
 
 function getVendorName(vendorId?: string) {
@@ -40,12 +46,24 @@ function WorkPackageGroup({
   workPackages,
   icon: Icon,
   badgeVariant,
+  onStartWork,
+  onPauseWork,
+  onResumeWork,
+  onCompleteWork,
+  onMarkDelayed,
+  onUpdateDelayReason,
 }: {
   title: string;
   description: string;
   workPackages: WorkPackage[];
   icon: typeof ShieldAlert;
   badgeVariant: 'danger' | 'warning' | 'info' | 'success' | 'muted';
+  onStartWork?: (workPackageId: string) => void;
+  onPauseWork?: (workPackageId: string) => void;
+  onResumeWork?: (workPackageId: string) => void;
+  onCompleteWork?: (workPackageId: string) => void;
+  onMarkDelayed?: (workPackageId: string) => void;
+  onUpdateDelayReason?: (workPackageId: string) => void;
 }) {
   if (workPackages.length === 0) return null;
 
@@ -70,6 +88,12 @@ function WorkPackageGroup({
             key={workPackage.id}
             workPackage={workPackage}
             vendorName={getVendorName(workPackage.vendorId)}
+            onStartWork={onStartWork}
+            onPauseWork={onPauseWork}
+            onResumeWork={onResumeWork}
+            onCompleteWork={onCompleteWork}
+            onMarkDelayed={onMarkDelayed}
+            onUpdateDelayReason={onUpdateDelayReason}
           />
         ))}
       </div>
@@ -79,6 +103,12 @@ function WorkPackageGroup({
 
 export function TimelineWorkPackages({
   workPackages,
+  onStartWork,
+  onPauseWork,
+  onResumeWork,
+  onCompleteWork,
+  onMarkDelayed,
+  onUpdateDelayReason,
 }: TimelineWorkPackagesProps) {
   if (workPackages.length === 0) {
     return (
@@ -102,6 +132,12 @@ export function TimelineWorkPackages({
         workPackages={needsAttention}
         icon={ShieldAlert}
         badgeVariant="danger"
+        onStartWork={onStartWork}
+        onPauseWork={onPauseWork}
+        onResumeWork={onResumeWork}
+        onCompleteWork={onCompleteWork}
+        onMarkDelayed={onMarkDelayed}
+        onUpdateDelayReason={onUpdateDelayReason}
       />
 
       <WorkPackageGroup
@@ -110,6 +146,12 @@ export function TimelineWorkPackages({
         workPackages={activeOrUpcoming}
         icon={Sparkles}
         badgeVariant="info"
+        onStartWork={onStartWork}
+        onPauseWork={onPauseWork}
+        onResumeWork={onResumeWork}
+        onCompleteWork={onCompleteWork}
+        onMarkDelayed={onMarkDelayed}
+        onUpdateDelayReason={onUpdateDelayReason}
       />
 
       <WorkPackageGroup
@@ -118,6 +160,12 @@ export function TimelineWorkPackages({
         workPackages={completed}
         icon={CheckCircle2}
         badgeVariant="success"
+        onStartWork={onStartWork}
+        onPauseWork={onPauseWork}
+        onResumeWork={onResumeWork}
+        onCompleteWork={onCompleteWork}
+        onMarkDelayed={onMarkDelayed}
+        onUpdateDelayReason={onUpdateDelayReason}
       />
     </div>
   );

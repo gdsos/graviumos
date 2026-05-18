@@ -164,6 +164,7 @@ type StoredTimelineState = {
   hasTimeline: boolean;
   paymentGates: PaymentGate[];
   workPackages: WorkPackage[];
+  timelineConfirmedAt?: string;
 };
 
 type TimelineTab = 'overview' | 'work' | 'payments' | 'gantt' | 'alerts';
@@ -211,6 +212,10 @@ function getStoredTimelineState(): StoredTimelineState | null {
         hasTimeline: parsedTimeline.hasTimeline,
         paymentGates: parsedTimeline.paymentGates,
         workPackages: parsedTimeline.workPackages,
+        timelineConfirmedAt:
+          typeof parsedTimeline.timelineConfirmedAt === 'string'
+            ? parsedTimeline.timelineConfirmedAt
+            : '',
       };
     }
 
@@ -319,6 +324,20 @@ function getNextStatusAfterPaymentUnlock(
   return workPackage.actualStartDate ? 'in_progress' : 'ready';
 }
 
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getActualDurationDays(startDate: string, endDate: string) {
+  return getDayDifference(startDate, endDate) + 1;
+}
+
+function appendTimelineNote(existingNote: string | undefined, nextNote: string) {
+  const trimmedNote = existingNote?.trim();
+
+  return trimmedNote ? `${trimmedNote} ${nextNote}` : nextNote;
+}
+
 export default function TimelinePage() {
   const storedTimeline = getStoredTimelineState();
 
@@ -336,6 +355,9 @@ export default function TimelinePage() {
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [pendingTimelineDraft, setPendingTimelineDraft] =
     useState<GeneratedTimelineReviewDraft | null>(null);
+  const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
+    () => storedTimeline?.timelineConfirmedAt ?? ''
+  );
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
   >(() => getStoredCostEstimateRecords());
@@ -359,9 +381,10 @@ export default function TimelinePage() {
         hasTimeline,
         paymentGates,
         workPackages,
+        timelineConfirmedAt,
       })
     );
-  }, [hasTimeline, paymentGates, workPackages]);
+  }, [hasTimeline, paymentGates, timelineConfirmedAt, workPackages]);
 
   const summary = useMemo(
     () => calculateTimelineSummary(workPackages, paymentGates),
@@ -594,6 +617,7 @@ export default function TimelinePage() {
     setPendingTimelineDraft(preparedTimeline);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
+    setTimelineConfirmedAt('');
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -609,6 +633,7 @@ export default function TimelinePage() {
     setIsContractSigned(false);
     setIsBookingPaymentCollected(false);
     setPendingTimelineDraft(null);
+    setTimelineConfirmedAt('');
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -621,6 +646,7 @@ export default function TimelinePage() {
     setWorkPackages(generatedTimeline.workPackages);
     setIgnoredAlertIds([]);
     setHasTimeline(true);
+    setTimelineConfirmedAt(new Date().toISOString());
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -642,6 +668,7 @@ export default function TimelinePage() {
     setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
+    setTimelineConfirmedAt('');
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -689,6 +716,7 @@ export default function TimelinePage() {
     setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(true);
+    setTimelineConfirmedAt(new Date().toISOString());
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -696,7 +724,157 @@ export default function TimelinePage() {
   const handleCancelPendingTimeline = () => {
     setPendingTimelineDraft(null);
     setHasTimeline(false);
+    setTimelineConfirmedAt('');
     setActiveTab('overview');
+  };
+
+  const handleStartWorkPackage = (workPackageId: string) => {
+    const today = getTodayDateString();
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage => {
+        if (workPackage.id !== workPackageId) return workPackage;
+
+        if (
+          workPackage.status === 'blocked_by_payment' ||
+          workPackage.status === 'blocked_by_dependency'
+        ) {
+          window.alert('This work package is blocked. Clear the blocker before starting work.');
+          return workPackage;
+        }
+
+        return {
+          ...workPackage,
+          actualStartDate: workPackage.actualStartDate ?? today,
+          actualEndDate: undefined,
+          actualDurationDays: undefined,
+          status: 'in_progress',
+          notes: appendTimelineNote(workPackage.notes, `Work started on ${today}.`),
+        };
+      })
+    );
+  };
+
+  const handlePauseWorkPackage = (workPackageId: string) => {
+    const reason = window.prompt('Why is this work being paused?')?.trim();
+    if (!reason) return;
+
+    const today = getTodayDateString();
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage => {
+        if (workPackage.id !== workPackageId) return workPackage;
+
+        return {
+          ...workPackage,
+          status: 'paused',
+          pausePeriods: [
+            ...workPackage.pausePeriods,
+            {
+              id: `pause-${workPackage.id}-${Date.now()}`,
+              pauseStart: today,
+              reason,
+              createdBy: 'Admin',
+            },
+          ],
+          notes: appendTimelineNote(workPackage.notes, `Paused on ${today}: ${reason}`),
+        };
+      })
+    );
+  };
+
+  const handleResumeWorkPackage = (workPackageId: string) => {
+    const today = getTodayDateString();
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage => {
+        if (workPackage.id !== workPackageId) return workPackage;
+
+        return {
+          ...workPackage,
+          status: workPackage.actualStartDate ? 'in_progress' : 'ready',
+          pausePeriods: workPackage.pausePeriods.map((pausePeriod, index, array) =>
+            index === array.length - 1 && !pausePeriod.pauseEnd
+              ? { ...pausePeriod, pauseEnd: today }
+              : pausePeriod
+          ),
+          notes: appendTimelineNote(workPackage.notes, `Work resumed on ${today}.`),
+        };
+      })
+    );
+  };
+
+  const handleCompleteWorkPackage = (workPackageId: string) => {
+    const today = getTodayDateString();
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage => {
+        if (workPackage.id !== workPackageId) return workPackage;
+
+        const actualStartDate = workPackage.actualStartDate ?? today;
+
+        return {
+          ...workPackage,
+          actualStartDate,
+          actualEndDate: today,
+          actualDurationDays: getActualDurationDays(actualStartDate, today),
+          status: 'completed',
+          pausePeriods: workPackage.pausePeriods.map(pausePeriod =>
+            pausePeriod.pauseEnd ? pausePeriod : { ...pausePeriod, pauseEnd: today }
+          ),
+          notes: appendTimelineNote(workPackage.notes, `Work completed on ${today}.`),
+        };
+      })
+    );
+  };
+
+  const handleMarkWorkPackageDelayed = (workPackageId: string) => {
+    const reason = window.prompt('Add the delay reason for this work package:')?.trim();
+    if (!reason) return;
+
+    const today = getTodayDateString();
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage =>
+        workPackage.id === workPackageId
+          ? {
+              ...workPackage,
+              status: 'delayed',
+              overrideReason: reason,
+              notes: appendTimelineNote(
+                workPackage.notes,
+                `Marked delayed on ${today}: ${reason}`
+              ),
+            }
+          : workPackage
+      )
+    );
+  };
+
+  const handleUpdateDelayReason = (workPackageId: string) => {
+    const currentWorkPackage = workPackages.find(
+      workPackage => workPackage.id === workPackageId
+    );
+
+    const reason = window.prompt(
+      'Update delay reason:',
+      currentWorkPackage?.overrideReason ?? ''
+    )?.trim();
+
+    if (!reason) return;
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage =>
+        workPackage.id === workPackageId
+          ? {
+              ...workPackage,
+              status:
+                workPackage.status === 'completed' ? workPackage.status : 'delayed',
+              overrideReason: reason,
+            }
+          : workPackage
+      )
+    );
   };
 
   const renderGeneratedTimelineReview = () => {
@@ -713,11 +891,15 @@ export default function TimelinePage() {
         <div className="border-b border-border px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-foreground">
-                Review Generated Timeline
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Review Draft Timeline
+                </p>
+                <StatusBadge variant="warning">Review Draft</StatusBadge>
+                <StatusBadge variant="outline">Not Active Yet</StatusBadge>
+              </div>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Adjust dates, assignee names, and statuses before confirming this timeline for execution.
+                This planned timeline is still editable and is not active yet. Confirm it only after dates, assignees, and payment gates are reviewed.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {formatDate(firstStartDate)} - {formatDate(finalEndDate)} -{' '}
@@ -734,7 +916,7 @@ export default function TimelinePage() {
                 Cancel Review
               </Button>
               <Button type="button" onClick={handleConfirmPendingTimeline}>
-                Confirm Timeline
+                Confirm Planned Timeline
               </Button>
             </div>
           </div>
@@ -1173,7 +1355,17 @@ export default function TimelinePage() {
     }
 
     if (activeTab === 'work') {
-      return <TimelineWorkPackages workPackages={workPackages} />;
+      return (
+        <TimelineWorkPackages
+          workPackages={workPackages}
+          onStartWork={handleStartWorkPackage}
+          onPauseWork={handlePauseWorkPackage}
+          onResumeWork={handleResumeWorkPackage}
+          onCompleteWork={handleCompleteWorkPackage}
+          onMarkDelayed={handleMarkWorkPackageDelayed}
+          onUpdateDelayReason={handleUpdateDelayReason}
+        />
+      );
     }
 
     if (activeTab === 'payments') {
@@ -1565,6 +1757,24 @@ export default function TimelinePage() {
 
       {!showCreateWizard && hasTimeline && (
         <>
+          <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-foreground">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge variant="success">Confirmed Planned Timeline</StatusBadge>
+                  <StatusBadge variant="outline">Baseline Locked</StatusBadge>
+                </div>
+                <p className="mt-2 leading-6 text-muted-foreground">
+                  This planned timeline is now the active baseline. Execution updates should be tracked separately as actual progress, pauses, completions, and delays.
+                </p>
+              </div>
+              {timelineConfirmedAt && (
+                <p className="shrink-0 text-xs font-medium text-muted-foreground">
+                  Confirmed On {formatDate(timelineConfirmedAt.slice(0, 10))}
+                </p>
+              )}
+            </div>
+          </div>
           <div className="mb-5 min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
