@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Calculator,
   ChevronDown,
+  MoreHorizontal,
   Package,
   Pencil,
   Plus,
@@ -390,6 +391,7 @@ export default function ItemsPage() {
   const [status, setStatus] = useState<ItemStatus | 'all'>('all');
   const [modalState, setModalState] = useState<ItemModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProcurementItem | null>(null);
+  const [actionMenuItemId, setActionMenuItemId] = useState<string | null>(null);
   const [formState, setFormState] = useState<ItemFormState>(() =>
     createFormState()
   );
@@ -446,7 +448,7 @@ export default function ItemsPage() {
     });
 
     return Array.from(optionMap, ([value, label]) => ({ value, label }));
-  }, [items]);
+  }, [categoryOptions, items]);
 
   const formCategoryOptions = categoryFilterOptions.filter(
     option => option.value !== 'all'
@@ -631,7 +633,7 @@ export default function ItemsPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <SectionCard className="shadow-none">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -660,7 +662,7 @@ export default function ItemsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard className="shadow-none">
+        <SectionCard className="col-span-2 shadow-none md:col-span-1">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Avg Markup</p>
@@ -713,87 +715,129 @@ export default function ItemsPage() {
       </SectionCard>
 
       {filteredItems.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {filteredItems.map(item => (
-            <div
-              key={item.id}
-              className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm sm:p-4"
-            >
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                <div className="order-2 min-w-0 flex-1 sm:order-1">
-                  <p className="break-words text-base font-semibold leading-snug text-foreground sm:truncate sm:text-lg">
-                    {item.name}
-                  </p>
-                  <p className="mt-1 break-words text-xs text-muted-foreground sm:text-sm">
-                    {formatCategory(item.category)} - {item.defaultUnitLabel}
-                  </p>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className="hidden grid-cols-[minmax(260px,1fr)_minmax(360px,1.1fr)_72px] items-center gap-4 border-b border-border bg-muted/35 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground lg:grid">
+            <span>Item</span>
+            <span>Rates</span>
+            <span className="text-center">Actions</span>
+          </div>
+
+          <div className="divide-y divide-border">
+            {filteredItems.map(item => (
+              <article
+                key={item.id}
+                className="relative grid gap-3 bg-card px-4 py-4 text-card-foreground transition hover:bg-muted/25 lg:grid-cols-[minmax(260px,1fr)_minmax(360px,1.1fr)_72px] lg:items-center lg:gap-4"
+              >
+                <div className="min-w-0 pr-12 lg:pr-0">
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h3 className="truncate text-sm font-semibold text-foreground sm:text-base">
+                        {item.name}
+                      </h3>
+
+                      <span className="hidden lg:inline-flex">
+                        <StatusBadge
+                          variant={item.status === 'active' ? 'success' : 'warning'}
+                        >
+                          {item.status === 'active' ? 'Active' : 'Inactive'}
+                        </StatusBadge>
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                      <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                        {formatCategory(item.category)}
+                      </p>
+
+                      <span className="shrink-0 lg:hidden">
+                        <StatusBadge
+                          variant={item.status === 'active' ? 'success' : 'warning'}
+                        >
+                          {item.status === 'active' ? 'Active' : 'Inactive'}
+                        </StatusBadge>
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="order-1 self-start sm:order-2">
-                  <StatusBadge
-                    variant={item.status === 'active' ? 'success' : 'warning'}
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                  <div className="min-w-0 rounded-xl border border-border bg-background px-3 py-2">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:text-[11px]">
+                      Cost
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-foreground sm:text-sm">
+                      {formatINR(item.purchaseRatePerUnit)}
+                      <span className="text-muted-foreground"> / {item.defaultUnitLabel}</span>
+                    </p>
+                  </div>
+
+                  <div className="min-w-0 rounded-xl border border-foreground/15 bg-muted/35 px-3 py-2 lg:order-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:text-[11px]">
+                      Sale
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-foreground sm:text-sm">
+                      {formatINR(item.sellingRatePerUnit)}
+                      <span className="text-muted-foreground"> / {item.defaultUnitLabel}</span>
+                    </p>
+                  </div>
+
+                  <div className="col-span-2 min-w-0 rounded-xl border border-border bg-background px-3 py-2 lg:order-2 lg:col-span-1">
+                    <div className="flex items-center justify-between gap-3 lg:block">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:text-[11px]">
+                        Markup
+                      </p>
+                      <p className="text-xs font-semibold text-foreground sm:text-sm lg:mt-1">
+                        {item.markupPercent}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute right-4 top-4 flex justify-end lg:relative lg:right-auto lg:top-auto">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActionMenuItemId(current =>
+                        current === item.id ? null : item.id
+                      )
+                    }
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                    aria-label={`Open actions for ${item.name}`}
                   >
-                    {item.status === 'active' ? 'Active' : 'Inactive'}
-                  </StatusBadge>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+
+                  {actionMenuItemId === item.id && (
+                    <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuItemId(null);
+                          openEditModal(item);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition hover:bg-muted"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit Item
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuItemId(null);
+                          setDeleteTarget(item);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 rounded-xl border border-border bg-muted/30 p-3 min-[390px]:grid-cols-3 sm:gap-3">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                    Cost Rate
-                  </p>
-                  <p className="mt-1 break-words text-sm font-semibold text-foreground sm:text-base">
-                    {formatINR(item.purchaseRatePerUnit)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Markup
-                  </p>
-                  <p className="mt-1 font-semibold text-foreground">
-                    {item.markupPercent}%
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Sale Rate
-                  </p>
-                  <p className="mt-1 font-semibold text-foreground">
-                    {formatINR(item.sellingRatePerUnit)}
-                  </p>
-                </div>
-              </div>
-
-              <p className="mt-4 line-clamp-3 break-words text-sm leading-6 text-muted-foreground sm:line-clamp-2">
-                {item.defaultDescription || 'No default description added yet.'}
-              </p>
-
-              <div className="mt-auto grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => openEditModal(item)}
-                  className="h-10 w-full justify-center gap-2"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit Item
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDeleteTarget(item)}
-                  className="h-10 w-full justify-center gap-2 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </Button>
-              </div>
-            </div>
-          ))}
+              </article>
+            ))}
+          </div>
         </div>
       ) : (
         <EmptyState
