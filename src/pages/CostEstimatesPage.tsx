@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FilePlus2,
   Plus,
+  RotateCcw,
   Trash2,
 } from 'lucide-react';
 
@@ -150,23 +151,6 @@ function getEstimateStatusVariant(status: EstimateCardStatus) {
   return 'warning';
 }
 
-function toTitleCase(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, letter => letter.toUpperCase());
-}
-
-function getAreaTypeLabel(areaName: string, areaType: string) {
-  const typeLabel = toTitleCase(areaType);
-
-  if (areaType === 'custom') return 'Custom Area';
-
-  if (areaName.trim().toLowerCase() === typeLabel.toLowerCase()) {
-    return 'Default Area';
-  }
-
-  return typeLabel;
-}
 
 function createId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -232,6 +216,12 @@ export default function CostEstimatesPage() {
   const [selectedAreaIds, setSelectedAreaIds] = useState(
     demoCostEstimateAreas.map(area => area.id)
   );
+  const [areaSelectionUndoStack, setAreaSelectionUndoStack] = useState<
+    {
+      areas: CostEstimateArea[];
+      selectedIds: string[];
+    }[]
+  >([]);
   const [newAreaName, setNewAreaName] = useState('');
 
   useEffect(() => {
@@ -314,7 +304,32 @@ export default function CostEstimatesPage() {
     setIsProjectSuggestionOpen(true);
   };
 
+  const rememberAreaSelectionState = () => {
+    setAreaSelectionUndoStack(current => [
+      ...current,
+      {
+        areas: modalAreas,
+        selectedIds: selectedAreaIds,
+      },
+    ]);
+  };
+
+  const handleUndoAreaSelection = () => {
+    setAreaSelectionUndoStack(current => {
+      const previousState = current[current.length - 1];
+
+      if (!previousState) return current;
+
+      setModalAreas(previousState.areas);
+      setSelectedAreaIds(previousState.selectedIds);
+
+      return current.slice(0, -1);
+    });
+  };
+
   const handleToggleArea = (areaId: string) => {
+    rememberAreaSelectionState();
+
     setSelectedAreaIds(current =>
       current.includes(areaId)
         ? current.filter(currentAreaId => currentAreaId !== areaId)
@@ -322,10 +337,23 @@ export default function CostEstimatesPage() {
     );
   };
 
+  const areAllModalAreasSelected =
+    modalAreas.length > 0 && selectedAreaIds.length === modalAreas.length;
+
+  const handleToggleAllAreas = () => {
+    rememberAreaSelectionState();
+
+    setSelectedAreaIds(
+      areAllModalAreasSelected ? [] : modalAreas.map(area => area.id)
+    );
+  };
+
   const handleAddModalArea = () => {
     const trimmedName = newAreaName.trim();
 
     if (!trimmedName) return;
+
+    rememberAreaSelectionState();
 
     const newArea: CostEstimateArea = {
       id: createId('estimate-area'),
@@ -338,39 +366,65 @@ export default function CostEstimatesPage() {
     setNewAreaName('');
   };
 
-  const handleAddBedroomSet = () => {
-    const hasPlainBedroom = modalAreas.some(area => area.name === 'Bedroom');
-    const hasPlainAttachedBathroom = modalAreas.some(
-      area => area.name === 'Attached Bathroom'
+  const normalizeBedroomBathroomMasters = (currentAreas: CostEstimateArea[]) => {
+    const hasMasterBedroom = currentAreas.some(
+      area => area.name.trim().toLowerCase() === 'master bedroom'
+    );
+    const hasMasterBathroom = currentAreas.some(
+      area => area.name.trim().toLowerCase() === 'master bathroom'
     );
 
-    const normalizedAreas = modalAreas.map(area => {
-      if (hasPlainBedroom && area.name === 'Bedroom') {
+    let didRenameBedroom = hasMasterBedroom;
+    let didRenameBathroom = hasMasterBathroom;
+
+    return currentAreas.map(area => {
+      const areaName = area.name.trim().toLowerCase();
+
+      if (!didRenameBedroom && area.type === 'bedroom') {
+        didRenameBedroom = true;
         return { ...area, name: 'Master Bedroom' };
       }
 
-      if (hasPlainAttachedBathroom && area.name === 'Attached Bathroom') {
+      if (
+        !didRenameBathroom &&
+        area.type === 'bathroom' &&
+        (areaName.includes('attached bathroom') || areaName === 'bathroom')
+      ) {
+        didRenameBathroom = true;
         return { ...area, name: 'Master Bathroom' };
       }
 
       return area;
     });
+  };
 
-    const numberedBedroomCount = normalizedAreas.filter(area =>
-      /^Bedroom \d+$/.test(area.name)
-    ).length;
+  const getNextBedroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area => /^bedroom\s+\d+$/i.test(area.name.trim()))
+      .length + 1;
 
-    const nextBedroomNumber = numberedBedroomCount + 1;
+  const getNextAttachedBathroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area =>
+      /^attached bathroom\s+\d+$/i.test(area.name.trim())
+    ).length + 1;
+
+  const handleAddBedroomSet = () => {
+    rememberAreaSelectionState();
+
+    const normalizedAreas = normalizeBedroomBathroomMasters(modalAreas);
+    const nextSetNumber = Math.max(
+      getNextBedroomNumber(normalizedAreas),
+      getNextAttachedBathroomNumber(normalizedAreas)
+    );
 
     const bedroomArea: CostEstimateArea = {
       id: createId('estimate-bedroom'),
-      name: `Bedroom ${nextBedroomNumber}`,
+      name: `Bedroom ${nextSetNumber}`,
       type: 'bedroom',
     };
 
     const attachedBathroomArea: CostEstimateArea = {
       id: createId('estimate-attached-bathroom'),
-      name: `Attached Bathroom ${nextBedroomNumber}`,
+      name: `Attached Bathroom ${nextSetNumber}`,
       type: 'bathroom',
     };
 
@@ -382,7 +436,37 @@ export default function CostEstimatesPage() {
     ]);
   };
 
+  const handleAddSingleBedroom = () => {
+    rememberAreaSelectionState();
+
+    const normalizedAreas = normalizeBedroomBathroomMasters(modalAreas);
+    const bedroomArea: CostEstimateArea = {
+      id: createId('estimate-bedroom'),
+      name: `Bedroom ${getNextBedroomNumber(normalizedAreas)}`,
+      type: 'bedroom',
+    };
+
+    setModalAreas([...normalizedAreas, bedroomArea]);
+    setSelectedAreaIds(current => [...current, bedroomArea.id]);
+  };
+
+  const handleAddSingleBathroom = () => {
+    rememberAreaSelectionState();
+
+    const normalizedAreas = normalizeBedroomBathroomMasters(modalAreas);
+    const attachedBathroomArea: CostEstimateArea = {
+      id: createId('estimate-attached-bathroom'),
+      name: `Attached Bathroom ${getNextAttachedBathroomNumber(normalizedAreas)}`,
+      type: 'bathroom',
+    };
+
+    setModalAreas([...normalizedAreas, attachedBathroomArea]);
+    setSelectedAreaIds(current => [...current, attachedBathroomArea.id]);
+  };
+
   const handleAddCommonBathroom = () => {
+    rememberAreaSelectionState();
+
     const commonBathroomCount =
       modalAreas.filter(area =>
         area.name.toLowerCase().includes('common bathroom')
@@ -408,6 +492,8 @@ export default function CostEstimatesPage() {
 
     if (alreadyExists) return;
 
+    rememberAreaSelectionState();
+
     const newArea: CostEstimateArea = {
       id: createId('estimate-custom-area'),
       name: areaName,
@@ -424,9 +510,19 @@ export default function CostEstimatesPage() {
     setIsProjectSuggestionOpen(false);
     setModalAreas(demoCostEstimateAreas);
     setSelectedAreaIds(demoCostEstimateAreas.map(area => area.id));
+    setAreaSelectionUndoStack([]);
     setNewAreaName('');
     setCreateStep('project');
     setIsCreateModalOpen(true);
+  };
+
+  const getNextUnassignedDraftName = () => {
+    const unassignedRecords = records.filter(record => !record.projectId);
+    const nextNumber = unassignedRecords.length + 1;
+
+    return nextNumber === 1
+      ? 'Unassigned Draft'
+      : `Unassigned Draft ${nextNumber}`;
   };
 
   const handleStartEstimation = () => {
@@ -434,7 +530,10 @@ export default function CostEstimatesPage() {
       id: createId('estimate'),
       projectId:
         selectedProjectId === UNASSIGNED_PROJECT_ID ? undefined : selectedProjectId,
-      projectName: selectedProject?.name ?? 'Unassigned Draft',
+      projectName:
+        selectedProjectId === UNASSIGNED_PROJECT_ID
+          ? getNextUnassignedDraftName()
+          : selectedProject?.name ?? 'Unassigned Draft',
       clientName: selectedProject?.clientName,
       status: 'draft',
       version: 1,
@@ -707,7 +806,7 @@ export default function CostEstimatesPage() {
       />
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-        <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_110px_280px] lg:items-center lg:gap-4">
+        <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_125px_295px] lg:items-center lg:gap-4">
           <span>Estimate</span>
           <span>Client</span>
           <span>Amount</span>
@@ -719,17 +818,28 @@ export default function CostEstimatesPage() {
           {records.map(record => (
             <div
               key={record.id}
-              className="grid gap-3 bg-background px-4 py-4 lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_110px_280px] lg:items-center lg:gap-4"
+              className="grid gap-3 bg-background px-4 py-4 lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_125px_295px] lg:items-center lg:gap-4"
             >
               <div className="min-w-0">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {record.projectName}
-                  </p>
-                  <StatusBadge variant={getEstimateStatusVariant(record.status)}>
-                    {getEstimateStatusLabel(record)}
-                  </StatusBadge>
+                <div className="flex min-w-0 items-start justify-between gap-2 lg:block">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {record.projectName}
+                    </p>
+                    <div className="mt-1 hidden lg:block">
+                      <StatusBadge variant={getEstimateStatusVariant(record.status)}>
+                        {getEstimateStatusLabel(record)}
+                      </StatusBadge>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 scale-90 origin-top-right lg:hidden">
+                    <StatusBadge variant={getEstimateStatusVariant(record.status)}>
+                      {getEstimateStatusLabel(record)}
+                    </StatusBadge>
+                  </div>
                 </div>
+
                 <p className="mt-1 text-xs text-muted-foreground lg:hidden">
                   {record.clientName ?? 'No project assigned'}
                 </p>
@@ -758,11 +868,11 @@ export default function CostEstimatesPage() {
               </div>
 
               <div
-                className={`grid gap-2 lg:flex lg:justify-center lg:pr-5 ${
+                className={`grid gap-2 lg:w-[345px] lg:justify-self-end lg:pr-2 ${
                   record.status === 'approved' ||
                   (record.status === 'revision' && record.approvedSnapshot)
-                    ? 'grid-cols-3'
-                    : 'grid-cols-2'
+                    ? 'grid-cols-3 lg:grid-cols-3'
+                    : 'grid-cols-2 lg:grid-cols-2'
                 }`}
               >
                 <Button
@@ -772,12 +882,12 @@ export default function CostEstimatesPage() {
                     setApprovedSnapshotReturnTarget('revision');
                     setSelectedRecordId(record.id);
                   }}
-                  className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3"
+                  className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3 lg:w-full"
                   aria-label={record.status === 'revision' ? 'Open revision' : 'Open estimate'}
                 >
                   <ArrowUpRight className="h-4 w-4 shrink-0" />
                   <span className="hidden sm:inline">
-                    {record.status === 'revision' ? 'Open Revision' : 'Open'}
+                    Open
                   </span>
                 </Button>
 
@@ -786,7 +896,7 @@ export default function CostEstimatesPage() {
                     type="button"
                     variant="outline"
                     onClick={() => handleCreateRevision(record)}
-                    className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3"
+                    className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3 lg:w-full"
                     aria-label="Create revision"
                   >
                     <FilePlus2 className="h-4 w-4 shrink-0" />
@@ -803,7 +913,7 @@ export default function CostEstimatesPage() {
                       setApprovedSnapshotReturnTarget('list');
                       setIsViewingApprovedSnapshot(true);
                     }}
-                    className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3"
+                    className="h-9 min-w-0 justify-center gap-1.5 px-2 text-sm sm:px-3 lg:w-full"
                     aria-label="View approved version"
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -815,7 +925,7 @@ export default function CostEstimatesPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setDeleteRecordId(record.id)}
-                  className="h-9 justify-center gap-1.5 px-2 text-destructive hover:text-destructive sm:px-3"
+                  className="h-9 justify-center gap-1.5 px-2 text-destructive hover:text-destructive sm:px-3 lg:w-full"
                   aria-label="Delete estimate"
                 >
                   <Trash2 className="h-4 w-4 shrink-0" />
@@ -964,13 +1074,38 @@ export default function CostEstimatesPage() {
                     Back
                   </Button>
 
-                  <p className="text-lg font-semibold text-foreground">
-                    Select Areas
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Choose the rooms/areas included in this estimate. You can refine
-                    these after starting estimation.
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-semibold text-foreground">
+                        Select Areas
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {selectedAreas.length} selected
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleUndoAreaSelection}
+                        disabled={areaSelectionUndoStack.length === 0}
+                        className="h-9 gap-1.5 px-3 text-xs sm:text-sm"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Undo
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleToggleAllAreas}
+                        className="h-9 shrink-0 px-3 text-xs sm:text-sm"
+                      >
+                        {areAllModalAreasSelected ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 sm:px-6">
@@ -984,32 +1119,30 @@ export default function CostEstimatesPage() {
                           key={area.id}
                           type="button"
                           onClick={() => handleToggleArea(area.id)}
-                          className={`min-h-[86px] rounded-xl border p-3 text-left transition ${
+                          className={`flex min-h-10 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${
                             isSelected
                               ? 'border-emerald-500/35 bg-emerald-500/10 text-foreground shadow-sm dark:border-emerald-400/35 dark:bg-emerald-400/10'
                               : 'border-border bg-card text-foreground hover:border-foreground/30 hover:bg-muted'
                           }`}
                         >
-                          <div className="flex h-full flex-col justify-between gap-3">
-                            <div className="min-w-0">
-                              <span className="block truncate text-sm font-medium">
-                                {area.name}
-                              </span>
-                              <span className="mt-1 block text-xs text-muted-foreground">
-                                {getAreaTypeLabel(area.name, area.type)}
-                              </span>
-                            </div>
+                          <span className="min-w-0 truncate text-xs font-medium sm:text-sm">
+                            {area.name}
+                          </span>
 
-                            <span
-                              className={`w-fit rounded-full border px-2 py-0.5 text-xs ${
-                                isSelected
-                                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
-                                  : 'border-border text-muted-foreground'
-                              }`}
-                            >
-                              {isSelected ? 'Selected' : 'Add'}
-                            </span>
-                          </div>
+                          <span
+                            className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                              isSelected
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
+                                : 'border-border text-muted-foreground'
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {isSelected ? (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            ) : (
+                              <Plus className="h-3.5 w-3.5" />
+                            )}
+                          </span>
                         </button>
                       );
                     })}
@@ -1038,24 +1171,42 @@ export default function CostEstimatesPage() {
                     </Button>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleAddBedroomSet}
-                      className="gap-2"
+                      className="justify-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
-                      Add Bedroom Set
+                      Bedroom Set
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleAddCommonBathroom}
-                      className="gap-2"
+                      className="justify-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
-                      Add Common Bathroom
+                      Common Bathroom
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddSingleBedroom}
+                      className="justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Bedroom
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddSingleBathroom}
+                      className="justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Bathroom
                     </Button>
                   </div>
 

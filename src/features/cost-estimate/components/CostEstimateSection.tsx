@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp,
+  Check,
   CheckCircle2,
   ChevronDown,
   FilePlus2,
@@ -699,9 +700,6 @@ export function CostEstimateSection({
   const availableProjectsForNewEstimate = demoCostEstimateProjects.filter(
     project => !project.hasCostEstimate || project.id === selectedProjectId
   );
-  const selectedProject =
-    demoCostEstimateProjects.find(project => project.id === selectedProjectId) ??
-    undefined;
   const isEstimateApproved = status === 'approved';
   const isEstimateReadOnly = isEstimateApproved && !isEditingEstimate;
   const estimateStatusLabel =
@@ -898,18 +896,126 @@ export function CostEstimateSection({
     markEstimateDirty();
   };
 
-  const handleAddRepeatedRoom = (type: 'bedroom' | 'bathroom') => {
-    const count = areas.filter(area => area.type === type).length;
-    const label = type === 'bedroom' ? 'Bedroom' : 'Bathroom';
+  const normalizeBedroomBathroomMasters = (currentAreas: CostEstimateArea[]) => {
+    const hasMasterBedroom = currentAreas.some(
+      area => area.name.trim().toLowerCase() === 'master bedroom'
+    );
+    const hasMasterBathroom = currentAreas.some(
+      area => area.name.trim().toLowerCase() === 'master bathroom'
+    );
 
-    setAreas(current => [
-      ...current,
-      {
-        id: createId(`estimate-${type}`),
-        name: `${label} ${count + 1}`,
-        type,
-      },
-    ]);
+    let didRenameBedroom = hasMasterBedroom;
+    let didRenameBathroom = hasMasterBathroom;
+
+    return currentAreas.map(area => {
+      const areaName = area.name.trim().toLowerCase();
+
+      if (!didRenameBedroom && area.type === 'bedroom') {
+        didRenameBedroom = true;
+        return { ...area, name: 'Master Bedroom' };
+      }
+
+      if (
+        !didRenameBathroom &&
+        area.type === 'bathroom' &&
+        (areaName.includes('attached bathroom') || areaName === 'bathroom')
+      ) {
+        didRenameBathroom = true;
+        return { ...area, name: 'Master Bathroom' };
+      }
+
+      return area;
+    });
+  };
+
+  const getNextBedroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area => /^bedroom\s+\d+$/i.test(area.name.trim()))
+      .length + 1;
+
+  const getNextAttachedBathroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area =>
+      /^attached bathroom\s+\d+$/i.test(area.name.trim())
+    ).length + 1;
+
+  const handleAddBedroomSet = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+      const nextSetNumber = Math.max(
+        getNextBedroomNumber(normalizedAreas),
+        getNextAttachedBathroomNumber(normalizedAreas)
+      );
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bedroom'),
+          name: `Bedroom ${nextSetNumber}`,
+          type: 'bedroom',
+        },
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${nextSetNumber}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddSingleBedroom = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bedroom'),
+          name: `Bedroom ${getNextBedroomNumber(normalizedAreas)}`,
+          type: 'bedroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddSingleBathroom = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${getNextAttachedBathroomNumber(normalizedAreas)}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddCommonBathroom = () => {
+    setAreas(current => {
+      const commonBathroomCount = current.filter(area =>
+        /^common bathroom(\s+\d+)?$/i.test(area.name.trim())
+      ).length;
+
+      return [
+        ...current,
+        {
+          id: createId('estimate-common-bathroom'),
+          name:
+            commonBathroomCount === 0
+              ? 'Common Bathroom'
+              : `Common Bathroom ${commonBathroomCount + 1}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
     markEstimateDirty();
   };
 
@@ -1224,45 +1330,48 @@ export function CostEstimateSection({
                 type="button"
                 variant="outline"
                 onClick={handleCreateRevision}
-                className="gap-2"
+                className="h-10 w-full justify-center gap-2 sm:w-auto"
               >
                 <FilePlus2 className="h-4 w-4" />
-                Create Revision
+                <span>Create Revision</span>
               </Button>
             )
           ) : (
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
               {isRevisionDraft && onViewApprovedVersion && (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={onViewApprovedVersion}
-                  className="h-10 w-full gap-2 sm:w-auto"
+                  className="h-10 w-full justify-center gap-1.5 px-2 text-xs sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
+                  aria-label="View approved estimate"
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  View Approved
+                  <span className="sm:hidden">View</span><span className="hidden sm:inline">View Approved</span>
                 </Button>
               )}
 
               <div
                 ref={saveMenuRef}
-                className="relative flex h-10 w-full min-w-0 items-stretch sm:inline-flex sm:w-auto"
+                className="relative flex h-10 min-w-0 items-stretch sm:inline-flex sm:w-auto"
               >
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleSaveDraft}
-                  className="h-10 flex-1 justify-center rounded-r-none border-r-0 bg-background pl-13 pr-3 text-foreground hover:bg-muted gap-2 sm:flex-none sm:pl-4"
+                  className="h-10 w-full justify-center rounded-lg bg-background px-2 text-xs text-foreground hover:bg-muted gap-1.5 sm:w-auto sm:rounded-r-none sm:border-r-0 sm:gap-2 sm:px-4 sm:text-sm"
+                  aria-label={saveButtonLabel}
                 >
-                  <Save className="h-4 w-4" />
-                  {saveButtonLabel}
+                  <Save className="h-4 w-4 shrink-0" />
+                  <span className="sm:hidden">Save</span>
+                  <span className="hidden truncate sm:inline">{saveButtonLabel}</span>
                 </Button>
 
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setIsSaveMenuOpen(current => !current)}
-                  className="h-10 flex-none rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
+                  className="hidden h-10 flex-none rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted sm:flex"
                   aria-label="Open save options"
                 >
                   <ChevronDown className="h-4 w-4" />
@@ -1289,10 +1398,11 @@ export function CostEstimateSection({
                 type="button"
                 variant="outline"
                 onClick={handleDeleteDraft}
-                className="h-10 w-full gap-2 text-destructive hover:text-destructive sm:w-auto"
+                className="h-10 w-full justify-center gap-1.5 px-2 text-xs text-destructive hover:text-destructive sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
+                aria-label={deleteButtonLabel}
               >
                 <Trash2 className="h-4 w-4" />
-                {deleteButtonLabel}
+                <span className="sm:hidden">Delete</span><span className="hidden sm:inline">{deleteButtonLabel}</span>
               </Button>
             </div>
           )}
@@ -1305,14 +1415,9 @@ export function CostEstimateSection({
       >
         <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center">
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Estimate Project
-              </p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Link this estimate to a project or keep it as an unassigned draft.
-              </p>
-            </div>
+            <p className="text-sm font-medium text-foreground">
+              Estimate Project
+            </p>
 
             <select
               value={selectedProjectId}
@@ -1327,22 +1432,6 @@ export function CostEstimateSection({
               ))}
             </select>
           </div>
-
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {selectedProject ? (
-              <>
-                Linked to{' '}
-                <span className="font-medium text-foreground">
-                  {selectedProject.name}
-                </span>
-                . Projects with an existing estimate are not shown here.
-              </>
-            ) : (
-              <>
-                This estimate is currently unassigned. Assign it to a project when the estimate is ready.
-              </>
-            )}
-          </p>
         </div>
         {supersededVersions.length > 0 && (
           <div className="rounded-2xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -1353,38 +1442,43 @@ export function CostEstimateSection({
           </div>
         )}
 
-        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4 [&>div]:min-w-[170px] sm:[&>div]:min-w-0 [&::-webkit-scrollbar]:hidden">
-          <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal</p>
-            <p className="mt-2 text-xl font-semibold text-foreground">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-border bg-background px-3 py-2 sm:rounded-2xl sm:p-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">Subtotal</p>
+            <p className="mt-1 text-sm font-semibold text-foreground sm:mt-2 sm:text-xl">
               {formatINR(summary.cogsSubtotal)}
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Taxable</p>
-            <p className="mt-2 text-xl font-semibold text-foreground">
+
+          <div className="rounded-xl border border-border bg-background px-3 py-2 sm:rounded-2xl sm:p-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">Taxable</p>
+            <p className="mt-1 text-sm font-semibold text-foreground sm:mt-2 sm:text-xl">
               {formatINR(summary.taxableSubtotal)}
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">GST 18%</p>
-            <p className="mt-2 text-xl font-semibold text-foreground">
+
+          <div className="rounded-xl border border-border bg-background px-3 py-2 sm:rounded-2xl sm:p-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">GST 18%</p>
+            <p className="mt-1 text-sm font-semibold text-foreground sm:mt-2 sm:text-xl">
               {formatINR(summary.gstAmount)}
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+
+          <div className="rounded-xl border border-border bg-background px-3 py-2 sm:rounded-2xl sm:p-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
               Grand Total
             </p>
-            <p className="mt-2 text-xl font-semibold text-foreground">
+            <p className="mt-1 text-sm font-semibold text-foreground sm:mt-2 sm:text-xl">
               {formatINR(summary.estimatedGrossRevenue)}
             </p>
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-foreground">Service Charge %</span>
+        <div className="grid grid-cols-3 gap-2 lg:grid-cols-3 lg:gap-3">
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Service %
+            </span>
             <input
               type="number"
               min="10"
@@ -1396,13 +1490,15 @@ export function CostEstimateSection({
                 setServiceChargePercent(nextValue === '' ? '' : Number(nextValue));
                 markEstimateDirty();
               }}
-              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="h-9 min-h-0 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition focus:border-foreground lg:mt-2 lg:h-10 lg:px-3"
             />
-            <span className="text-xs text-muted-foreground">Allowed: 10-20%</span>
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">Allowed: 10-20%</span>
           </label>
 
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-foreground">Misc Charge %</span>
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Misc %
+            </span>
             <input
               type="number"
               min="10"
@@ -1414,14 +1510,14 @@ export function CostEstimateSection({
                 setMiscChargePercent(nextValue === '' ? '' : Number(nextValue));
                 markEstimateDirty();
               }}
-              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="h-9 min-h-0 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition focus:border-foreground lg:mt-2 lg:h-10 lg:px-3"
             />
-            <span className="text-xs text-muted-foreground">Allowed: 10-15%</span>
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">Allowed: 10-15%</span>
           </label>
 
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-foreground">
-              Current Project Revenue
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Revenue
             </span>
             <input
               type="number"
@@ -1433,9 +1529,9 @@ export function CostEstimateSection({
                 setTargetProjectRevenue(nextValue === '' ? '' : Number(nextValue));
                 markEstimateDirty();
               }}
-              className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="h-9 min-h-0 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition focus:border-foreground lg:mt-2 lg:h-10 lg:px-3"
             />
-            <span className="text-xs text-muted-foreground">
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">
               Used to validate the estimated grand total against the project value.
             </span>
           </label>
@@ -1536,12 +1632,30 @@ export function CostEstimateSection({
             </Button>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleAddRepeatedRoom('bedroom')}
-              className="gap-2"
+              onClick={handleAddBedroomSet}
+              className="justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Bedroom Set
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddCommonBathroom}
+              className="justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Common Bathroom
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddSingleBedroom}
+              className="justify-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Add Bedroom
@@ -1549,8 +1663,8 @@ export function CostEstimateSection({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleAddRepeatedRoom('bathroom')}
-              className="gap-2"
+              onClick={handleAddSingleBathroom}
+              className="justify-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Add Bathroom
@@ -1561,23 +1675,23 @@ export function CostEstimateSection({
             {groupedAreas.map(group => (
               <div
                 key={group.area.id}
-                className="grid gap-2 border-b border-border px-3 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px_44px] sm:items-center"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 border-b border-border px-3 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_110px_120px_44px] sm:items-center sm:gap-2"
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
+                <div className="min-w-0 sm:text-left">
+                  <p className="truncate text-base font-semibold text-foreground sm:text-sm sm:font-medium">
                     {group.area.name}
                   </p>
                 </div>
 
-                <p className="text-xs text-muted-foreground sm:text-right">
+                <p className="whitespace-nowrap text-right text-xs text-muted-foreground sm:text-center">
                   {group.lineItems.length} item(s)
                 </p>
 
-                <p className="text-sm font-semibold text-foreground sm:text-right">
+                <p className="self-end text-lg font-semibold text-foreground sm:self-center sm:text-center sm:text-sm">
                   {formatINR(group.total)}
                 </p>
 
-                <div className="flex justify-start sm:justify-end">
+                <div className="flex items-end justify-end sm:items-center sm:justify-center">
                   <button
                     type="button"
                     onClick={() => handleDeleteArea(group.area.id)}
@@ -1600,16 +1714,21 @@ export function CostEstimateSection({
               key={group.area.id}
               className="overflow-visible rounded-2xl border border-border bg-background"
             >
-              <div className="flex flex-col gap-3 border-b border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-semibold text-foreground">{group.area.name}</p>
+              <div className="flex flex-row items-start justify-between gap-3 border-b border-border bg-muted/30 p-4 sm:items-center">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-foreground sm:text-sm">
+                    {group.area.name}
+                  </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {group.lineItems.length} line item(s)
                   </p>
+                  <p className="mt-2 text-sm font-semibold text-foreground sm:hidden">
+                    Area total: {formatINR(group.total)}
+                  </p>
                 </div>
 
-                <div className="flex flex-col gap-2 sm:items-end">
-                  <div className="text-sm font-semibold text-foreground">
+                <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                  <div className="hidden text-sm font-semibold text-foreground sm:block">
                     Area total: {formatINR(group.total)}
                   </div>
 
@@ -1617,7 +1736,17 @@ export function CostEstimateSection({
                     type="button"
                     variant="outline"
                     onClick={() => handleStartAreaLineItem(group.area.id)}
-                    className="gap-2"
+                    className="h-8 gap-1.5 px-2 text-xs sm:hidden"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleStartAreaLineItem(group.area.id)}
+                    className="hidden gap-2 sm:flex"
                   >
                     <Plus className="h-4 w-4" />
                     Add New Row
@@ -1627,8 +1756,8 @@ export function CostEstimateSection({
 
               {activeLineItemAreaId === group.area.id && (
                 <div className="border-b border-border bg-card/60 p-3 sm:p-4">
-                  <div className="grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_150px] xl:items-center xl:gap-4 2xl:gap-5">
-                    <div className="grid gap-2 sm:gap-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_150px] xl:items-center xl:gap-4 2xl:gap-5">
+                    <div className="col-span-3 grid gap-2 sm:gap-3 xl:col-span-1">
                       <div className="relative">
                         <input
                           value={newLineItemName}
@@ -2157,8 +2286,8 @@ export function CostEstimateSection({
                       className="h-10 w-full min-w-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
                     />
 
-                    <div className="flex min-w-0 flex-col gap-2 self-center">
-                      <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                    <div className="col-span-3 flex min-w-0 items-center justify-between gap-2 self-center xl:col-span-1 xl:flex-col xl:items-stretch">
+                      <div className="min-w-0 flex-1 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground xl:w-full">
                         Amount:{' '}
                         <span className="font-semibold text-foreground">
                           {formatINR(
@@ -2172,10 +2301,11 @@ export function CostEstimateSection({
                         type="button"
                         onClick={handleAddLineItem}
                         disabled={!newLineItemName.trim() || !newLineItemAreaId}
-                        className="gap-2"
+                        className="h-10 w-11 shrink-0 justify-center px-0 sm:w-auto sm:gap-2 sm:px-3"
+                        aria-label="Save row"
                       >
-                        <Plus className="h-4 w-4" />
-                        Save Row
+                        <Check className="h-4 w-4" />
+                        <span className="hidden sm:inline">Save Row</span>
                       </Button>
                     </div>
                   </div>
@@ -2187,9 +2317,9 @@ export function CostEstimateSection({
                   {group.lineItems.map(lineItem => (
                     <div
                       key={lineItem.id}
-                      className="grid gap-3 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_auto] xl:items-center xl:gap-4 2xl:gap-5"
+                      className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_auto] xl:items-center xl:gap-4 2xl:gap-5"
                     >
-                      <div className="min-w-0">
+                      <div className="col-span-3 min-w-0 xl:col-span-1">
                         <p className="font-medium text-foreground">{lineItem.name}</p>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {lineItem.description}
@@ -2303,7 +2433,7 @@ export function CostEstimateSection({
                         className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
 
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
                         <p className="text-sm font-semibold text-foreground">
                           {formatINR(calculateLineItemTotal(lineItem))}
                         </p>
@@ -2329,38 +2459,41 @@ export function CostEstimateSection({
         </div>
       </fieldset>
 
-      <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end">
+      <div className="mt-6 grid grid-cols-3 gap-2 border-t border-border pt-4 sm:flex sm:items-center sm:justify-end">
         <Button
           type="button"
           variant="outline"
           onClick={handleBackToEstimateTop}
-          className="h-10 gap-2"
+          className="h-10 w-full justify-center gap-1.5 px-2 text-xs sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
+          aria-label="Back to top"
         >
           <ArrowUp className="h-4 w-4" />
-          Back to Top
+          <span className="sm:hidden">Top</span><span className="hidden sm:inline">Back to Top</span>
         </Button>
 
         {status !== 'approved' && (
           <>
             <div
               ref={bottomSaveMenuRef}
-              className="relative flex h-10 w-full min-w-0 items-stretch sm:inline-flex sm:w-auto"
+              className="relative flex h-10 min-w-0 flex-1 items-stretch sm:inline-flex sm:w-auto"
             >
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleSaveDraft}
-                className="h-10 flex-1 justify-center rounded-r-none border-r-0 bg-background pl-13 pr-3 text-foreground hover:bg-muted gap-2 sm:flex-none sm:pl-4"
+                className="h-10 w-full justify-center rounded-lg bg-background px-2 text-xs text-foreground hover:bg-muted gap-1.5 sm:w-auto sm:rounded-r-none sm:border-r-0 sm:gap-2 sm:px-4 sm:text-sm"
+                aria-label={saveButtonLabel}
               >
                 <Save className="h-4 w-4" />
-                {saveButtonLabel}
+                <span className="sm:hidden">Save</span>
+                <span className="hidden sm:inline">{saveButtonLabel}</span>
               </Button>
 
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsBottomSaveMenuOpen(current => !current)}
-                className="h-10 flex-none rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted"
+                className="hidden h-10 flex-none rounded-l-none rounded-r-lg border-l-0 bg-background px-3 text-foreground hover:bg-muted sm:flex"
                 aria-label="Open bottom save options"
               >
                 <ChevronDown className="h-4 w-4" />
@@ -2387,10 +2520,12 @@ export function CostEstimateSection({
               type="button"
               variant="outline"
               onClick={handleDeleteDraft}
-              className="h-10 gap-2 text-destructive hover:text-destructive"
+              className="h-10 w-full justify-center gap-1.5 px-2 text-xs text-destructive hover:text-destructive sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
+              aria-label={deleteButtonLabel}
             >
               <Trash2 className="h-4 w-4" />
-              {deleteButtonLabel}
+              <span className="sm:hidden">Delete</span>
+              <span className="hidden sm:inline">{deleteButtonLabel}</span>
             </Button>
           </>
         )}
