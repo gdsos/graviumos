@@ -1,12 +1,21 @@
-# Gravium OS Roadmap and Codex Brief
+# Gravium OS Roadmap and Codex Brief - Updated
 
-This document is the working roadmap, implementation plan, and Codex handoff brief for Gravium OS.
+This document is the working roadmap, implementation plan, UI direction, and Codex handoff brief for Gravium OS.
 
 Repo:
-D:\Gravium Design Studio\Web_App\graviumos
+`D:\Gravium Design Studio\Web_App\graviumos`
 
 Branch:
-featuretest
+`featuretest`
+
+Latest known clean checkpoint:
+
+- `8ce0b69 Convert timeline work packages to list view`
+- `cab8cea Add timeline confirmation state and execution actions`
+- `87bd4b4 Update Villa Athani stage 1 payment helper text`
+- Working tree was clean after commit.
+
+---
 
 ## Development Rules
 
@@ -16,6 +25,7 @@ featuretest
   `@' ... '@ | python -`
 - Avoid `Set-Content` for TS/TSX files unless explicitly UTF-8.
 - Prefer Python `Path.write_text(..., encoding="utf-8")`.
+- Include patch + build/status commands together in one PowerShell block when possible.
 - After patches, run:
   - `npm run build`
   - `git status --short`
@@ -30,6 +40,7 @@ featuretest
 - Desktop card action rows should use full-width responsive button groups.
 - Number inputs should allow empty/backspace states. Avoid trapping users with forced zero values.
 - Avoid unsafe/special UI separators that may render incorrectly. Prefer plain ASCII labels.
+- After UI/layout changes, remind the user to test both desktop and mobile UI.
 
 ---
 
@@ -47,27 +58,284 @@ It should manage the full business workflow:
 6. Planned Timeline
 7. Execution tracking
 8. Project Finance
-9. Handover
-10. Reports and archive
+9. Employee Tasks
+10. KPI and dashboards
+11. Handover
+12. Reports and archive
 
-The app should feel premium, clean, practical, and operationally useful, not like a generic template.
+The app should feel premium, clean, practical, and operationally useful, not like a generic template or over-carded SaaS dashboard.
 
-Current visual baseline:
-- Vendors page
-- Items page
-- Cost Estimates page
-- Timeline page
+Current priority modules that define the initial Gravium design system:
 
-These pages define the current Gravium UI direction.
+1. Items
+2. Vendors
+3. Cost Estimates
+4. Timeline
 
-Design system:
+Initial goal:
+
+- Fix and standardize Items, Vendors, Cost Estimate, and Timeline first.
+- Use the cleaned design system from these modules for the rest of the app, including already existing pages.
+- Avoid continuing to polish old template/Porsche-style pages directly until the core Gravium UI direction is stable.
+
+Design system direction:
+
 - Tailwind
 - Neue Montreal
 - Gravium brand style
-- Clean cards
+- Clean operational UI
+- List/table-first layouts for data-heavy modules
 - PageHeader on module/list pages
-- Strong mobile layouts
-- Clear light/dark contrast
+- Strong light/dark contrast
+- Compact rows by default
+- Details in drawers/sheets instead of giant cards
+- Mobile-lite experience instead of desktop squeezed into mobile
+
+---
+
+# Product-Wide UI Direction
+
+## Avoid the Vibe-Coded SaaS Look
+
+Avoid:
+
+1. Too many large cards
+2. Everything inside oversized rounded blocks
+3. Low information density
+4. Repetitive dashboard cards
+5. Sidebars and card grids everywhere
+6. Too many badges competing for attention
+7. Decorative UI that does not improve operations
+8. Generic template-looking pages
+
+Use instead:
+
+1. Compact operational lists
+2. Tables where useful
+3. Clear hierarchy
+4. One smart primary action per row
+5. Secondary actions in a three-dot menu
+6. Details in drawer, side panel, mobile sheet, or dedicated detail page
+7. Charts only when they explain something useful
+8. Fewer but more meaningful dashboard summaries
+
+---
+
+# Desktop vs Mobile Product Rule
+
+Desktop and mobile should not expose the same complexity.
+
+## Desktop
+
+Desktop is the full operational control center.
+
+Desktop should support:
+
+1. Full planning
+2. Deep editing
+3. Large data tables/lists
+4. Multi-step workflows
+5. Timeline generation and review
+6. Cost estimate creation/editing/approval
+7. Detailed Project Finance
+8. Advanced dashboards and KPI charts
+9. Reports and exports
+10. Admin settings and permissions
+
+## Mobile
+
+Mobile should be a lite operational mode.
+
+Mobile should focus on:
+
+1. What needs attention?
+2. What do I need to do now?
+3. Quick status updates
+4. Quick task handling
+5. Quick payment/action checks
+6. Basic edit/delete/archive when safe
+7. Lightweight detail review
+8. Alerts and notifications
+
+Mobile should avoid showing full desktop complexity upfront.
+
+Mobile pattern:
+
+- Minimal visible text
+- Fewer fields
+- Fewer visible modules
+- Strong primary action
+- Secondary actions in three-dot menu
+- Tap row/card to open a mobile sheet/detail view
+- Desktop-only heavy features where necessary
+
+---
+
+# Mobile Navigation Direction
+
+Replace mobile sidebar with a bottom navigation tab bar.
+
+Preferred style:
+
+- Floating liquid glass bottom nav
+- Soft translucent background
+- Blur/glass effect
+- Thin border
+- Rounded capsule
+- Raised active tab/pill
+- Icons + short labels
+- Premium but subtle
+- No heavy glow or noisy decoration
+- Safe-area padding for modern phones
+
+Suggested generic mobile nav:
+
+1. Home
+2. Projects
+3. Tasks
+4. Timeline
+5. More
+
+`More` can contain role-specific secondary modules such as Cost Estimates, Items, Vendors, Project Finance, Leads, Reports, and Settings.
+
+Future navigation should be permission-aware and department-specific.
+
+Examples:
+
+## Admin / Partner
+
+- Full navigation
+
+## Execution Team
+
+- Home
+- Projects
+- Timeline
+- Tasks
+- More
+
+## Finance Team
+
+- Home
+- Finance
+- Payments
+- Tasks
+- More
+
+## Marketing Team
+
+- Home
+- Leads
+- Follow-ups
+- Tasks
+- More
+
+## Design / Procurement
+
+- Home
+- Projects
+- Cost Estimates
+- Items
+- Vendors
+- Tasks / More
+
+---
+
+# Module UI Rules
+
+## Items
+
+Default direction:
+
+- List/table-first layout
+- Optional card view toggle later if useful
+- Search/typeahead where selecting master data
+- Main list shows only essential fields
+- Details open in drawer/sheet/detail view
+- Secondary actions in three-dot menu
+- Mobile should show only key item name, scope/category, rate/price summary, status, and primary action
+
+## Vendors
+
+Default direction:
+
+- List/table-first layout
+- Optional card view toggle later
+- Main list shows vendor name, scope/category, contact/status, and primary action
+- Detailed vendor data should move to drawer/detail view
+- Mobile should prioritize quick contact/open/edit actions
+
+## Cost Estimates
+
+Default direction:
+
+- Keep cost estimates as record cards/list where useful, but avoid oversized decorative cards
+- Estimate editor can stay structured because it is a complex workflow
+- Mobile should not attempt full complex estimate editing unless deliberately simplified
+- Mobile can view estimate status, totals, approval/revision state, and key actions
+- Desktop remains the main place for detailed estimate creation/editing
+
+## Timeline
+
+Default direction:
+
+- Timeline Work tab should be list-first, not card-first
+- Generated timelines are Planned/Estimated timelines, not execution truth
+- Confirmed timeline becomes the Planned baseline
+- Execution actions update Actual progress
+- Forecast is a later layer
+- Desktop can show full Planned vs Actual detail
+- Mobile should show a simplified execution row/card with one primary action and a details sheet
+
+---
+
+# Timeline Current Implementation Status
+
+Completed recently:
+
+1. Temporary Villa Athani dummy timeline dev controls added.
+   - Fetch Data / Hide Data controls remain intentionally available.
+   - Temporary dummy data should be removed only when user asks.
+2. Timeline creation is gated by approved Cost Estimate.
+3. Approved estimate source selection added.
+4. Timeline generation from approved estimates added.
+5. Planning controls added:
+   - Contract Signed
+   - Booking Payment Collected
+   - Timeline Start Date
+   - Editable payment gate percentages
+6. Generated timeline review mode added:
+   - Build Timeline creates a review draft
+   - Dates, assignee, and status can be edited
+   - Confirm Timeline activates it
+7. Gantt now uses generated work package date range instead of old demo date range.
+8. Intelligent Assist no longer mixes old demo alerts once a generated timeline is active.
+9. Payment gate updates added:
+   - Booking Payment Collected auto-marks booking payment as received
+   - Payments support Unmark
+   - Unmark re-blocks linked work packages
+10. Side quest completed:
+   - In temporary Villa Athani dummy data, Stage 1 payment helper text changed from `After Steel Roof Finishes` to `After Fabrication Part-A`.
+11. Timeline confirmation state polish added:
+   - Review Draft Timeline state
+   - Confirmed Planned Timeline banner
+   - Baseline Locked messaging
+   - Confirmation timestamp persistence
+12. Execution actions added:
+   - Start Work
+   - Pause Work
+   - Resume Work
+   - Complete Work
+   - Mark Delayed
+   - Delay Reason
+   - Actual start/end/duration updates
+   - Pause period tracking
+13. Timeline Work tab converted from detailed cards to list-first execution tracker.
+14. Work list alignment/clipping issues fixed.
+
+Latest committed Timeline milestone:
+
+- `8ce0b69 Convert timeline work packages to list view`
 
 ---
 
@@ -91,9 +359,17 @@ MVP means Gravium OS can manage one real project from approved estimate to plann
    - Timeline start date
    - Payment gate percentages
 8. Timeline review and confirmation
-9. Basic payment gates
-10. Basic Project Finance direction
-11. Clean consistent UI for the main workflow pages
+9. Basic timeline execution actions
+   - Start Work
+   - Pause Work
+   - Resume Work
+   - Complete Work
+   - Mark Delayed
+   - Delay Reason
+10. Basic payment gates
+11. Basic Project Finance direction
+12. Clean consistent UI for Items, Vendors, Cost Estimates, Timeline, and Employee Tasks
+13. Mobile-lite UI direction for key operational actions
 
 ## MVP Does Not Need Yet
 
@@ -105,6 +381,7 @@ MVP means Gravium OS can manage one real project from approved estimate to plann
 6. Advanced PDF/report automation
 7. Full forecast automation
 8. PWA notifications
+9. Full mobile parity with desktop
 
 ---
 
@@ -112,14 +389,16 @@ MVP means Gravium OS can manage one real project from approved estimate to plann
 
 | Milestone | Goal |
 |---|---|
-| 1. MVP Core Workflow | Projects, Items, Vendors, Cost Estimates, Employee Tasks, Timeline from approved estimate, basic payment gates |
-| 2. Timeline Execution | Planned vs Actual timeline, Start/Pause/Resume/Complete work, delay reasons |
-| 3. Project Finance Integration | Make Project Finance the payment source of truth; Timeline reads payment status |
-| 4. Employee KPI Foundation | Use real task/project/payment/activity data for KPI tracking |
-| 5. Dashboards and Permissions | Admin dashboard, Employee dashboard, Department Head views, page/feature access |
-| 6. UI and Codebase Cleanup | Remove Porsche/template leftovers, standardize all pages to Gravium style |
-| 7. Supabase Migration | Replace localStorage with real database tables and multi-user data |
-| 8. Reports and Client Outputs | Branded Estimate PDF, Timeline Report, Progress Report, Handover Report |
+| 1. Core Module UI Standardization | Fix Items, Vendors, Cost Estimates, and Timeline as the initial Gravium design baseline |
+| 2. MVP Core Workflow | Projects, Items, Vendors, Cost Estimates, Employee Tasks, Timeline from approved estimate, basic payment gates |
+| 3. Timeline Execution | Planned vs Actual timeline, Start/Pause/Resume/Complete work, delay reasons |
+| 4. Mobile Lite UX | Replace mobile sidebar with liquid-glass bottom nav and simplify mobile screens |
+| 5. Project Finance Integration | Make Project Finance the payment source of truth; Timeline reads payment status |
+| 6. Employee KPI Foundation | Use real task/project/payment/activity data for KPI tracking |
+| 7. Dashboards and Permissions | Admin dashboard, Employee dashboard, Department Head views, page/feature access |
+| 8. UI and Codebase Cleanup | Remove Porsche/template leftovers, standardize all pages to Gravium style |
+| 9. Supabase Migration | Replace localStorage with real database tables and multi-user data |
+| 10. Reports and Client Outputs | Branded Estimate PDF, Timeline Report, Progress Report, Handover Report |
 
 ---
 
@@ -141,6 +420,9 @@ Generated timelines must be treated as Planned/Estimated Timelines, not executio
      - Estimated End Date
      - Actual Start Date
      - Actual End Date
+     - Actual Duration
+     - Pause periods
+     - Delay reason
 
 3. Forecast Timeline
    - Recalculates current expected dates based on delays, pauses, payments, vendors, dependencies, site readiness, and client decisions.
@@ -150,14 +432,14 @@ Generated timelines must be treated as Planned/Estimated Timelines, not executio
 
 ## Execution Actions
 
-Future work package actions:
+Work package actions:
 
 1. Start Work
 2. Pause Work
 3. Resume Work
 4. Complete Work
 5. Mark Delayed
-6. Add Delay Reason
+6. Add / Update Delay Reason
 
 ## Internal View
 
@@ -196,6 +478,7 @@ Timeline must not be created from:
 4. No estimate
 
 If the linked Cost Estimate changes from Approved to Revision Draft:
+
 - Timeline should wait.
 - The revised estimate must be approved before timeline updates.
 
@@ -238,8 +521,7 @@ Long-term behavior:
 
 - Timeline asks: Is payment gate satisfied?
 - Project Finance answers: Payment received, pending, partial, overdue, or approved by finance.
-
-Timeline should not permanently own payment truth.
+- Timeline should not permanently own payment truth.
 
 ---
 
@@ -253,6 +535,7 @@ Tasks must support:
 2. Internal/non-project tasks
 
 Examples of project tasks:
+
 - Prepare cost estimate
 - Follow up with vendor
 - Visit site
@@ -262,6 +545,7 @@ Examples of project tasks:
 - Update client on timeline delay
 
 Examples of internal tasks:
+
 - Call leads
 - Post Instagram content
 - Update vendor pricing
@@ -302,6 +586,14 @@ Long-term dashboards:
 2. Employee Dashboard
 3. Department Head Dashboard
 
+Dashboard direction:
+
+- Do not rely only on generic stat cards.
+- Use clean, purposeful KPI charts.
+- Charts should show trends, comparisons, workload, delays, payment progress, and employee/task performance.
+- Every KPI should be drillable to the records behind it.
+- Avoid decorative dashboard blocks that do not help decisions.
+
 ## Admin Dashboard
 
 Should show:
@@ -332,6 +624,7 @@ Should show:
 Should show only department-relevant work.
 
 Examples:
+
 - Marketing head sees leads and marketing tasks.
 - Finance head sees finance and payment tasks.
 - Execution head sees site/timeline/vendor tasks.
@@ -354,12 +647,16 @@ Permissions must support:
 2. Feature-level access
 3. Button/action access
 4. Data visibility restrictions
+5. Mobile navigation restrictions
+6. Desktop-only feature restrictions
 
 Examples:
+
 - Finance can update Project Finance but cannot edit Cost Estimate line items.
 - Execution can update work package status but cannot delete projects.
 - Marketing can manage leads but cannot access Project Finance.
 - Employee can view Timeline but cannot edit payment gates.
+- Mobile users may be allowed to mark work/status updates but not perform complex setup or full estimate editing.
 
 ---
 
@@ -377,6 +674,10 @@ Goals:
 6. Replace placeholder/demo copy before production.
 7. Keep Tailwind + Neue Montreal + Gravium brand system consistent.
 8. Refactor large pages/components when needed.
+9. Apply the Items/Vendors/Cost Estimate/Timeline design system to the rest of the app.
+10. Use list-first operational layouts unless cards provide clear value.
+11. Add optional card toggles only where useful.
+12. Move heavy details into drawers/sheets/detail pages.
 
 This cleanup track must be included in every future new-chat handoff.
 
@@ -392,6 +693,7 @@ Use normal ChatGPT patching for:
 4. Clear TypeScript errors
 5. Button/copy/layout adjustments
 6. Patch/build/test/commit loops
+7. Screenshot-driven UI fixes
 
 Use Codex for:
 
@@ -403,6 +705,8 @@ Use Codex for:
 6. Supabase migration scaffolding
 7. Route/page permission system
 8. Large repetitive changes
+9. Applying new list-first design patterns across old modules
+10. Implementing full mobile navigation architecture
 
 Best Codex tasks for Gravium OS:
 
@@ -411,6 +715,8 @@ Best Codex tasks for Gravium OS:
 3. Refactor large files like TimelinePage, CostEstimateSection, Projects, and Tasks.
 4. Prepare Supabase service/data layer after schema is finalized.
 5. Implement permissions guards after rules are finalized.
+6. Apply list/table-first module patterns across older pages.
+7. Build mobile bottom-nav architecture after design rules are finalized.
 
 ---
 
@@ -471,19 +777,24 @@ Timeline report should include:
 
 # Current Implementation Sequence
 
-Immediate order:
+Immediate order from here:
 
-1. Commit current timeline payment patch.
-2. Add Timeline confirmation state.
-3. Add basic execution actions:
-   - Start Work
-   - Pause Work
-   - Resume Work
-   - Complete Work
-4. Improve Work tab UI for Planned vs Actual.
-5. Start Project Finance cleanup plan.
-6. Define MVP checklist in-app or docs.
-7. Use Codex for Porsche/template cleanup and page standardization.
+1. Confirm clean status after latest Timeline list-view commit.
+2. Begin initial design-system cleanup across the four priority modules:
+   - Items
+   - Vendors
+   - Cost Estimates
+   - Timeline
+3. Simplify mobile UI for these four modules.
+4. Define mobile-lite feature restrictions:
+   - What is mobile-visible
+   - What is desktop-only
+   - What can be quick-action only on mobile
+5. Plan and implement liquid-glass mobile bottom nav.
+6. Add row/detail drawer or mobile sheet pattern where needed.
+7. Start Project Finance cleanup/integration plan.
+8. Define MVP checklist in app or docs.
+9. Use Codex for Porsche/template cleanup and page standardization when scope becomes repo-wide.
 
 ---
 
@@ -492,10 +803,10 @@ Immediate order:
 Whenever moving to a new chat, include:
 
 1. Repo path:
-   D:\Gravium Design Studio\Web_App\graviumos
+   `D:\Gravium Design Studio\Web_App\graviumos`
 
 2. Branch:
-   featuretest
+   `featuretest`
 
 3. PowerShell workflow rules:
    - No Bash heredocs
@@ -509,8 +820,12 @@ Whenever moving to a new chat, include:
 
 6. Current implementation goal
 
-7. Important long-term tracks:
-   - MVP
+7. Important product/UI tracks:
+   - Items/Vendors/Cost Estimate/Timeline as first design-system baseline
+   - List/table-first operational UI
+   - Mobile-lite UX, not full desktop parity
+   - Liquid-glass bottom nav for mobile
+   - Department/permission-specific navigation
    - Timeline planned/actual/forecast architecture
    - Project Finance source of truth
    - Employee Tasks and KPI
@@ -521,3 +836,7 @@ Whenever moving to a new chat, include:
    - Reports/PDF exports
 
 8. Temporary Villa Athani timeline dev controls remain intentionally available until user asks to remove them.
+
+9. Testing reminder:
+   - After UI/layout changes, test desktop and mobile.
+   - Do not mark mobile UI fully cleared until user verifies on phone.
