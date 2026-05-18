@@ -23,7 +23,7 @@ interface TopBarProps {
   onMenuToggle: () => void;
 }
 
-export default function TopBar({ onMenuToggle }: TopBarProps) {
+export default function TopBar({}: TopBarProps) {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -207,22 +207,20 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   };
 
   return (
-    <header className="h-15 border-b bg-background flex items-center px-4 sm:px-6">
-      <div className="lg:hidden">
-        <button onClick={onMenuToggle}>
-          <GraviumLogo variant="icon" className="h-6 w-auto object-contain" />
-        </button>
+    <header className="flex h-15 items-center bg-background px-4 sm:px-6">
+      <div className="flex min-w-0 translate-y-1 items-center gap-2 md:hidden">
+        <GraviumLogo variant="wordmark" className="h-6 w-auto object-contain" />
+        <span className="text-sm font-semibold leading-none tracking-tight text-foreground">OS</span>
       </div>
 
-      {/* RIGHT: everything pushed */}
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="ml-auto flex translate-y-1 items-center gap-2">
         {/* Announcement */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="relative"
+              className="relative rounded-full"
               onClick={() => {
                 const now = new Date().toISOString();
 
@@ -265,7 +263,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative rounded-full">
               <Bell size={18} />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] flex items-center justify-center rounded-full">
@@ -333,7 +331,7 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         {/* Avatar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="focus:outline-none">
+            <button className="rounded-full border border-border bg-card p-0.5 shadow-sm transition hover:bg-muted focus:outline-none">
               <Avatar className="w-8 h-8 cursor-pointer">
                 <AvatarImage src={profile?.profile_picture_url || ""} />
                 <AvatarFallback>
