@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, FileCheck2, LockKeyhole, Plus, RotateCcw } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save } from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
@@ -143,22 +143,6 @@ function getEstimateStatusVariant(status?: LinkedCostEstimateStatus) {
   return 'muted';
 }
 
-function getTimelineSourceMessage(record?: StoredCostEstimateRecord) {
-  if (!record) {
-    return 'Create and approve a linked cost estimate before building the project timeline.';
-  }
-
-  if (record.status === 'approved') {
-    return 'Approved cost estimate found. Timeline can be planned after contract signing and booking payment confirmation.';
-  }
-
-  if (record.status === 'revision') {
-    return 'A revision draft is active. Approve the revision before updating or creating the timeline.';
-  }
-
-  return 'This estimate is still a draft. Approve the estimate before creating the timeline.';
-}
-
 
 type StoredTimelineState = {
   hasTimeline: boolean;
@@ -233,6 +217,15 @@ function formatINR(amount: number) {
   }).format(amount);
 }
 
+
+function formatCompactDate(dateString: string) {
+  const [year, month, day] = dateString.split('-');
+
+  if (!year || !month || !day) return dateString;
+
+  return `${day}/${month}/${year}`;
+}
+
 function formatDate(dateString: string) {
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
@@ -299,13 +292,6 @@ function getGanttBarTone(status: WorkPackageStatus) {
   return 'bg-primary';
 }
 
-function getProjectStatusVariant(status: string) {
-  if (status === 'active') return 'success';
-  if (status === 'on_hold') return 'warning';
-  if (status === 'completed') return 'info';
-
-  return 'muted';
-}
 
 function getNextStatusAfterPaymentUnlock(
   workPackage: WorkPackage,
@@ -358,6 +344,9 @@ export default function TimelinePage() {
   const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     () => storedTimeline?.timelineConfirmedAt ?? ''
   );
+  const [showEstimateSourcePicker, setShowEstimateSourcePicker] = useState(false);
+  const [isPlanningControlsLocked, setIsPlanningControlsLocked] = useState(false);
+  const [showPaymentGateControls, setShowPaymentGateControls] = useState(false);
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
   >(() => getStoredCostEstimateRecords());
@@ -480,7 +469,6 @@ export default function TimelinePage() {
   ]);
 
   const isTimelineEstimateApproved = linkedCostEstimate?.status === 'approved';
-  const timelineSourceMessage = getTimelineSourceMessage(linkedCostEstimate);
   const paymentPercentageValues = {
     booking: bookingPaymentPercent === '' ? 0 : Number(bookingPaymentPercent) || 0,
     stageOne:
@@ -618,6 +606,7 @@ export default function TimelinePage() {
     setIgnoredAlertIds([]);
     setHasTimeline(false);
     setTimelineConfirmedAt('');
+    setShowEstimateSourcePicker(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -634,6 +623,7 @@ export default function TimelinePage() {
     setIsBookingPaymentCollected(false);
     setPendingTimelineDraft(null);
     setTimelineConfirmedAt('');
+    setShowEstimateSourcePicker(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -1471,105 +1461,130 @@ export default function TimelinePage() {
       </div>
 
       <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              {isTimelineEstimateApproved ? (
-                <FileCheck2 className="h-5 w-5" />
-              ) : (
-                <LockKeyhole className="h-5 w-5" />
-              )}
-            </div>
-
-            <div className="min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-foreground">
-                Timeline Source
+                Approved Estimate Source
               </p>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                {timelineSourceMessage}
-              </p>
-              {linkedCostEstimate && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {linkedCostEstimate.projectName} - v{linkedCostEstimate.version} -{' '}
-                  {formatINR(linkedCostEstimate.grandTotal)}
-                </p>
-              )}
+              <StatusBadge variant="outline">
+                {approvedCostEstimateRecords.length} Approved
+              </StatusBadge>
             </div>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Use one approved estimate as the source for timeline planning.
+            </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate?.status)}>
-              {getEstimateStatusTitle(linkedCostEstimate?.status)}
-            </StatusBadge>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshCostEstimateSources}
+            className="h-9 w-9 shrink-0 p-0"
+            aria-label="Refresh estimate sources"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {linkedCostEstimate ? (
+          <div className="mt-4 rounded-2xl border border-border bg-background p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {linkedCostEstimate.projectName}
+                  </p>
+                  <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate.status)}>
+                    {getEstimateStatusTitle(linkedCostEstimate.status)}
+                  </StatusBadge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {linkedCostEstimate.clientName ?? 'No client name'} - v{linkedCostEstimate.version}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {formatINR(linkedCostEstimate.grandTotal)}
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowEstimateSourcePicker(current => !current)}
+                className="h-9 w-full justify-center gap-2 lg:w-auto lg:shrink-0"
+                disabled={approvedCostEstimateRecords.length === 0}
+              >
+                {showEstimateSourcePicker ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+                {showEstimateSourcePicker ? 'Hide Sources' : 'Change Source'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+            <p className="text-sm text-muted-foreground">
+              No approved source selected. Choose an approved estimate before building the timeline.
+            </p>
 
             <Button
               type="button"
               variant="outline"
-              onClick={handleRefreshCostEstimateSources}
-              className="h-9"
+              onClick={() => setShowEstimateSourcePicker(current => !current)}
+              className="mt-3 h-9 w-full justify-center gap-2 sm:w-auto"
+              disabled={approvedCostEstimateRecords.length === 0}
             >
-              Refresh Estimates
+              {showEstimateSourcePicker ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              {showEstimateSourcePicker ? 'Hide Sources' : 'Choose Source'}
             </Button>
           </div>
-        </div>
-      </div>
+        )}
 
-      <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              Approved Estimate Sources
-            </p>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Select an approved cost estimate before creating or updating a timeline.
-            </p>
-          </div>
+        {showEstimateSourcePicker && (
+          approvedCostEstimateRecords.length > 0 ? (
+            <div className="mt-4 grid gap-2">
+              {approvedCostEstimateRecords.map(record => {
+                const isSelected = record.projectId === selectedTimelineProjectId;
 
-          <StatusBadge variant="outline">
-            {approvedCostEstimateRecords.length} Approved
-          </StatusBadge>
-        </div>
+                return (
+                  <button
+                    key={record.id}
+                    type="button"
+                    onClick={() => handleSelectTimelineSource(record.projectId)}
+                    className={`rounded-xl border px-3 py-3 text-left transition ${
+                      isSelected
+                        ? 'border-emerald-500/40 bg-emerald-500/10'
+                        : 'border-border bg-background hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {record.projectName}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {record.clientName ?? 'No client name'} - v{record.version} - {formatINR(record.grandTotal)}
+                        </p>
+                      </div>
 
-        {approvedCostEstimateRecords.length > 0 ? (
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            {approvedCostEstimateRecords.map(record => {
-              const isSelected = record.projectId === selectedTimelineProjectId;
-
-              return (
-                <button
-                  key={record.id}
-                  type="button"
-                  onClick={() => handleSelectTimelineSource(record.projectId)}
-                  className={`rounded-2xl border p-4 text-left transition ${
-                    isSelected
-                      ? 'border-emerald-500/40 bg-emerald-500/10'
-                      : 'border-border bg-background hover:bg-muted/50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {record.projectName}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {record.clientName ?? 'No client name'} - v{record.version}
-                      </p>
+                      {isSelected && <StatusBadge variant="success">Selected</StatusBadge>}
                     </div>
-
-                    {isSelected && <StatusBadge variant="success">Selected</StatusBadge>}
-                  </div>
-
-                  <p className="mt-3 text-sm font-semibold text-foreground">
-                    {formatINR(record.grandTotal)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="mt-4 rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-            No approved cost estimates found. Approve an estimate first, then refresh this list.
-          </p>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-4 rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+              No approved cost estimates found. Approve an estimate first, then refresh this list.
+            </p>
+          )
         )}
 
         {waitingCostEstimateRecords.length > 0 && (
@@ -1603,125 +1618,263 @@ export default function TimelinePage() {
       </div>
 
       <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              Timeline Planning Controls
-            </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                Timeline Planning Controls
+              </p>
+              <StatusBadge variant={canBuildTimeline ? 'success' : 'warning'}>
+                {canBuildTimeline ? 'Ready' : 'Waiting'}
+              </StatusBadge>
+              {isPlanningControlsLocked && (
+                <StatusBadge variant="outline">Locked</StatusBadge>
+              )}
+            </div>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Confirm contract and booking payment before building the execution timeline.
+              Confirm the basics before building the planned timeline.
             </p>
           </div>
 
-          <StatusBadge variant={canBuildTimeline ? 'success' : 'warning'}>
-            {canBuildTimeline ? 'Ready To Build' : 'Waiting'}
-          </StatusBadge>
-        </div>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_180px]">
-          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-background px-3 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={isContractSigned}
-              onChange={event => setIsContractSigned(event.target.checked)}
-              disabled={!isTimelineEstimateApproved}
-            />
-            Contract Signed
-          </label>
-
-          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-background px-3 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={isBookingPaymentCollected}
-              onChange={event =>
-                setIsBookingPaymentCollected(event.target.checked)
+          <Button
+            type="button"
+            variant={isPlanningControlsLocked ? 'outline' : 'default'}
+            size="sm"
+            onClick={() => {
+              if (isPlanningControlsLocked) {
+                setIsPlanningControlsLocked(false);
+                return;
               }
-              disabled={!isTimelineEstimateApproved}
-            />
-            Booking Payment Collected
-          </label>
 
-          <label className="grid gap-1">
-            <span className="text-xs font-medium text-muted-foreground">
-              Timeline Start Date
-            </span>
-            <input
-              type="date"
-              value={timelineStartDate}
-              onChange={event => setTimelineStartDate(event.target.value)}
-              disabled={!isTimelineEstimateApproved}
-              className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground disabled:opacity-50"
-            />
-          </label>
+              if (!canBuildTimeline) return;
+
+              setIsPlanningControlsLocked(true);
+              setShowPaymentGateControls(false);
+            }}
+            disabled={!isPlanningControlsLocked && !canBuildTimeline}
+            className="hidden h-9 justify-center gap-2 sm:inline-flex sm:px-4"
+            aria-label={isPlanningControlsLocked ? 'Edit planning controls' : 'Save and lock planning controls'}
+          >
+            {isPlanningControlsLocked ? (
+              <Pencil className="h-4 w-4" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            <span>{isPlanningControlsLocked ? 'Edit' : 'Save & Lock'}</span>
+          </Button>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-border bg-background p-3">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-foreground">
-              Payment Gate Percentages
-            </p>
-            <p
-              className={`text-xs ${
-                isPaymentPercentageMatched
-                  ? 'text-emerald-600 dark:text-emerald-300'
-                  : 'text-amber-700 dark:text-amber-300'
-              }`}
-            >
-              Total: {paymentPercentageTotal}%
-            </p>
+        {isPlanningControlsLocked ? (
+          <div className="mt-4 rounded-2xl border border-border bg-background p-3">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Contract</p>
+                <p className="mt-0.5 font-semibold text-foreground">
+                  {isContractSigned ? 'Signed' : 'Pending'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground">Booking</p>
+                <p className="mt-0.5 font-semibold text-foreground">
+                  {isBookingPaymentCollected ? 'Collected' : 'Pending'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground">Start Date</p>
+                <p className="mt-0.5 font-semibold text-foreground">
+                  {formatCompactDate(timelineStartDate)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground">Payment Split</p>
+                <p className="mt-0.5 font-semibold text-foreground">
+                  {paymentPercentageTotal}%
+                </p>
+              </div>
+            </div>
           </div>
+        ) : (
+          <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(260px,0.8fr)_minmax(260px,1fr)]">
+            <div className="grid gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-3">
+                  <input
+                    type="checkbox"
+                    checked={isContractSigned}
+                    onChange={event => setIsContractSigned(event.target.checked)}
+                    disabled={!isTimelineEstimateApproved}
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <span className="text-sm font-medium text-foreground">
+                    Contract Signed
+                  </span>
+                </label>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <label className="grid gap-1">
-              <span className="text-xs text-muted-foreground">Booking</span>
-              <input
-                type="number"
-                min="0"
-                value={bookingPaymentPercent}
-                onChange={event => setBookingPaymentPercent(event.target.value)}
-                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </label>
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-3">
+                  <input
+                    type="checkbox"
+                    checked={isBookingPaymentCollected}
+                    onChange={event => setIsBookingPaymentCollected(event.target.checked)}
+                    disabled={!isTimelineEstimateApproved}
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <span className="text-sm font-medium text-foreground">
+                    Booking Paid
+                  </span>
+                </label>
+              </div>
 
-            <label className="grid gap-1">
-              <span className="text-xs text-muted-foreground">Stage 1</span>
-              <input
-                type="number"
-                min="0"
-                value={stageOnePaymentPercent}
-                onChange={event => setStageOnePaymentPercent(event.target.value)}
-                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </label>
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Timeline Start Date
+                </span>
+                <input
+                  type="date"
+                  value={timelineStartDate}
+                  onChange={event => setTimelineStartDate(event.target.value)}
+                  disabled={!isTimelineEstimateApproved}
+                  className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground outline-none transition focus:border-foreground disabled:opacity-50"
+                />
+              </label>
+            </div>
 
-            <label className="grid gap-1">
-              <span className="text-xs text-muted-foreground">Stage 2</span>
-              <input
-                type="number"
-                min="0"
-                value={stageTwoPaymentPercent}
-                onChange={event => setStageTwoPaymentPercent(event.target.value)}
-                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </label>
+            <div className="rounded-2xl border border-border bg-background p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Payment Split
+                  </p>
+                  <p className={`mt-1 text-xs font-semibold ${
+                    isPaymentPercentageMatched
+                      ? 'text-emerald-600 dark:text-emerald-300'
+                      : 'text-amber-700 dark:text-amber-300'
+                  }`}>
+                    Total {paymentPercentageTotal}%
+                  </p>
+                </div>
 
-            <label className="grid gap-1">
-              <span className="text-xs text-muted-foreground">Handover</span>
-              <input
-                type="number"
-                min="0"
-                value={handoverPaymentPercent}
-                onChange={event => setHandoverPaymentPercent(event.target.value)}
-                className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPaymentGateControls(current => !current)}
+                  className="h-9 gap-2 px-3"
+                  aria-label={showPaymentGateControls ? 'Save payment split' : 'Edit payment split'}
+                >
+                  {showPaymentGateControls ? (
+                    <Save className="h-4 w-4" />
+                  ) : (
+                    <Pencil className="h-4 w-4" />
+                  )}
+                  <span>{showPaymentGateControls ? 'Save' : 'Edit'}</span>
+                </Button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <label className="rounded-xl border border-border bg-card px-3 py-2">
+                  <span className="block text-xs text-muted-foreground">Booking</span>
+                  {showPaymentGateControls ? (
+                    <input
+                      inputMode="numeric"
+                      value={bookingPaymentPercent}
+                      onChange={event => setBookingPaymentPercent(event.target.value)}
+                      className="mt-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+                    />
+                  ) : (
+                    <span className="mt-1 block text-sm font-semibold text-foreground">
+                      {bookingPaymentPercent || 0}%
+                    </span>
+                  )}
+                </label>
+
+                <label className="rounded-xl border border-border bg-card px-3 py-2">
+                  <span className="block text-xs text-muted-foreground">Stage 1</span>
+                  {showPaymentGateControls ? (
+                    <input
+                      inputMode="numeric"
+                      value={stageOnePaymentPercent}
+                      onChange={event => setStageOnePaymentPercent(event.target.value)}
+                      className="mt-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+                    />
+                  ) : (
+                    <span className="mt-1 block text-sm font-semibold text-foreground">
+                      {stageOnePaymentPercent || 0}%
+                    </span>
+                  )}
+                </label>
+
+                <label className="rounded-xl border border-border bg-card px-3 py-2">
+                  <span className="block text-xs text-muted-foreground">Stage 2</span>
+                  {showPaymentGateControls ? (
+                    <input
+                      inputMode="numeric"
+                      value={stageTwoPaymentPercent}
+                      onChange={event => setStageTwoPaymentPercent(event.target.value)}
+                      className="mt-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+                    />
+                  ) : (
+                    <span className="mt-1 block text-sm font-semibold text-foreground">
+                      {stageTwoPaymentPercent || 0}%
+                    </span>
+                  )}
+                </label>
+
+                <label className="rounded-xl border border-border bg-card px-3 py-2">
+                  <span className="block text-xs text-muted-foreground">Handover</span>
+                  {showPaymentGateControls ? (
+                    <input
+                      inputMode="numeric"
+                      value={handoverPaymentPercent}
+                      onChange={event => setHandoverPaymentPercent(event.target.value)}
+                      className="mt-1 w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+                    />
+                  ) : (
+                    <span className="mt-1 block text-sm font-semibold text-foreground">
+                      {handoverPaymentPercent || 0}%
+                    </span>
+                  )}
+                </label>
+              </div>
+
+              {!isPaymentPercentageMatched && (
+                <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+                  Payment gate percentages must total 100% before building the timeline.
+                </p>
+              )}
+            </div>
           </div>
+        )}
 
-          {!isPaymentPercentageMatched && (
-            <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
-              Payment gate percentages must total 100% before building the timeline.
-            </p>
-          )}
+        <div className="mt-4 flex justify-end sm:hidden">
+          <Button
+            type="button"
+            variant={isPlanningControlsLocked ? 'outline' : 'default'}
+            size="sm"
+            onClick={() => {
+              if (isPlanningControlsLocked) {
+                setIsPlanningControlsLocked(false);
+                return;
+              }
+
+              if (!canBuildTimeline) return;
+
+              setIsPlanningControlsLocked(true);
+              setShowPaymentGateControls(false);
+            }}
+            disabled={!isPlanningControlsLocked && !canBuildTimeline}
+            className="h-10 w-full justify-center gap-2"
+            aria-label={isPlanningControlsLocked ? 'Edit planning controls' : 'Save and lock planning controls'}
+          >
+            {isPlanningControlsLocked ? (
+              <Pencil className="h-4 w-4" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            <span>{isPlanningControlsLocked ? 'Edit Planning Controls' : 'Save & Lock Planning Controls'}</span>
+          </Button>
         </div>
       </div>
 
@@ -1758,50 +1911,27 @@ export default function TimelinePage() {
       {!showCreateWizard && hasTimeline && (
         <>
           <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-foreground">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge variant="success">Confirmed Planned Timeline</StatusBadge>
-                  <StatusBadge variant="outline">Baseline Locked</StatusBadge>
-                </div>
-                <p className="mt-2 leading-6 text-muted-foreground">
-                  This planned timeline is now the active baseline. Execution updates should be tracked separately as actual progress, pauses, completions, and delays.
-                </p>
-              </div>
-              {timelineConfirmedAt && (
-                <p className="shrink-0 text-xs font-medium text-muted-foreground">
-                  Confirmed On {formatDate(timelineConfirmedAt.slice(0, 10))}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="mb-5 min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
-            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <StatusBadge variant={getProjectStatusVariant(activeTimelineProject.status)}>
-                  {toTitleCase(activeTimelineProject.status)}
-                </StatusBadge>
-
-                <StatusBadge variant="outline">
-                  {activeTimelineProject.projectType}
-                </StatusBadge>
-
-                {activeTimelineProject.location && (
-                  <StatusBadge variant="outline">
-                    {activeTimelineProject.location}
-                  </StatusBadge>
-                )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge variant="success">Confirmed Planned Timeline</StatusBadge>
+                <StatusBadge variant="outline">Baseline Locked</StatusBadge>
               </div>
 
-              <div className="text-sm text-muted-foreground">
-                {formatDate(activeTimelineProject.startDate)} →{' '}
-                {formatDate(activeTimelineProject.currentProjectedHandoverDate)}
+              <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <CalendarClock className="h-4 w-4 shrink-0" />
+                  {formatCompactDate(timelineDateRange.startDate)}
+                </span>
+                <span className="text-muted-foreground/70">-</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <CalendarClock className="h-4 w-4 shrink-0" />
+                  {formatCompactDate(timelineDateRange.endDate)}
+                </span>
               </div>
             </div>
           </div>
-
           <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
               {tabs.map(tab => {
                 const isActive = activeTab === tab.id;
 
@@ -1811,6 +1941,10 @@ export default function TimelinePage() {
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
                     className={`rounded-xl px-2 py-2.5 text-xs font-medium transition sm:text-sm ${
+                      tab.id === 'gantt' ? 'hidden sm:block ' : ''
+                    }${
+                      tab.id === 'gantt' ? 'hidden sm:block ' : ''
+                    }${
                       isActive
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'

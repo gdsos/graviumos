@@ -130,6 +130,22 @@ function getActualEndLabel(workPackage: WorkPackage) {
   return '-';
 }
 
+function getShortDateRange(startDate?: string, endDate?: string) {
+  return `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
+}
+
+function getMobileActualLabel(workPackage: WorkPackage) {
+  if (workPackage.actualEndDate) {
+    return `Completed ${formatDisplayDate(workPackage.actualEndDate)}`;
+  }
+
+  if (workPackage.actualStartDate) {
+    return `In Progress from ${formatDisplayDate(workPackage.actualStartDate)}`;
+  }
+
+  return 'Not Started';
+}
+
 function getPrimaryAction({
   workPackage,
   onStartWork,
@@ -279,147 +295,235 @@ function WorkPackageRow({
   const PrimaryIcon = primaryAction?.icon;
 
   return (
-    <div className="grid min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_96px_176px] xl:items-center xl:gap-4 xl:px-4">
-      <div className="min-w-0">
-        <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
-          <p className="mr-1 truncate text-base font-semibold text-foreground">
-            {titleParts.areaName}
-          </p>
+    <>
+      <article className="border-b border-border px-3 py-3 last:border-b-0 xl:hidden">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+              <p className="truncate text-base font-semibold text-foreground">
+                {titleParts.areaName}
+              </p>
+              <StatusBadge variant={getStatusVariant(workPackage.status)}>
+                {formatLabel(workPackage.status)}
+              </StatusBadge>
+              <StatusBadge variant={getPriorityVariant(workPackage.priority)}>
+                {formatLabel(workPackage.priority)}
+              </StatusBadge>
+            </div>
 
-          <StatusBadge variant={getStatusVariant(workPackage.status)}>
-            {formatLabel(workPackage.status)}
-          </StatusBadge>
-          <StatusBadge variant={getPriorityVariant(workPackage.priority)}>
-            {formatLabel(workPackage.priority)}
-          </StatusBadge>
-        </div>
-
-        {titleParts.workName && (
-          <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">
-            {titleParts.workName}
-          </p>
-        )}
-
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          Vendor: {vendorName ?? workPackage.assigneeName}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-2 xl:block">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground xl:hidden">
-          Planned
-        </p>
-        <div className="space-y-1 text-sm">
-          <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
-            <span className="text-muted-foreground">From</span>
-            <span>{formatDisplayDate(workPackage.estimatedStartDate)}</span>
-          </p>
-          <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
-            <span className="text-muted-foreground">To</span>
-            <span>{formatDisplayDate(workPackage.estimatedEndDate)}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-2 xl:block">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground xl:hidden">
-          Actual
-        </p>
-        <div className="space-y-1 text-sm">
-          <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
-            <span className="text-muted-foreground">From</span>
-            <span>{getActualStartLabel(workPackage)}</span>
-          </p>
-          <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
-            <span className="text-muted-foreground">To</span>
-            <span>{getActualEndLabel(workPackage)}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-2 xl:block">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground xl:hidden">
-          Pause / Delay
-        </p>
-        <div className="min-w-0">
-          {workPackage.overrideReason ? (
-            <p className="truncate text-sm text-red-600 dark:text-red-300">
-              {workPackage.overrideReason}
-            </p>
-          ) : latestPauseReason ? (
-            <p className="truncate text-sm text-amber-700 dark:text-amber-300">
-              {latestPauseReason}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Clear</p>
-          )}
-
-          {workPackage.pausePeriods.length > 0 && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {workPackage.pausePeriods.length} pause(s)
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-2 xl:block xl:text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground xl:hidden">
-          Dependencies
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {workPackage.dependsOnWorkPackageIds.length || 0}
-        </p>
-      </div>
-
-      <div className="flex min-w-0 items-center gap-2 xl:justify-center">
-        {primaryAction && PrimaryIcon ? (
-          <Button
-            type="button"
-            size="sm"
-            onClick={primaryAction.onClick}
-            className="min-w-0 flex-1 gap-2 xl:max-w-[118px]"
-          >
-            <PrimaryIcon className="h-4 w-4" />
-            {primaryAction.label}
-          </Button>
-        ) : (
-          <p className="min-w-0 flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-xs text-muted-foreground xl:max-w-[118px]">
-            No Action
-          </p>
-        )}
-
-        <details className="relative shrink-0">
-          <summary className="flex h-9 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground [&::-webkit-details-marker]:hidden">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">More Actions</span>
-          </summary>
-
-          <div className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
-            {secondaryActions.length > 0 ? (
-              secondaryActions.map(action => {
-                const Icon = action.icon;
-
-                return (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={action.onClick}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                  >
-                    <Icon className="h-4 w-4" />
-                    {action.label}
-                  </button>
-                );
-              })
-            ) : (
-              <p className="px-3 py-2 text-sm text-muted-foreground">
-                No actions available
+            {titleParts.workName && (
+              <p className="line-clamp-1 text-sm text-muted-foreground">
+                {titleParts.workName}
               </p>
             )}
           </div>
-        </details>
+        </div>
+
+        <div className="mt-3 grid gap-2 rounded-xl border border-border bg-background/60 p-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Planned</span>
+            <span className="text-right font-medium text-foreground">
+              {getShortDateRange(workPackage.estimatedStartDate, workPackage.estimatedEndDate)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Actual</span>
+            <span className="text-right font-medium text-foreground">
+              {getMobileActualLabel(workPackage)}
+            </span>
+          </div>
+
+          {(workPackage.overrideReason || latestPauseReason) && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Issue</span>
+              <span className="line-clamp-1 text-right font-medium text-red-600 dark:text-red-300">
+                {workPackage.overrideReason ?? latestPauseReason}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          {primaryAction && PrimaryIcon ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={primaryAction.onClick}
+              className="min-w-0 flex-1 gap-2"
+            >
+              <PrimaryIcon className="h-4 w-4" />
+              {primaryAction.label}
+            </Button>
+          ) : (
+            <p className="min-w-0 flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-xs text-muted-foreground">
+              No Action
+            </p>
+          )}
+
+          <details className="relative shrink-0">
+            <summary className="flex h-9 w-11 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">More Actions</span>
+            </summary>
+
+            <div className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+              {secondaryActions.length > 0 ? (
+                secondaryActions.map(action => {
+                  const Icon = action.icon;
+
+                  return (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={action.onClick}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                    >
+                      <Icon className="h-4 w-4" />
+                      {action.label}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  No actions available
+                </p>
+              )}
+            </div>
+          </details>
+        </div>
+      </article>
+
+      <div className="hidden min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_96px_176px] xl:items-center xl:gap-4 xl:px-4">
+        <div className="min-w-0">
+          <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+            <p className="mr-1 truncate text-base font-semibold text-foreground">
+              {titleParts.areaName}
+            </p>
+
+            <StatusBadge variant={getStatusVariant(workPackage.status)}>
+              {formatLabel(workPackage.status)}
+            </StatusBadge>
+            <StatusBadge variant={getPriorityVariant(workPackage.priority)}>
+              {formatLabel(workPackage.priority)}
+            </StatusBadge>
+          </div>
+
+          {titleParts.workName && (
+            <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">
+              {titleParts.workName}
+            </p>
+          )}
+
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            Vendor: {vendorName ?? workPackage.assigneeName}
+          </p>
+        </div>
+
+        <div className="block">
+          <div className="space-y-1 text-sm">
+            <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
+              <span className="text-muted-foreground">From</span>
+              <span>{formatDisplayDate(workPackage.estimatedStartDate)}</span>
+            </p>
+            <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
+              <span className="text-muted-foreground">To</span>
+              <span>{formatDisplayDate(workPackage.estimatedEndDate)}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="block">
+          <div className="space-y-1 text-sm">
+            <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
+              <span className="text-muted-foreground">From</span>
+              <span>{getActualStartLabel(workPackage)}</span>
+            </p>
+            <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
+              <span className="text-muted-foreground">To</span>
+              <span>{getActualEndLabel(workPackage)}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="block">
+          <div className="min-w-0">
+            {workPackage.overrideReason ? (
+              <p className="truncate text-sm text-red-600 dark:text-red-300">
+                {workPackage.overrideReason}
+              </p>
+            ) : latestPauseReason ? (
+              <p className="truncate text-sm text-amber-700 dark:text-amber-300">
+                {latestPauseReason}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Clear</p>
+            )}
+
+            {workPackage.pausePeriods.length > 0 && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {workPackage.pausePeriods.length} pause(s)
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="block text-center">
+          <p className="text-sm text-muted-foreground">
+            {workPackage.dependsOnWorkPackageIds.length || 0}
+          </p>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-2 xl:justify-center">
+          {primaryAction && PrimaryIcon ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={primaryAction.onClick}
+              className="min-w-0 flex-1 gap-2 xl:max-w-[118px]"
+            >
+              <PrimaryIcon className="h-4 w-4" />
+              {primaryAction.label}
+            </Button>
+          ) : (
+            <p className="min-w-0 flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-xs text-muted-foreground xl:max-w-[118px]">
+              No Action
+            </p>
+          )}
+
+          <details className="relative shrink-0">
+            <summary className="flex h-9 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">More Actions</span>
+            </summary>
+
+            <div className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+              {secondaryActions.length > 0 ? (
+                secondaryActions.map(action => {
+                  const Icon = action.icon;
+
+                  return (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={action.onClick}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                    >
+                      <Icon className="h-4 w-4" />
+                      {action.label}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  No actions available
+                </p>
+              )}
+            </div>
+          </details>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
