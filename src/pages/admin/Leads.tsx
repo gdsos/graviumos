@@ -141,7 +141,7 @@ export default function Leads() {
   const canDelete = isAdmin() || (isDeptHead() && isMS());
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         eyebrow="Marketing & Sales"
         title="Leads"
