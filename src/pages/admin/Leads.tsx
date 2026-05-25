@@ -139,6 +139,8 @@ export default function Leads() {
   };
 
   const canDelete = isAdmin() || (isDeptHead() && isMS());
+  const openLeadCount = leads.filter(lead => lead.status === 'Open').length;
+  const convertedLeadCount = leads.filter(lead => lead.status === 'Converted').length;
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -153,6 +155,38 @@ export default function Leads() {
           </Button>
         }
       />
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+        <SectionCard className="shadow-none">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Leads</p>
+            <p className="mt-1 text-3xl font-semibold text-foreground">
+              {leads.length}
+            </p>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="shadow-none">
+          <div>
+            <p className="text-sm text-muted-foreground">Open Leads</p>
+            <p className="mt-1 text-3xl font-semibold text-foreground">
+              {openLeadCount}
+            </p>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="col-span-2 shadow-none md:col-span-1">
+          <div>
+            <p className="text-sm text-muted-foreground">Converted Leads</p>
+            <p className="mt-1 text-3xl font-semibold text-foreground">
+              {convertedLeadCount}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ready for project conversion
+            </p>
+          </div>
+        </SectionCard>
+      </div>
 
       {loading ? (
         <SectionCard className="shadow-none">
