@@ -434,7 +434,7 @@ export default function Reports() {
       return {
         'Employee Name': record.employee_id ? (employeeMap[record.employee_id] || record.employee_id) : '',
         Month: monthNames[(record.month ?? 1) - 1] || '',
-        Year: record.year ?? '',
+        Year: String(record.year ?? ''),
         'Base Salary': record.base_salary ?? 0,
         'KPI Incentive': record.kpi_incentive ?? 0,
         'TDS Deduction': record.tds_deduction ?? 0,
@@ -672,7 +672,7 @@ export default function Reports() {
         return {
           'Employee Name': r.employee_id ? (employeeMap[r.employee_id] || r.employee_id) : '',
           Month: monthNames[(r.month ?? 1) - 1] || '',
-          Year: r.year ?? '',
+          Year: String(r.year ?? ''),
           'Base Salary': r.base_salary ?? 0,
           'KPI Incentive': r.kpi_incentive ?? 0,
           'TDS Deduction': r.tds_deduction ?? 0,
