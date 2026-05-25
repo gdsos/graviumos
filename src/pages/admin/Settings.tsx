@@ -1,22 +1,19 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AlertTriangle, CheckCircle, Copy, Eye, RefreshCw, Save } from 'lucide-react';
 import { supabase, type OrgSettings } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PButton, PHeading, PInlineNotification, PText, PSwitch } from '@/components/ui/porsche';
+import { PageHeader } from '../../components/common/PageHeader';
 
-// ——— Constants ————————————————————————————————————————————————————————————————
-
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
-
-// ——— Helpers ——————————————————————————————————————————————————————————————————
+// ??? Helpers ??????????????????????????????????????????????????????????????????
 
 function SectionHeading({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-4">
-      <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>{title}</PText>
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       {description && (
-        <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }} className="mt-0.5">
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {description}
-        </PText>
+        </p>
       )}
     </div>
   );
@@ -38,24 +35,23 @@ function SettingRow({
   suffix?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-6 py-4 border-b border-contrast-low last:border-0">
-      <div className="min-w-0 flex-1">
-        <PText size="small" style={{ fontFamily: FONT }}>{label}</PText>
+    <div className="grid gap-3 border-b border-border py-4 last:border-0 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start sm:gap-6">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">{label}</p>
         {description && (
-          <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }} className="mt-0.5">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {description}
-          </PText>
+          </p>
         )}
       </div>
-      <div className="w-48 flex-shrink-0">
+
+      <div className="min-w-0">
         {readOnly ? (
           <div className="flex items-center gap-1">
-            <PText size="small" weight="semi-bold" style={{ fontFamily: FONT }}>
-              {value ?? '—'}
-            </PText>
-            {suffix && (
-              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{suffix}</PText>
-            )}
+            <span className="text-sm font-semibold text-foreground">
+              {value ?? '?'}
+            </span>
+            {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
           </div>
         ) : (
           children
@@ -90,19 +86,94 @@ function NumberInput({
         max={max}
         step={step}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={event => onChange(event.target.value)}
         disabled={disabled}
         className="form-input"
         style={{ width: suffix ? '100px' : '100%' }}
       />
-      {suffix && (
-        <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>{suffix}</PText>
+      {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+    </div>
+  );
+}
+
+function SwitchControl({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
+        checked ? 'border-primary bg-primary' : 'border-border bg-muted'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
+
+function InlineNotice({
+  tone,
+  title,
+  description,
+  onDismiss,
+}: {
+  tone: 'success' | 'error' | 'warning';
+  title: string;
+  description: string;
+  onDismiss?: () => void;
+}) {
+  const isSuccess = tone === 'success';
+  const isError = tone === 'error';
+
+  return (
+    <div
+      className={`flex gap-3 rounded-2xl border p-4 text-sm ${
+        isSuccess
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+          : isError
+            ? 'border-destructive/20 bg-destructive/10 text-destructive'
+            : 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+      }`}
+    >
+      {isSuccess ? (
+        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      ) : (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      )}
+
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{title}</p>
+        <p className="mt-0.5 text-xs leading-5">{description}</p>
+      </div>
+
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-xs font-semibold underline-offset-4 hover:underline"
+        >
+          Dismiss
+        </button>
       )}
     </div>
   );
 }
 
-// ——— Default form state ———————————————————————————————————————————————————————
+// ??? Default form state ???????????????????????????????????????????????????????
 
 interface SettingsForm {
   org_name: string;
@@ -273,126 +344,128 @@ export default function Settings() {
   // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
-    <div className="max-w-3xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">Settings</PHeading>
-          <PText color="contrast-medium">
-            {isSuperAdmin
-              ? 'Configure organization-wide defaults and financial parameters.'
-              : 'View organization settings. Contact a Super Admin to make changes.'}
-          </PText>
-        </div>
-        {isSuperAdmin ? (
-          <div className="flex items-center gap-2">
-            <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>Edit Mode</PText>
-            <PSwitch
-              checked={editMode}
-              onUpdate={e => {
-                setEditMode(e.detail.checked);
-                if (!e.detail.checked) handleReset();
-              }}
-              aria-label="Toggle edit mode"
-            />
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-notification-warning-soft border border-notification-warning">
-            <PText size="x-small" color="notification-warning" style={{ fontFamily: FONT }}>
+    <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
+      <PageHeader
+        eyebrow="Admin Settings"
+        title="Settings"
+        description={
+          isSuperAdmin
+            ? 'Configure organization-wide defaults and financial parameters.'
+            : 'View organization settings. Contact a Super Admin to make changes.'
+        }
+        actions={
+          isSuperAdmin ? (
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-card-foreground">
+              <span className="text-xs font-medium text-muted-foreground">Edit Mode</span>
+              <SwitchControl
+                checked={editMode}
+                onChange={checked => {
+                  setEditMode(checked);
+                  if (!checked) handleReset();
+                }}
+                ariaLabel="Toggle edit mode"
+              />
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+              <Eye className="h-3.5 w-3.5" />
               View Only
-            </PText>
-          </div>
-        )}
-      </div>
+            </div>
+          )
+        }
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium">Loading settings…</PText>
+        <div className="flex h-48 items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading settings...</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-
-          {/* Notifications */}
           {success && (
-            <PInlineNotification
-              heading="Saved"
+            <InlineNotice
+              tone="success"
+              title="Saved"
               description={success}
-              state="success"
-              dismissButton
               onDismiss={() => setSuccess('')}
             />
           )}
+
           {error && (
-            <PInlineNotification
-              heading="Error"
+            <InlineNotice
+              tone="error"
+              title="Error"
               description={error}
-              state="error"
-              dismissButton
               onDismiss={() => setError('')}
             />
           )}
 
-          {/* —— Organization Details ——————————————————————————————————————— */}
-          <div className="bg-surface rounded-xl border border-contrast-low p-5">
+          <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
             <SectionHeading
               title="Organization Details"
               description="Basic information about your organization."
             />
+
             <SettingRow
               label="Organization Name"
               description="Displayed across the platform and in reports."
               readOnly={!canEdit}
-              value={form.org_name || '—'}
+              value={form.org_name || '?'}
             >
               <input
                 type="text"
                 value={form.org_name}
-                onChange={e => setField('org_name')(e.target.value)}
+                onChange={event => setField('org_name')(event.target.value)}
                 className="form-input"
                 placeholder="e.g. GRAVIUM Interiors Pvt. Ltd."
               />
             </SettingRow>
+
             <SettingRow
               label="Admin Key"
               description="Required when creating new admin accounts. Keep this secure."
               readOnly={!canEdit}
-              value={canEdit ? form.admin_key : '••••••••'}
+              value={canEdit ? form.admin_key : '\u2022'.repeat(8)}
             >
               <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input
                     type="text"
                     value={form.admin_key}
-                    onChange={e => setField('admin_key')(e.target.value)}
-                    className="form-input flex-1"
+                    onChange={event => setField('admin_key')(event.target.value)}
+                    className="form-input min-w-0 flex-1"
                     placeholder="Set admin key for new admin creation"
                   />
+
                   {canEdit && form.admin_key && (
-                    <PButton
-                      variant="secondary"
+                    <button
+                      type="button"
                       onClick={copyAdminKey}
                       aria-label="Copy admin key"
                       title="Copy admin key"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
+                      <Copy className="h-4 w-4" />
                       Copy
-                    </PButton>
+                    </button>
                   )}
                 </div>
+
                 {canEdit && (
-                  <PButton
-                    variant="secondary"
+                  <button
+                    type="button"
                     onClick={generateRandomKey}
                     aria-label="Generate random admin key"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   >
+                    <RefreshCw className="h-4 w-4" />
                     Generate Random Key
-                  </PButton>
+                  </button>
                 )}
               </div>
             </SettingRow>
-          </div>
+          </section>
 
-          {/* —— Financial Settings ————————————————————————————————————————— */}
-          <div className="bg-surface rounded-xl border border-contrast-low p-5">
+          <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
             <SectionHeading
               title="Financial Settings"
               description="Default percentages used for project financials and payroll calculations."
@@ -448,33 +521,32 @@ export default function Settings() {
                 suffix="%"
               />
             </SettingRow>
-          </div>
+          </section>
 
-          {/* —— Profit First Allocation ———————————————————————————————————— */}
-          <div className="bg-surface rounded-xl border border-contrast-low p-5">
+          <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
             <SectionHeading
               title="Profit First Allocation"
               description="Define how incoming revenue is allocated across accounts. All four percentages should add up to 100%."
             />
 
-            {/* Visual allocation bar */}
             {!profitFirstWarning && (
               <div className="mb-4">
-                <div className="flex rounded-full overflow-hidden h-3">
+                <div className="flex h-3 overflow-hidden rounded-full bg-muted">
                   {[
                     { pct: parseFloat(form.profit_first_profit_pct || '0'), color: 'bg-success' },
                     { pct: parseFloat(form.profit_first_opex_pct || '0'), color: 'bg-info' },
                     { pct: parseFloat(form.profit_first_tax_pct || '0'), color: 'bg-warning' },
                     { pct: parseFloat(form.profit_first_owner_pay_pct || '0'), color: 'bg-error' },
-                  ].map((seg, i) => (
+                  ].map((segment, index) => (
                     <div
-                      key={i}
-                      className={`${seg.color} transition-all duration-300`}
-                      style={{ width: `${seg.pct}%` }}
+                      key={index}
+                      className={`${segment.color} transition-all duration-300`}
+                      style={{ width: `${segment.pct}%` }}
                     />
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-3 mt-2">
+
+                <div className="mt-2 flex flex-wrap gap-3">
                   {[
                     { label: 'Profit', color: 'bg-success', pct: form.profit_first_profit_pct },
                     { label: 'OpEx', color: 'bg-info', pct: form.profit_first_opex_pct },
@@ -482,10 +554,10 @@ export default function Settings() {
                     { label: 'Owner Pay', color: 'bg-error', pct: form.profit_first_owner_pay_pct },
                   ].map(item => (
                     <div key={item.label} className="flex items-center gap-1.5">
-                      <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+                      <div className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
+                      <span className="text-xs text-muted-foreground">
                         {item.label}: {item.pct}%
-                      </PText>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -494,11 +566,10 @@ export default function Settings() {
 
             {profitFirstWarning && (
               <div className="mb-4">
-                <PInlineNotification
-                  heading="Allocation warning"
+                <InlineNotice
+                  tone="warning"
+                  title="Allocation Warning"
                   description={`The four percentages currently add up to ${profitFirstTotal.toFixed(2)}% instead of 100%. Please adjust them before saving.`}
-                  state="warning"
-                  dismissButton={false}
                 />
               </div>
             )}
@@ -571,69 +642,54 @@ export default function Settings() {
               />
             </SettingRow>
 
-            {/* Total indicator */}
             <div
-              className={`mt-4 flex items-center justify-between px-4 py-3 rounded-lg border ${
+              className={`mt-4 flex items-center justify-between rounded-xl border px-4 py-3 ${
                 profitFirstWarning
-                  ? 'border-notification-warning bg-notification-warning-soft'
-                  : 'border-notification-success bg-notification-success-soft'
+                  ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
               }`}
             >
-              <PText size="x-small" style={{ fontFamily: FONT }}>
-                Total Allocation
-              </PText>
-              <PText
-                size="small"
-                weight="semi-bold"
-                color={profitFirstWarning ? 'notification-warning' : 'notification-success'}
-                style={{ fontFamily: FONT }}
-              >
-                {profitFirstTotal.toFixed(2)}%
-              </PText>
+              <span className="text-xs font-medium">Total Allocation</span>
+              <span className="text-sm font-semibold">{profitFirstTotal.toFixed(2)}%</span>
             </div>
-          </div>
+          </section>
 
-          {/* —— Actions ———————————————————————————————————————————————————— */}
           {canEdit && (
-            <div className="flex items-center justify-between bg-surface rounded-xl border border-contrast-low p-4">
-              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+            <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
                 {settings ? `Last updated: ${new Date(settings.updated_at).toLocaleString('en-IN')}` : 'No settings saved yet.'}
-              </PText>
-              <div className="flex gap-3">
-                <PButton
+              </p>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={handleReset}
                   disabled={saving}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Discard Changes
-                </PButton>
-                <PButton
+                </button>
+
+                <button
                   type="button"
-                  icon="save"
-                  loading={saving}
                   onClick={handleSave}
-                  disabled={profitFirstWarning}
+                  disabled={profitFirstWarning || saving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
+                  {saving ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/60 border-t-transparent" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
                   Save Settings
-                </PButton>
+                </button>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Read-only note for non-admins */}
-          {!canEdit && (
-            <div className="flex items-center gap-3 bg-surface rounded-xl border border-contrast-low p-4">
-              <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                You are viewing settings in read-only mode. Contact a Super Admin to make changes.
-              </PText>
-            </div>
-          )}
         </div>
       )}
     </div>
   );
+
 }
-
-
-
