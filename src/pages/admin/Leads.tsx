@@ -2,15 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Lead, type Profile, LEAD_SOURCES } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, ArrowRight, Settings } from 'lucide-react';
+import { Plus, Edit2, Trash2, ArrowRight, Settings, Mail, Phone } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { EmptyState } from '../../components/common/EmptyState';
+import { PageHeader } from '../../components/common/PageHeader';
+import { SectionCard } from '../../components/common/SectionCard';
+import { StatusBadge } from '../../components/common/StatusBadge';
 
-const STATUS_COLORS: Record<string, string> = {
-  Open: 'bg-blue-200 text-blue-900',
-  Qualified: 'bg-slate-300 text-slate-900',
-  Converted: 'bg-green-200 text-green-900',
-  Rejected: 'bg-red-200 text-red-900',
-  Ghosted: 'bg-amber-200 text-amber-900',
+const STATUS_VARIANTS: Record<string, 'info' | 'outline' | 'success' | 'danger' | 'warning' | 'muted'> = {
+  Open: 'info',
+  Qualified: 'outline',
+  Converted: 'success',
+  Rejected: 'danger',
+  Ghosted: 'warning',
 };
 
 interface LeadWithProfile extends Lead {
@@ -137,29 +141,37 @@ export default function Leads() {
   const canDelete = isAdmin() || (isDeptHead() && isMS());
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">Leads</h1>
-          <span className="text-xs text-slate-600">Manage your CRM pipeline</span>
-        </div>
-        <Button onClick={openCreate} className="flex items-center gap-2">
-          <Plus size={16} />
-          Add Lead
-        </Button>
-      </div>
+    <div className="mx-auto max-w-7xl">
+      <PageHeader
+        eyebrow="Marketing & Sales"
+        title="Leads"
+        description="Manage client enquiries, assignments, and CRM pipeline status."
+        actions={
+          <Button onClick={openCreate} className="flex items-center gap-2">
+            <Plus size={16} />
+            Add Lead
+          </Button>
+        }
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <span className="text-sm text-slate-600">Loading...</span>
-        </div>
+        <SectionCard className="shadow-none">
+          <div className="flex min-h-48 items-center justify-center">
+            <span className="text-sm text-muted-foreground">Loading leads...</span>
+          </div>
+        </SectionCard>
       ) : leads.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-white rounded-xl border border-slate-200">
-          <ArrowRight size={40} className="text-slate-300" />
-          <span className="text-sm text-slate-600 mt-3">
-            No leads yet. Add your first lead.
-          </span>
-        </div>
+        <EmptyState
+          icon={ArrowRight}
+          title="No leads yet"
+          description="Add your first lead to start tracking enquiries and follow-ups."
+          action={
+            <Button onClick={openCreate} className="flex items-center gap-2">
+              <Plus size={16} />
+              Add Lead
+            </Button>
+          }
+        />
       ) : (
         <>
           {/* ✅ MOBILE CARDS */}
@@ -167,7 +179,7 @@ export default function Leads() {
                 {leads.map(lead => (
                   <div
                     key={lead.id}
-                    className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+                    className="rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm"
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between">
@@ -175,39 +187,44 @@ export default function Leads() {
                         <p className="text-sm font-semibold truncate">
                           {lead.name}
                         </p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-muted-foreground">
                           {new Date(lead.created_at).toLocaleDateString('en-IN')}
                         </p>
                       </div>
 
-                      <span
-                        className={`ml-2 shrink-0 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${STATUS_COLORS[lead.status] || 'bg-slate-200 text-slate-800'
-                          }`}
+                      <StatusBadge
+                        variant={STATUS_VARIANTS[lead.status] || 'muted'}
+                        className="ml-2 shrink-0"
                       >
                         {lead.status}
-                      </span>
+                      </StatusBadge>
                     </div>
 
-                    {/* Contact (compact row instead of stacked) */}
+                    {/* Contact */}
                     {(lead.contact_phone || lead.contact_email) && (
-                      <div className="mt-3 flex flex-col text-xs text-slate-600"> 
+                      <div className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
                         {lead.contact_phone && (
-                          <span>☎ {lead.contact_phone}</span>
+                          <span className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 shrink-0" />
+                            {lead.contact_phone}
+                          </span>
                         )}
                         {lead.contact_email && (
-                          <span className="truncate">
-                            ✉ {lead.contact_email}</span>
+                          <span className="flex items-center gap-1.5 truncate">
+                            <Mail className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{lead.contact_email}</span>
+                          </span>
                         )}
                       </div>
                     )}
 
-                    {/* Meta + Actions (balanced row) */}
+                    {/* Meta and actions */}
                     <div className="mt-4 flex items-end justify-between">
                       {/* Meta */}
                       <div className="text-xs space-y-1">
                         <div>
-                          <span className="text-slate-400">Source: </span>
-                          <span className="font-medium text-slate-700">
+                          <span className="text-muted-foreground">Source: </span>
+                          <span className="font-medium text-foreground">
                             {lead.lead_source === 'Other' && lead.lead_source_custom
                               ? lead.lead_source_custom
                               : lead.lead_source}
@@ -215,8 +232,8 @@ export default function Leads() {
                         </div>
 
                         <div>
-                          <span className="text-slate-400">Assigned: </span>
-                          <span className="font-medium text-slate-700">
+                          <span className="text-muted-foreground">Assigned: </span>
+                          <span className="font-medium text-foreground">
                             {lead.assignee?.full_name || '—'}
                           </span>
                         </div>
@@ -226,15 +243,15 @@ export default function Leads() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => openEdit(lead)}
-                          className="p-2 rounded-md hover:bg-slate-100 transition"
+                          className="p-2 rounded-md hover:bg-muted transition"
                         >
-                          <Edit2 size={16} className="text-slate-600" />
+                          <Edit2 size={16} className="text-muted-foreground" />
                         </button>
 
                         {canDelete && (
                           <button
                             onClick={() => handleDelete(lead.id)}
-                            className="p-2 rounded-md hover:bg-red-50 text-red-600 transition"
+                            className="p-2 rounded-md hover:bg-destructive/10 text-red-600 transition"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -246,14 +263,14 @@ export default function Leads() {
               </div>
 
           {/* ✅ DESKTOP TABLE (UNCHANGED STRUCTURE) */}
-          <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="hidden overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm md:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200">
+                  <tr className="border-b border-border">
                     {['Name', 'Contact', 'Source', 'Status', 'Assigned To', 'Date', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left">
-                        <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide">
+                        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
                           {h}
                         </span>
                       </th>
@@ -265,22 +282,26 @@ export default function Leads() {
                   {leads.map(lead => (
                     <tr
                       key={lead.id}
-                      className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors"
+                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
                     >
                       <td className="px-4 py-3">
-                        <span className="text-sm font-semibold">{lead.name}</span>
+                        <span className="text-sm font-semibold text-foreground">
+                          {lead.name}
+                        </span>
                       </td>
 
                       <td className="px-4 py-3">
-                        <div>
+                        <div className="space-y-1">
                           {lead.contact_email && (
-                            <span className="text-xs text-slate-600 block">
-                              ✉  {lead.contact_email}
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{lead.contact_email}</span>
                             </span>
                           )}
                           {lead.contact_phone && (
-                            <span className="text-xs text-slate-600 block">
-                              ☎  {lead.contact_phone}
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Phone className="h-3.5 w-3.5 shrink-0" />
+                              {lead.contact_phone}
                             </span>
                           )}
                         </div>
@@ -295,9 +316,9 @@ export default function Leads() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wider ${STATUS_COLORS[lead.status] || 'bg-slate-50 text-slate-700'}`}>
+                        <StatusBadge variant={STATUS_VARIANTS[lead.status] || 'muted'}>
                           {lead.status}
-                        </span>
+                        </StatusBadge>
                       </td>
 
                       <td className="px-4 py-3">
@@ -307,7 +328,7 @@ export default function Leads() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className="text-xs text-slate-600">
+                        <span className="text-xs text-muted-foreground">
                           {new Date(lead.created_at).toLocaleDateString('en-IN')}
                         </span>
                       </td>
@@ -316,15 +337,15 @@ export default function Leads() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openEdit(lead)}
-                            className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                            className="p-1.5 rounded hover:bg-muted transition-colors"
                           >
-                            <Edit2 size={16} className="text-slate-600" />
+                            <Edit2 size={16} className="text-muted-foreground" />
                           </button>
 
                           {canDelete && (
                             <button
                               onClick={() => handleDelete(lead.id)}
-                              className="p-1.5 rounded hover:bg-red-50 transition-colors text-red-600"
+                              className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-red-600"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -344,7 +365,7 @@ export default function Leads() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-            <div className="border-b border-slate-200 px-6 py-4">
+            <div className="border-b border-border px-6 py-4">
               <h2 className="text-lg font-bold">{editingLead ? 'Edit Lead' : 'Add Lead'}</h2>
             </div>
             <form onSubmit={handleSave} className="p-6 flex flex-col gap-4">
@@ -403,7 +424,7 @@ export default function Leads() {
               </div>
 
               <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-muted/40 transition-colors">
                   Cancel
                 </button>
                 <Button type="submit">
@@ -419,13 +440,13 @@ export default function Leads() {
       {convertModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="border-b border-slate-200 px-6 py-4">
+            <div className="border-b border-border px-6 py-4">
               <h2 className="text-lg font-bold">Lead Converted!</h2>
             </div>
             <div className="p-6 flex flex-col gap-4">
               <p className="text-sm">The lead has been marked as Converted. Would you like to create a project from this lead?</p>
               <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <button type="button" onClick={() => setConvertModal(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+                <button type="button" onClick={() => setConvertModal(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-muted/40 transition-colors">
                   Not Now
                 </button>
                 <Button onClick={handleConvertToProject} className="flex items-center gap-2">
@@ -444,7 +465,7 @@ export default function Leads() {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-contrast-high mb-1.5"
+      <label className="mb-1.5 block text-xs font-medium text-foreground"
         style={{ fontFamily: "'Neue Montreal', sans-serif" }}>
         {label}
       </label>
