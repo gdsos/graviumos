@@ -150,7 +150,7 @@ export default function Leads() {
         title="Leads"
         description="Manage client enquiries, assignments, and CRM pipeline status."
         actions={
-          <Button onClick={openCreate} className="flex items-center gap-2">
+          <Button onClick={openCreate} className="h-10 justify-center gap-2">
             <Plus size={16} />
             Add Lead
           </Button>
@@ -473,13 +473,13 @@ export default function Leads() {
                 </div>
               </div>
 
-              <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-card px-5 py-4">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+              <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-border bg-card px-5 py-4 sm:ml-auto sm:flex sm:w-auto sm:min-w-[17rem]">
+                <ModalActionButton onClick={() => setShowModal(false)}>
                   Cancel
-                </button>
-                <Button type="submit">
+                </ModalActionButton>
+                <ModalActionButton type="submit" variant="primary">
                   {editingLead ? 'Save Changes' : 'Create Lead'}
-                </Button>
+                </ModalActionButton>
               </div>
             </form>
           </div>
@@ -495,20 +495,49 @@ export default function Leads() {
             </div>
             <div className="flex flex-col gap-4 p-5">
               <p className="text-sm text-muted-foreground">The lead has been marked as converted. Create a project from this lead when the handoff is ready.</p>
-              <div className="flex justify-end gap-3 border-t border-border pt-4">
-                <button type="button" onClick={() => setConvertModal(null)} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+              <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
+                <ModalActionButton onClick={() => setConvertModal(null)}>
                   Not Now
-                </button>
-                <Button onClick={handleConvertToProject} className="flex items-center gap-2">
+                </ModalActionButton>
+                <ModalActionButton onClick={handleConvertToProject} variant="primary">
                   <Settings size={16} />
                   Create Project
-                </Button>
+                </ModalActionButton>
               </div>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+type ModalActionButtonVariant = 'primary' | 'secondary';
+
+function ModalActionButton({
+  children,
+  type = 'button',
+  variant = 'secondary',
+  onClick,
+}: {
+  children: React.ReactNode;
+  type?: 'button' | 'submit';
+  variant?: ModalActionButtonVariant;
+  onClick?: () => void;
+}) {
+  const variantClass =
+    variant === 'primary'
+      ? 'border-transparent bg-primary text-primary-foreground hover:bg-primary/90'
+      : 'border-border bg-background text-foreground hover:bg-muted';
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      className={`inline-flex h-11 min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-0 text-center text-sm font-medium leading-none transition-colors ${variantClass}`}
+    >
+      {children}
+    </button>
   );
 }
 
