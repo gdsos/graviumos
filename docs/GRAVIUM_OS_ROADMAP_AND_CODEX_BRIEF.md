@@ -974,3 +974,47 @@ Recommended next steps:
    - Planned timeline
    - Basic execution/payment tracking
 5. Later use Codex for repo-wide Porsche/template cleanup and page standardization.
+
+---
+
+# Session Update - Mobile Glass Navigation Drawer
+
+Completed milestone:
+
+1. Mobile bottom navigation has been rebuilt using ReactBits-style `GlassSurface`.
+   - Added reusable component:
+     - `src/components/ui/GlassSurface.tsx`
+     - `src/components/ui/GlassSurface.css`
+   - Added `framer-motion` dependency for selector and drawer animation.
+   - Replaced the old mobile bottom nav with:
+     - Home
+     - Projects
+     - Tasks
+     - Timeline
+     - Menu
+
+2. Menu drawer behavior:
+   - Secondary modules are now inside a grouped glass drawer.
+   - Menu drawer groups currently include Procurement, Finance, Sales, and Admin where permissions allow.
+   - Menu becomes active when the drawer is open.
+   - Menu also stays active when the current route belongs to a secondary module.
+   - Primary nav items no longer show active state while Menu is open.
+
+3. Visual testing:
+   - Light mode tested on phone.
+   - Dark mode tested on phone.
+   - Drawer width aligned with bottom nav width.
+   - Drawer fill opacity, blur, and light-mode color were tuned.
+   - Active selector light-mode color was tuned.
+   - Navbar milestone is cleared by phone testing.
+
+4. Latest clean checkpoint:
+   - `6373948 Add mobile glass navigation drawer`
+
+Next recommended work:
+1. Begin app cleanup track.
+2. Remove/replace Porsche/template remnants.
+3. Convert older pages to the current Gravium style used by Vendors, Items, Cost Estimates, and Timeline.
+4. Use Vendors-style `PageHeader` for module/list pages.
+5. Continue mobile-lite rules per module after cleanup pass begins.
+
