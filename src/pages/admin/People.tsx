@@ -1,9 +1,22 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  Filter,
+  Pencil,
+  Plus,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 import { supabase, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon, PSwitch } from '@/components/ui/porsche';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { PageHeader } from '../../components/common/PageHeader';
+import { PhoneNumberInput } from '../../components/common/PhoneNumberInput';
 
 // ——— Types ———————————————————————————————————————————————————————————————————
 
@@ -32,10 +45,10 @@ const ROLE_LABELS: Record<string, string> = {
   employee: 'Employee',
 };
 
-const ROLE_COLORS: Record<string, Parameters<typeof PTag>[0]['color']> = {
-  super_admin: 'notification-error-soft',
-  department_head: 'notification-warning-soft',
-  employee: 'notification-info-soft',
+const ROLE_TONES: Record<string, 'danger' | 'warning' | 'info' | 'default'> = {
+  super_admin: 'danger',
+  department_head: 'warning',
+  employee: 'info',
 };
 
 const EMPTY_FORM: EmployeeForm = {
@@ -82,10 +95,7 @@ async function generateEmployeeCode(deptCode: string): Promise<string> {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label
-        className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: "'Neue Montreal', sans-serif" }}
-      >
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </label>
       {children}
@@ -93,7 +103,75 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-// ——— Main Component ———————————————————————————————————————————————————————————
+function Badge({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode;
+  tone?: 'danger' | 'warning' | 'info' | 'success' | 'default';
+}) {
+  const toneClass =
+    tone === 'danger'
+      ? 'border-destructive/20 bg-destructive/10 text-destructive'
+      : tone === 'warning'
+        ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        : tone === 'info'
+          ? 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+          : tone === 'success'
+            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            : 'border-border bg-background text-muted-foreground';
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function InlineNotice({
+  tone,
+  title,
+  description,
+  onDismiss,
+}: {
+  tone: 'error' | 'warning' | 'success' | 'info';
+  title: string;
+  description: string;
+  onDismiss?: () => void;
+}) {
+  const isError = tone === 'error';
+  const isWarning = tone === 'warning';
+  const isSuccess = tone === 'success';
+
+  return (
+    <div
+      className={`flex gap-3 rounded-2xl border p-4 text-sm ${
+        isError
+          ? 'border-destructive/20 bg-destructive/10 text-destructive'
+          : isWarning
+            ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+            : isSuccess
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : 'border-border bg-card text-card-foreground'
+      }`}
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{title}</p>
+        <p className="mt-0.5 text-xs leading-5">{description}</p>
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-xs font-semibold underline-offset-4 hover:underline"
+        >
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function People() {
   const { profile: _currentUserProfile, departments, isAdmin, suppressAuthChanges } = useAuth();
@@ -405,40 +483,47 @@ export default function People() {
   // ——— Render ———————————————————————————————————————————————————————————————————
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">People</PHeading>
-          <PText size="x-small" color="contrast-medium">Manage employees and their access</PText>
-        </div>
-        {isAdmin() && (
-          <Button onClick={openCreate} className="flex items-center gap-2">
-            <Plus size={16} /> Add Employee
-          </Button>
-        )}
-      </div>
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
+      <PageHeader
+        eyebrow="Admin People"
+        title="People"
+        description="Manage employees, departments, payroll flags, and access."
+        actions={
+          isAdmin() ? (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Employee
+            </button>
+          ) : undefined
+        }
+      />
 
-      {/* Department filter tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="mb-6 flex flex-wrap gap-2">
         <button
+          type="button"
           onClick={() => setFilterDeptId('all')}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
             filterDeptId === 'all'
-              ? 'bg-canvas border-contrast-high text-primary'
-              : 'bg-surface border-contrast-low text-contrast-medium hover:border-contrast-medium'
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
           }`}
         >
           All Departments
         </button>
+
         {departments.map(dept => (
           <button
             key={dept.id}
+            type="button"
             onClick={() => setFilterDeptId(dept.id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+            className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
               filterDeptId === dept.id
-                ? 'bg-canvas border-contrast-high text-primary'
-                : 'bg-surface border-contrast-low text-contrast-medium hover:border-contrast-medium'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
             {dept.code}
@@ -446,137 +531,106 @@ export default function People() {
         ))}
       </div>
 
-      {/* Error banner */}
       {error && !showModal && (
         <div className="mb-4">
-          <PInlineNotification
-            heading="Error"
+          <InlineNotice
+            tone="error"
+            title="Error"
             description={error}
-            state="error"
-            dismissButton
             onDismiss={() => setError('')}
           />
         </div>
       )}
 
-      {/* People Cards */}
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <PText color="contrast-medium">Loading employees…</PText>
+        <div className="flex h-48 items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading employees...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-surface rounded-2xl border border-contrast-low">
-          <PIcon name="user" size="large" color="contrast-low" />
-          <PText color="contrast-medium" className="mt-3">
-            No employees found.
-          </PText>
+        <div className="flex h-48 flex-col items-center justify-center rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <User className="h-8 w-8 text-muted-foreground" />
+          <p className="mt-3 text-sm text-muted-foreground">No employees found.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {filtered.map(emp => (
-            <div
+            <article
               key={emp.id}
-              className="bg-surface border border-contrast-low rounded-2xl p-5 hover:border-contrast-medium transition-all"
+              className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm transition-colors hover:border-muted-foreground/40"
             >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-4 mb-5">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-full bg-contrast-low flex items-center justify-center flex-shrink-0">
-                    <PText size="small" weight="semi-bold">
-                      {(emp.full_name || emp.email || '?')[0].toUpperCase()}
-                    </PText>
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+                    <span className="text-sm font-semibold text-foreground">
+                      {(emp.full_name || emp.email || '-')[0].toUpperCase()}
+                    </span>
                   </div>
 
                   <div className="min-w-0">
-                    <h3 className="text-sm font-semibold truncate">
+                    <h3 className="truncate text-sm font-semibold text-foreground">
                       {emp.full_name || 'Unnamed Employee'}
                     </h3>
+                    <p className="truncate text-xs text-muted-foreground">{emp.email}</p>
 
-                    <p className="text-xs text-muted-foreground truncate">
-                      {emp.email}
-                    </p>
-
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <PTag color={ROLE_COLORS[emp.role] ?? 'background-surface'}>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge tone={ROLE_TONES[emp.role] ?? 'default'}>
                         {ROLE_LABELS[emp.role] ?? emp.role}
-                      </PTag>
-
-                      <PTag
-                        color={
-                          emp.is_active
-                            ? 'notification-success-soft'
-                            : 'notification-error-soft'
-                        }
-                      >
+                      </Badge>
+                      <Badge tone={emp.is_active ? 'success' : 'danger'}>
                         {emp.is_active ? 'Active' : 'Inactive'}
-                      </PTag>
+                      </Badge>
                     </div>
                   </div>
                 </div>
 
-                {/* Actions */}
                 {isAdmin() && (
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex shrink-0 items-center gap-1">
                     <button
+                      type="button"
                       onClick={() => openEdit(emp)}
-                      className="p-2 rounded-lg hover:bg-contrast-low transition-colors"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       title="Edit"
                     >
-                      <PIcon name="edit" size="x-small" />
+                      <Pencil className="h-4 w-4" />
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => toggleActive(emp)}
-                      className="p-2 rounded-lg hover:bg-contrast-low transition-colors"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       title={emp.is_active ? 'Deactivate' : 'Activate'}
                     >
-                      <PIcon
-                        name={emp.is_active ? 'close' : 'check'}
-                        size="x-small"
-                      />
+                      {emp.is_active ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => setDeleteTarget(emp)}
-                      className="p-2 rounded-lg hover:bg-notification-error-soft transition-colors"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                       title="Delete"
                     >
-                      <PIcon name="delete" size="x-small" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-5">
-                <DetailItem
-                  label="Employee Code"
-                  value={emp.employee_code ?? '—'}
-                />
-
+              <div className="mb-5 grid grid-cols-2 gap-4">
+                <DetailItem label="Employee Code" value={emp.employee_code ?? '-'} />
                 <DetailItem
                   label="Base Salary"
                   value={
                     emp.base_salary != null
-                      ? `₹${emp.base_salary.toLocaleString('en-IN')}`
-                      : '—'
+                      ? `\u20B9${emp.base_salary.toLocaleString('en-IN')}`
+                      : '-'
                   }
                 />
-
-                <DetailItem
-                  label="Phone"
-                  value={emp.phone || '—'}
-                />
-
-                <DetailItem
-                  label="KPI Score"
-                  value={String(emp.kpi_score ?? 0)}
-                />
+                <DetailItem label="Phone" value={emp.phone || '-'} />
+                <DetailItem label="Status" value={emp.is_active ? 'Active' : 'Inactive'} />
               </div>
 
-              {/* Departments */}
               <div className="mb-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
                   Departments
                 </p>
 
@@ -585,349 +639,343 @@ export default function People() {
                     emp.departmentNames.map(name => (
                       <span
                         key={name}
-                        className="text-xs py-1 rounded-full bg-contrast-low text-contrast-high"
+                        className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground"
                       >
-                      {name}
+                        {name}
                       </span>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No departments assigned
-                    </p>
+                    <p className="text-sm text-muted-foreground">No departments assigned</p>
                   )}
                 </div>
               </div>
 
-              {/* Expand Toggle */}
               <button
-                onClick={() =>
-                  setExpandedId(expandedId === emp.id ? null : emp.id)
-                }
-                className="w-full flex items-center justify-center gap-2 border border-contrast-low rounded-xl py-2.5 hover:bg-canvas transition-colors"
+                type="button"
+                onClick={() => setExpandedId(expandedId === emp.id ? null : emp.id)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
               >
-                <PText size="x-small" weight="semi-bold">
-                  {expandedId === emp.id ? 'Hide Details' : 'View Details'}
-                </PText>
-
-                <PIcon
-                  name={
-                    expandedId === emp.id
-                      ? 'arrow-head-up'
-                      : 'arrow-head-down'
-                  }
-                  size="x-small"
-                />
+                {expandedId === emp.id ? 'Hide Details' : 'View Details'}
+                {expandedId === emp.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
 
-              {/* Expanded Section */}
               {expandedId === emp.id && (
-                <div className="mt-5 pt-5 border-t border-contrast-low">
+                <div className="mt-5 border-t border-border pt-5">
                   <div className="grid grid-cols-2 gap-4">
-                    <DetailItem
-                      label="Address"
-                      value={emp.address || '—'}
-                    />
-
+                    <DetailItem label="Address" value={emp.address || '-'} />
                     <DetailItem
                       label="Joined"
-                      value={
-                        emp.created_at
-                          ? new Date(emp.created_at).toLocaleDateString('en-IN')
-                          : '—'
-                      }
+                      value={emp.created_at ? new Date(emp.created_at).toLocaleDateString('en-IN') : '-'}
                     />
-
-                    <DetailItem
-                      label="TDS"
-                      value={emp.tds_enabled ? 'Enabled' : 'Disabled'}
-                    />
-
-                    <DetailItem
-                      label="PF"
-                      value={emp.pf_enabled ? 'Enabled' : 'Disabled'}
-                    />
-
-                    <DetailItem
-                      label="ESI"
-                      value={emp.esi_enabled ? 'Enabled' : 'Disabled'}
-                    />
-
+                    <DetailItem label="TDS" value={emp.tds_enabled ? 'Enabled' : 'Disabled'} />
+                    <DetailItem label="PF" value={emp.pf_enabled ? 'Enabled' : 'Disabled'} />
+                    <DetailItem label="ESI" value={emp.esi_enabled ? 'Enabled' : 'Disabled'} />
                     <DetailItem
                       label="Professional Tax"
-                      value={
-                        emp.professional_tax_enabled
-                          ? 'Enabled'
-                          : 'Disabled'
-                      }
+                      value={emp.professional_tax_enabled ? 'Enabled' : 'Disabled'}
                     />
                   </div>
                 </div>
               )}
-            </div>
+            </article>
           ))}
         </div>
       )}
 
-      {/* —— Add / Edit Modal —— */}
-      <PModal
-        open={showModal}
-        onDismiss={() => { setShowModal(false); setError(''); }}
-        heading={editingEmployee ? `Edit ${editingEmployee.full_name || 'Employee'}` : 'Add Employee'}
-        aria={{ 'aria-label': 'Employee form' }}
-      >
-        <form onSubmit={handleSave} className="flex flex-col gap-5">
-          <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true">Submit</button>
-          {error && (
-            <PInlineNotification
-              heading="Error"
-              description={error}
-              state="error"
-              dismissButton={false}
-            />
-          )}
-          {deptHeadWarning && (
-            <PInlineNotification
-              heading="Department Head Conflict"
-              description={deptHeadWarning}
-              state="warning"
-              dismissButton={false}
-            />
-          )}
-
-          {/* Basic info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Full Name *">
-              <input
-                type="text"
-                required
-                value={form.full_name}
-                onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-                className="form-input"
-                placeholder="e.g. Rahul Sharma"
-              />
-            </FormField>
-
-            <FormField label="Role *">
-              <select
-                value={form.role}
-                onChange={e => setForm(f => ({ ...f, role: e.target.value as EmployeeForm['role'] }))}
-                className="form-input"
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                {editingEmployee ? `Edit ${editingEmployee.full_name || 'Employee'}` : 'Add Employee'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => { setShowModal(false); setError(''); }}
+                disabled={saving}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close"
               >
-                <option value="employee">Employee</option>
-                <option value="department_head">Department Head</option>
-              </select>
-            </FormField>
-          </div>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-          {/* Email + password (create only) */}
-          {!editingEmployee && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Email *">
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  className="form-input"
-                  placeholder="employee@company.com"
-                  autoComplete="off"
-                />
-              </FormField>
-              <FormField label="Password *">
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    className="form-input pr-10"
-                    placeholder="Min. 8 characters"
-                    autoComplete="new-password"
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-contrast-low transition-colors"
-                    title={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    <PIcon name={showPassword ? 'view-off' : 'view'} size="x-small" />
-                  </button>
+            <form onSubmit={handleSave} className="flex max-h-[calc(100vh-8rem)] flex-col">
+              <div className="flex-1 overflow-y-auto p-5">
+                <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true">Submit</button>
+
+                <div className="flex flex-col gap-5">
+                  {error && (
+                    <InlineNotice
+                      tone="error"
+                      title="Error"
+                      description={error}
+                    />
+                  )}
+
+                  {deptHeadWarning && (
+                    <InlineNotice
+                      tone="warning"
+                      title="Department Head Conflict"
+                      description={deptHeadWarning}
+                    />
+                  )}
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField label="Full Name *">
+                      <input
+                        type="text"
+                        required
+                        value={form.full_name}
+                        onChange={event => setForm(current => ({ ...current, full_name: event.target.value }))}
+                        className="form-input"
+                        placeholder="e.g. Rahul Sharma"
+                      />
+                    </FormField>
+
+                    <FormField label="Role *">
+                      <select
+                        value={form.role}
+                        onChange={event => setForm(current => ({ ...current, role: event.target.value as EmployeeForm['role'] }))}
+                        className="form-input"
+                      >
+                        <option value="employee">Employee</option>
+                        <option value="department_head">Department Head</option>
+                      </select>
+                    </FormField>
+                  </div>
+
+                  {!editingEmployee && (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <FormField label="Email *">
+                        <input
+                          type="email"
+                          required
+                          value={form.email}
+                          onChange={event => setForm(current => ({ ...current, email: event.target.value }))}
+                          className="form-input"
+                          placeholder="employee@company.com"
+                          autoComplete="off"
+                        />
+                      </FormField>
+
+                      <FormField label="Password *">
+                        <div className="relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            value={form.password}
+                            onChange={event => setForm(current => ({ ...current, password: event.target.value }))}
+                            className="form-input pr-10"
+                            placeholder="Min. 8 characters"
+                            autoComplete="new-password"
+                            minLength={8}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(value => !value)}
+                            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            title={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </FormField>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField label="Phone">
+                      <PhoneNumberInput
+                        value={form.phone}
+                        onChange={value => setForm(current => ({ ...current, phone: value }))}
+                      />
+                    </FormField>
+
+                    <FormField label={`Base Salary (${'\\u20B9'})`}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.base_salary}
+                        onChange={event => setForm(current => ({ ...current, base_salary: event.target.value }))}
+                        className="form-input"
+                        placeholder="e.g. 50000"
+                      />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Address">
+                    <input
+                      type="text"
+                      value={form.address}
+                      onChange={event => setForm(current => ({ ...current, address: event.target.value }))}
+                      className="form-input"
+                      placeholder="Full address"
+                    />
+                  </FormField>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Departments *
+                    </label>
+                    <div className="flex flex-wrap gap-3">
+                      {departments.map(dept => {
+                        const selected = form.department_ids.includes(dept.id);
+
+                        return (
+                          <button
+                            key={dept.id}
+                            type="button"
+                            onClick={() => toggleDept(dept.id)}
+                            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                              selected
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                            }`}
+                          >
+                            {dept.code} - {dept.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {!editingEmployee && form.department_ids.length > 0 && (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Filter className="h-3.5 w-3.5" />
+                        <span>
+                          Employee code:{' '}
+                          <span className="font-mono font-semibold text-foreground">
+                            {generatingCode ? 'Generating...' : previewCode || '-'}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Payroll Deductions
+                    </label>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <SwitchField
+                        label="TDS"
+                        checked={form.tds_enabled}
+                        onChange={value => setForm(current => ({ ...current, tds_enabled: value }))}
+                      />
+                      <SwitchField
+                        label="PF"
+                        checked={form.pf_enabled}
+                        onChange={value => setForm(current => ({ ...current, pf_enabled: value }))}
+                      />
+                      <SwitchField
+                        label="ESI"
+                        checked={form.esi_enabled}
+                        onChange={value => setForm(current => ({ ...current, esi_enabled: value }))}
+                      />
+                      <SwitchField
+                        label="Prof. Tax"
+                        checked={form.professional_tax_enabled}
+                        onChange={value => setForm(current => ({ ...current, professional_tax_enabled: value }))}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </FormField>
-            </div>
-          )}
-
-          {/* Phone + Address */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Phone">
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                className="form-input"
-                placeholder="+91 98765 43210"
-              />
-            </FormField>
-            <FormField label="Base Salary (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.base_salary}
-                onChange={e => setForm(f => ({ ...f, base_salary: e.target.value }))}
-                className="form-input"
-                placeholder="e.g. 50000"
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Address">
-            <input
-              type="text"
-              value={form.address}
-              onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-              className="form-input"
-              placeholder="Full address"
-            />
-          </FormField>
-
-          {/* Departments */}
-          <div>
-            <label
-              className="block text-xs font-medium text-contrast-high mb-2"
-              style={{ fontFamily: "'Neue Montreal', sans-serif" }}
-            >
-              Departments *
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {departments.map(dept => {
-                const selected = form.department_ids.includes(dept.id);
-                return (
-                  <button
-                    key={dept.id}
-                    type="button"
-                    onClick={() => toggleDept(dept.id)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                      selected
-                        ? 'bg-canvas border-contrast-high text-primary'
-                        : 'bg-surface border-contrast-low text-contrast-medium hover:border-contrast-medium'
-                    }`}
-                  >
-                    {dept.code} — {dept.name}
-                  </button>
-                );
-              })}
-            </div>
-            {/* Employee code preview */}
-            {!editingEmployee && form.department_ids.length > 0 && (
-              <div className="mt-2 flex items-center gap-2">
-                <PIcon name="filter" size="x-small" color="contrast-medium" />
-                <PText size="x-small" color="contrast-medium">
-                  Employee code:{' '}
-                  <span className="font-mono font-semibold text-contrast-high">
-                    {generatingCode ? 'Generating…' : previewCode || '—'}
-                  </span>
-                </PText>
               </div>
-            )}
-          </div>
 
-          {/* Tax/deduction toggles */}
-          <div>
-            <label
-              className="block text-xs font-medium text-contrast-high mb-3"
-              style={{ fontFamily: "'Neue Montreal', sans-serif" }}
-            >
-              Payroll Deductions
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <SwitchField
-                label="TDS"
-                checked={form.tds_enabled}
-                onChange={v => setForm(f => ({ ...f, tds_enabled: v }))}
-              />
-              <SwitchField
-                label="PF"
-                checked={form.pf_enabled}
-                onChange={v => setForm(f => ({ ...f, pf_enabled: v }))}
-              />
-              <SwitchField
-                label="ESI"
-                checked={form.esi_enabled}
-                onChange={v => setForm(f => ({ ...f, esi_enabled: v }))}
-              />
-              <SwitchField
-                label="Prof. Tax"
-                checked={form.professional_tax_enabled}
-                onChange={v => setForm(f => ({ ...f, professional_tax_enabled: v }))}
-              />
-            </div>
-          </div>
+              <div className="flex shrink-0 flex-col justify-end gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => { setShowModal(false); setError(''); }}
+                  disabled={saving}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
 
-          {/* Actions */}
-          <div className="flex gap-3 justify-end pt-2">
-            <PButton
-              type="button"
-              variant="secondary"
-              onClick={() => { setShowModal(false); setError(''); }}
-              disabled={saving}
-            >
-              Cancel
-            </PButton>
-            <PButton type="submit" loading={saving} disabled={saving}>
-              {editingEmployee ? 'Save Changes' : 'Create Employee'}
-            </PButton>
-          </div>
-        </form>
-      </PModal>
-
-      {/* —— Delete Confirm Modal —— */}
-      <PModal
-        open={!!deleteTarget}
-        onDismiss={() => setDeleteTarget(null)}
-        heading="Delete Employee"
-        aria={{ 'aria-label': 'Delete employee confirmation' }}
-      >
-        <div className="flex flex-col gap-4">
-          <PText>
-            Are you sure you want to delete{' '}
-            <strong>{deleteTarget?.full_name || deleteTarget?.email}</strong>? This removes their
-            profile data. Their authentication account will remain until manually removed from
-            Supabase Auth.
-          </PText>
-          <div className="flex gap-3 justify-end">
-            <PButton
-              variant="secondary"
-              onClick={() => setDeleteTarget(null)}
-              disabled={deleting}
-            >
-              Cancel
-            </PButton>
-            <PButton
-              variant="primary"
-              onClick={handleDelete}
-              loading={deleting}
-              disabled={deleting}
-            >
-              Delete
-            </PButton>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/60 border-t-transparent" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {editingEmployee ? 'Save Changes' : 'Create Employee'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </PModal>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Delete Employee</h2>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4 p-5">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Are you sure you want to delete{' '}
+                <strong className="text-foreground">{deleteTarget?.full_name || deleteTarget?.email}</strong>?
+                This removes their profile data. Their authentication account will remain until manually removed from Supabase Auth.
+              </p>
+
+              <div className="flex flex-col justify-end gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-destructive-foreground/60 border-t-transparent" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
 }
 
-// ——— Sub-components ———————————————————————————————————————————————————————————
+// ??? Sub-components ???????????????????????????????????????????????????????????
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="text-sm font-medium break-words">
+      <p className="break-words text-sm font-medium text-foreground">
         {value}
       </p>
     </div>
@@ -941,21 +989,28 @@ function SwitchField({
 }: {
   label: string;
   checked: boolean;
-  onChange: (v: boolean) => void;
+  onChange: (value: boolean) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 bg-surface border border-contrast-low rounded-lg px-3 py-2">
-      <PSwitch
-        checked={checked}
-        onUpdate={e => onChange((e as CustomEvent<{ checked: boolean }>).detail.checked)}
-        hideLabel
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left transition-colors hover:bg-muted"
+      role="switch"
+      aria-checked={checked}
+    >
+      <span className="text-xs font-medium text-foreground">{label}</span>
+      <span
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+          checked ? 'border-primary bg-primary' : 'border-border bg-muted'
+        }`}
       >
-        {label}
-      </PSwitch>
-      <PText size="x-small">{label}</PText>
-    </div>
+        <span
+          className={`inline-block h-3.5 w-3.5 rounded-full bg-background shadow-sm transition-transform ${
+            checked ? 'translate-x-4' : 'translate-x-1'
+          }`}
+        />
+      </span>
+    </button>
   );
 }
-
-
-
