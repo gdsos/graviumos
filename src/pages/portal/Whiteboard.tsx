@@ -1,356 +1,1209 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PText, PIcon, PHeading } from '@/components/ui/porsche';
+import { PageHeader } from '../../components/common/PageHeader';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  AlertTriangle,
+  Archive,
+  Bold,
+  Check,
+  Eraser,
+  CheckCircle,
+  ChevronDown,
+  FileText,
+  Highlighter,
+  Italic,
+  Palette,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Trash2,
+  Underline,
+} from 'lucide-react';
 
-// ——— Constants ————————————————————————————————————————————————————————————————
-
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 650;
 
 interface WhiteboardNote {
   id: string;
   user_id: string;
+  title: string;
   content: string;
+  content_html: string;
+  plain_text: string;
+  is_archived: boolean;
+  pinned_at: string | null;
+  created_at: string;
   updated_at: string;
 }
 
-// ——— Toolbar actions ——————————————————————————————————————————————————————————
-
-type FormatAction = 'bold' | 'italic' | 'h1' | 'h2' | 'ul';
-
-function applyFormat(text: string, selStart: number, selEnd: number, action: FormatAction): string {
-  const before = text.slice(0, selStart);
-  const selected = text.slice(selStart, selEnd);
-  const after = text.slice(selEnd);
-
-  switch (action) {
-    case 'bold':
-      return `${before}**${selected || 'bold text'}**${after}`;
-    case 'italic':
-      return `${before}_${selected || 'italic text'}_${after}`;
-    case 'h1': {
-      // If cursor is on a line, prepend # to that line
-      const lineStart = before.lastIndexOf('\n') + 1;
-      const lineBefore = text.slice(0, lineStart);
-      const lineContent = before.slice(lineStart) + selected + after;
-      const firstLine = lineContent.split('\n')[0];
-      const rest = lineContent.slice(firstLine.length);
-      const stripped = firstLine.replace(/^#{1,6}\s?/, '');
-      return `${lineBefore}# ${stripped}${rest}`;
-    }
-    case 'h2': {
-      const lineStart = before.lastIndexOf('\n') + 1;
-      const lineBefore = text.slice(0, lineStart);
-      const lineContent = before.slice(lineStart) + selected + after;
-      const firstLine = lineContent.split('\n')[0];
-      const rest = lineContent.slice(firstLine.length);
-      const stripped = firstLine.replace(/^#{1,6}\s?/, '');
-      return `${lineBefore}## ${stripped}${rest}`;
-    }
-    case 'ul': {
-      // Toggle list item on each selected line
-      const lines = selected
-        ? selected.split('\n').map(l => (l.startsWith('- ') ? l.slice(2) : `- ${l}`)).join('\n')
-        : '- list item';
-      return `${before}${lines}${after}`;
-    }
-    default:
-      return text;
-  }
-}
-
-// ——— Toolbar Button ———————————————————————————————————————————————————————————
-
-interface ToolbarBtnProps {
-  label: string;
-  title: string;
-  onClick: () => void;
-}
-
-function ToolbarBtn({ label, title, onClick }: ToolbarBtnProps) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold text-contrast-medium border border-contrast-low bg-canvas hover:bg-surface hover:text-primary hover:border-primary transition-colors select-none"
-      style={{ fontFamily: FONT }}
-    >
-      {label}
-    </button>
-  );
-}
-
-// ——— Save status indicator ————————————————————————————————————————————————————
-
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+interface ConfirmDialogState {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: 'default' | 'danger';
+  onConfirm: () => Promise<void> | void;
+}
+
+const TEXT_COLORS = ['#111827', '#603B2A', '#555D3A', '#2563EB', '#DC2626'];
+const HIGHLIGHT_COLORS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3'];
+
+function getPlainTextFromHtml(html: string) {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  return wrapper.textContent?.trim() || '';
+}
+
+function countWords(text: string) {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
+function formatUpdatedAt(value: string) {
+  if (!value) return 'Not saved yet';
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
 
 function SaveIndicator({ status }: { status: SaveStatus }) {
   if (status === 'idle') return null;
 
-  const configs: Record<Exclude<SaveStatus, 'idle'>, { icon: Parameters<typeof PIcon>[0]['name']; color: Parameters<typeof PIcon>[0]['color']; label: string }> = {
-    saving: { icon: 'refresh', color: 'contrast-medium', label: 'Saving…' },
-    saved: { icon: 'check', color: 'notification-success', label: 'Saved' },
-    error: { icon: 'error', color: 'notification-error', label: 'Save failed' },
-  };
+  const config = {
+    saving: {
+      icon: RefreshCw,
+      label: 'Saving...',
+      className: 'text-muted-foreground',
+    },
+    saved: {
+      icon: CheckCircle,
+      label: 'Saved',
+      className: 'text-emerald-600 dark:text-emerald-300',
+    },
+    error: {
+      icon: AlertTriangle,
+      label: 'Save failed',
+      className: 'text-destructive',
+    },
+  }[status];
 
-  const cfg = configs[status as Exclude<SaveStatus, 'idle'>];
+  const Icon = config.icon;
 
   return (
-    <div className="flex items-center gap-1.5">
-      <PIcon name={cfg.icon} size="x-small" color={cfg.color} />
-      <PText size="x-small" color={status === 'error' ? 'notification-error' : 'contrast-medium'} style={{ fontFamily: FONT }}>
-        {cfg.label}
-      </PText>
+    <div className={`flex items-center gap-1.5 text-xs ${config.className}`}>
+      <Icon className={`h-3.5 w-3.5 ${status === 'saving' ? 'animate-spin' : ''}`} />
+      <span>{config.label}</span>
     </div>
   );
 }
 
-// ——— Preview renderer (simple markdown to HTML) ———————————————————————————————
-
-function renderMarkdown(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    // Headings
-    .replace(/^### (.+)$/gm, '<h3 style="font-size:1rem;font-weight:600;margin:0.75em 0 0.25em">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="font-size:1.15rem;font-weight:700;margin:0.75em 0 0.25em">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="font-size:1.35rem;font-weight:800;margin:0.75em 0 0.25em">$1</h1>')
-    // Bold / italic
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/_(.+?)_/g, '<em>$1</em>')
-    // List items
-    .replace(/^- (.+)$/gm, '<li style="margin-left:1.25em;list-style-type:disc">$1</li>')
-    // Line breaks
-    .replace(/\n/g, '<br />');
+function ToolbarButton({
+  title,
+  onClick,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={event => event.preventDefault()}
+      onClick={onClick}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      {children}
+    </button>
+  );
 }
-
-// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Whiteboard() {
   const { profile } = useAuth();
 
-  const [content, setContent] = useState('');
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  const [loading, setLoading] = useState(true);
-  const [noteId, setNoteId] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+  const [notes, setNotes] = useState<WhiteboardNote[]>([]);
+  const [activeNoteId, setActiveNoteId] = useState<string>('');
+  const [title, setTitle] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [noteSection, setNoteSection] = useState<'active' | 'archived'>('active');
+  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   const [wordCount, setWordCount] = useState(0);
+  const [characterCount, setCharacterCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [error, setError] = useState('');
+  const [isColorPanelOpen, setIsColorPanelOpen] = useState(false);
+  const [isHighlightPanelOpen, setIsHighlightPanelOpen] = useState(false);
+  const [selectedTextColor, setSelectedTextColor] = useState(TEXT_COLORS[0]);
+  const [selectedHighlightColor, setSelectedHighlightColor] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedNoteIdRef = useRef<string>('');
+  const savedSelectionRef = useRef<Range | null>(null);
 
-  // ——— Load note on mount ———————————————————————————————————————————————————
+  const activeNote = notes.find(note => note.id === activeNoteId) || null;
 
-  useEffect(() => {
+  const fetchNotes = useCallback(async () => {
     if (!profile) return;
-    (async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from('whiteboard_notes')
-        .select('*')
-        .eq('user_id', profile.id)
-        .maybeSingle();
 
-      if (data) {
-        const note = data as WhiteboardNote;
-        setNoteId(note.id);
-        setContent(note.content || '');
-        setWordCount(countWords(note.content || ''));
-      }
+    setLoading(true);
+    setError('');
+
+    const { data, error: fetchError } = await supabase
+      .from('whiteboard_notes')
+      .select('*')
+      .eq('user_id', profile.id)
+      .order('updated_at', { ascending: false });
+
+    if (fetchError) {
+      setError(fetchError.message);
       setLoading(false);
-    })();
+      return;
+    }
+
+    const fetchedNotes = (data as WhiteboardNote[]) || [];
+    setNotes(fetchedNotes);
+    setSelectedNoteIds(new Set());
+
+    if (fetchedNotes.length > 0) {
+      const firstNote = fetchedNotes[0];
+      setActiveNoteId(firstNote.id);
+      setTitle(firstNote.title || 'Untitled Note');
+      const plainText = firstNote.plain_text || getPlainTextFromHtml(firstNote.content_html || firstNote.content || '');
+      setWordCount(countWords(plainText));
+      setCharacterCount(plainText.length);
+    } else {
+      setActiveNoteId('');
+      setTitle('');
+      setWordCount(0);
+      setCharacterCount(0);
+    }
+
+    setLoading(false);
   }, [profile]);
 
-  // ——— Helpers ——————————————————————————————————————————————————————————————
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
 
-  function countWords(text: string): number {
-    return text.trim() ? text.trim().split(/\s+/).length : 0;
-  }
+  useEffect(() => {
+    if (!editorRef.current) return;
 
-  // ——— Debounced auto-save —————————————————————————————————————————————————
+    if (!activeNote) {
+      editorRef.current.innerHTML = '';
+      loadedNoteIdRef.current = '';
+      setWordCount(0);
+      setCharacterCount(0);
+      return;
+    }
 
-  const saveNote = useCallback(
-    async (text: string) => {
-      if (!profile) return;
+    if (loadedNoteIdRef.current === activeNote.id) return;
+
+    const html = activeNote.content_html || activeNote.content || '';
+    editorRef.current.innerHTML = html;
+    loadedNoteIdRef.current = activeNote.id;
+
+    const plainText = activeNote.plain_text || getPlainTextFromHtml(html);
+    setWordCount(countWords(plainText));
+    setCharacterCount(plainText.length);
+  }, [activeNoteId]);
+
+  const updateNotesList = useCallback((noteId: string, nextTitle: string, html: string, plainText: string) => {
+    const updatedAt = new Date().toISOString();
+
+    setNotes(current =>
+      current.map(note =>
+        note.id === noteId
+          ? {
+              ...note,
+              title: nextTitle,
+              content: html,
+              content_html: html,
+              plain_text: plainText,
+              updated_at: updatedAt,
+            }
+          : note,
+      ),
+    );
+  }, []);
+
+  const saveActiveNote = useCallback(
+    async (noteId: string, nextTitle: string, html: string, plainText: string) => {
       setSaveStatus('saving');
-      const now = new Date().toISOString();
 
-      let err = null;
+      const safeTitle = nextTitle.trim() || 'Untitled Note';
 
-      if (noteId) {
-        const { error } = await supabase
-          .from('whiteboard_notes')
-          .update({ content: text, updated_at: now })
-          .eq('id', noteId);
-        err = error;
-      } else {
-        const { data, error } = await supabase
-          .from('whiteboard_notes')
-          .insert({ user_id: profile.id, content: text, updated_at: now })
-          .select()
-          .single();
-        err = error;
-        if (!error && data) setNoteId((data as WhiteboardNote).id);
+      const { error: saveError } = await supabase
+        .from('whiteboard_notes')
+        .update({
+          title: safeTitle,
+          content: html,
+          content_html: html,
+          plain_text: plainText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', noteId)
+        .eq('user_id', profile?.id);
+
+      if (saveError) {
+        setSaveStatus('error');
+        setError(saveError.message);
+        return;
       }
 
-      setSaveStatus(err ? 'error' : 'saved');
-      // Reset to idle after 3s
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      updateNotesList(noteId, safeTitle, html, plainText);
+      setSaveStatus('saved');
+      window.setTimeout(() => setSaveStatus('idle'), 1800);
     },
-    [profile, noteId]
+    [profile?.id, updateNotesList],
   );
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setContent(val);
-    setWordCount(countWords(val));
-    setSaveStatus('saving');
+  const scheduleSave = useCallback(
+    (nextTitle = title) => {
+      if (!activeNoteId || !editorRef.current) return;
 
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      saveNote(val);
-    }, DEBOUNCE_MS);
+      const html = editorRef.current.innerHTML;
+      const plainText = editorRef.current.textContent?.trim() || '';
+
+      setWordCount(countWords(plainText));
+      setCharacterCount(plainText.length);
+      setSaveStatus('saving');
+
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+      debounceTimer.current = setTimeout(() => {
+        saveActiveNote(activeNoteId, nextTitle, html, plainText);
+      }, DEBOUNCE_MS);
+    },
+    [activeNoteId, saveActiveNote, title],
+  );
+
+  const createNote = async () => {
+    if (!profile) return;
+
+    const { data, error: createError } = await supabase
+      .from('whiteboard_notes')
+      .insert({
+        user_id: profile.id,
+        title: 'Untitled Note',
+        content: '',
+        content_html: '',
+        plain_text: '',
+      })
+      .select('*')
+      .single();
+
+    if (createError) {
+      setError(createError.message);
+      return;
+    }
+
+    const note = data as WhiteboardNote;
+
+    loadedNoteIdRef.current = '';
+    setNotes(current => [note, ...current]);
+    setActiveNoteId(note.id);
+    setTitle(note.title);
+    setWordCount(0);
+    setCharacterCount(0);
+    setSaveStatus('saved');
+    window.setTimeout(() => setSaveStatus('idle'), 1500);
   };
 
-  // ——— Format toolbar ———————————————————————————————————————————————————————
+  const performArchiveNote = async () => {
+    if (!activeNote || !profile) return;
 
-  const handleFormat = (action: FormatAction) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+    const { error: archiveError } = await supabase
+      .from('whiteboard_notes')
+      .update({
+        is_archived: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', activeNote.id)
+      .eq('user_id', profile.id);
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newText = applyFormat(content, start, end, action);
-    setContent(newText);
-    setWordCount(countWords(newText));
+    if (archiveError) {
+      setError(archiveError.message);
+      return;
+    }
 
-    // Trigger debounced save
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      saveNote(newText);
-    }, DEBOUNCE_MS);
+    setNotes(current =>
+      current.map(note =>
+        note.id === activeNote.id
+          ? { ...note, is_archived: true, updated_at: new Date().toISOString() }
+          : note,
+      ),
+    );
 
-    // Restore focus
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start, start);
-    }, 0);
+    const nextActiveNote = notes.find(note => note.id !== activeNote.id && !note.is_archived);
+
+    if (nextActiveNote) {
+      loadedNoteIdRef.current = '';
+      setActiveNoteId(nextActiveNote.id);
+      setTitle(nextActiveNote.title || 'Untitled Note');
+    } else {
+      setActiveNoteId('');
+      setTitle('');
+      if (editorRef.current) editorRef.current.innerHTML = '';
+    }
   };
 
-  // ——— Render ———————————————————————————————————————————————————————————————
+  const archiveNote = () => {
+    if (!activeNote) return;
+
+    setConfirmDialog({
+      title: 'Archive note?',
+      description: `"${activeNote.title || 'Untitled Note'}" will be hidden from Active Notes. You can restore it later from Archived.`,
+      confirmLabel: 'Archive',
+      tone: 'default',
+      onConfirm: performArchiveNote,
+    });
+  };
+
+  const performRestoreNote = async () => {
+    if (!activeNote || !profile) return;
+
+    const { error: restoreError } = await supabase
+      .from('whiteboard_notes')
+      .update({
+        is_archived: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', activeNote.id)
+      .eq('user_id', profile.id);
+
+    if (restoreError) {
+      setError(restoreError.message);
+      return;
+    }
+
+    setNotes(current =>
+      current.map(note =>
+        note.id === activeNote.id
+          ? { ...note, is_archived: false, updated_at: new Date().toISOString() }
+          : note,
+      ),
+    );
+
+    const nextArchivedNote = notes.find(note => note.id !== activeNote.id && note.is_archived);
+
+    if (nextArchivedNote) {
+      loadedNoteIdRef.current = '';
+      setActiveNoteId(nextArchivedNote.id);
+      setTitle(nextArchivedNote.title || 'Untitled Note');
+    } else {
+      setActiveNoteId('');
+      setTitle('');
+      if (editorRef.current) editorRef.current.innerHTML = '';
+    }
+  };
+
+  const restoreNote = () => {
+    if (!activeNote) return;
+
+    setConfirmDialog({
+      title: 'Restore note?',
+      description: `"${activeNote.title || 'Untitled Note'}" will move back to Active Notes.`,
+      confirmLabel: 'Restore',
+      tone: 'default',
+      onConfirm: performRestoreNote,
+    });
+  };
+
+  const performDeleteNote = async () => {
+    if (!activeNote || !profile) return;
+
+    const { error: deleteError } = await supabase
+      .from('whiteboard_notes')
+      .delete()
+      .eq('id', activeNote.id)
+      .eq('user_id', profile.id);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    const remainingNotes = notes.filter(note => note.id !== activeNote.id);
+    const nextNote = remainingNotes.find(note =>
+      noteSection === 'archived' ? note.is_archived : !note.is_archived,
+    );
+
+    setNotes(remainingNotes);
+
+    if (nextNote) {
+      loadedNoteIdRef.current = '';
+      setActiveNoteId(nextNote.id);
+      setTitle(nextNote.title || 'Untitled Note');
+    } else {
+      setActiveNoteId('');
+      setTitle('');
+      if (editorRef.current) editorRef.current.innerHTML = '';
+    }
+  };
+
+  const deleteNote = () => {
+    if (!activeNote) return;
+
+    setConfirmDialog({
+      title: 'Delete note permanently?',
+      description: `"${activeNote.title || 'Untitled Note'}" will be permanently deleted. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+      onConfirm: performDeleteNote,
+    });
+  };
+
+  const selectNote = (note: WhiteboardNote) => {
+    if (note.id !== activeNoteId) {
+      loadedNoteIdRef.current = '';
+    }
+
+    setActiveNoteId(note.id);
+    setTitle(note.title || 'Untitled Note');
+    setSaveStatus('idle');
+  };
+
+  const saveEditorSelection = () => {
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+
+    const anchorNode = selection.anchorNode;
+    if (!anchorNode || !editorRef.current.contains(anchorNode)) return;
+
+    savedSelectionRef.current = selection.getRangeAt(0).cloneRange();
+  };
+
+  const restoreEditorSelection = () => {
+    editorRef.current?.focus();
+
+    const selection = window.getSelection();
+    if (!selection || !savedSelectionRef.current) return;
+
+    selection.removeAllRanges();
+    selection.addRange(savedSelectionRef.current);
+  };
+
+  const runCommand = (command: string, value?: string) => {
+    restoreEditorSelection();
+    document.execCommand(command, false, value);
+    saveEditorSelection();
+    scheduleSave();
+  };
+
+  const applyTextColor = (color: string) => {
+    setSelectedTextColor(color);
+    runCommand('foreColor', color);
+  };
+
+  const applyHighlightColor = (color: string) => {
+    setSelectedHighlightColor(color);
+    runCommand('backColor', color);
+  };
+
+  const clearHighlight = () => {
+    setSelectedHighlightColor('');
+    runCommand('backColor', 'transparent');
+  };
+
+  const handleEditorInput = (_event: FormEvent<HTMLDivElement>) => {
+    saveEditorSelection();
+    scheduleSave();
+  };
+
+  const activeNotesCount = notes.filter(note => !note.is_archived).length;
+  const archivedNotesCount = notes.filter(note => note.is_archived).length;
+
+  const toggleNoteSelection = (noteId: string) => {
+    setSelectedNoteIds(current => {
+      const next = new Set(current);
+
+      if (next.has(noteId)) {
+        next.delete(noteId);
+      } else {
+        next.add(noteId);
+      }
+
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedNoteIds(new Set());
+  };
+
+  const getSelectedNotesForSection = () =>
+    notes.filter(note => {
+      const matchesSection = noteSection === 'archived' ? note.is_archived : !note.is_archived;
+      return matchesSection && selectedNoteIds.has(note.id);
+    });
+
+  const selectedSectionNotes = getSelectedNotesForSection();
+  const selectedSectionCount = selectedSectionNotes.length;
+  const toggleSelectAllVisible = () => {
+    setSelectedNoteIds(current => {
+      const next = new Set(current);
+
+      if (allVisibleSelected) {
+        selectableSectionNoteIds.forEach(noteId => next.delete(noteId));
+      } else {
+        selectableSectionNoteIds.forEach(noteId => next.add(noteId));
+      }
+
+      return next;
+    });
+  };
+
+  const performArchiveSelectedNotes = async () => {
+    if (!profile) return;
+
+    const selectedNotes = getSelectedNotesForSection();
+    if (selectedNotes.length === 0) return;
+
+    const selectedIds = selectedNotes.map(note => note.id);
+    const updatedAt = new Date().toISOString();
+
+    const { error: archiveError } = await supabase
+      .from('whiteboard_notes')
+      .update({
+        is_archived: true,
+        updated_at: updatedAt,
+      })
+      .in('id', selectedIds)
+      .eq('user_id', profile.id);
+
+    if (archiveError) {
+      setError(archiveError.message);
+      return;
+    }
+
+    setNotes(current =>
+      current.map(note =>
+        selectedIds.includes(note.id)
+          ? { ...note, is_archived: true, updated_at: updatedAt }
+          : note,
+      ),
+    );
+
+    if (activeNoteId && selectedIds.includes(activeNoteId)) {
+      const nextActiveNote = notes.find(note => !selectedIds.includes(note.id) && !note.is_archived);
+
+      if (nextActiveNote) {
+        loadedNoteIdRef.current = '';
+        setActiveNoteId(nextActiveNote.id);
+        setTitle(nextActiveNote.title || 'Untitled Note');
+      } else {
+        setActiveNoteId('');
+        setTitle('');
+        if (editorRef.current) editorRef.current.innerHTML = '';
+      }
+    }
+
+    clearSelection();
+  };
+
+  const archiveSelectedNotes = () => {
+    const selectedNotes = getSelectedNotesForSection();
+    if (selectedNotes.length === 0) return;
+
+    setConfirmDialog({
+      title: 'Archive selected notes?',
+      description: `${selectedNotes.length} selected note${selectedNotes.length === 1 ? '' : 's'} will be moved to Archived. You can restore them later.`,
+      confirmLabel: 'Archive',
+      tone: 'default',
+      onConfirm: performArchiveSelectedNotes,
+    });
+  };
+
+  const performRestoreSelectedNotes = async () => {
+    if (!profile) return;
+
+    const selectedNotes = getSelectedNotesForSection();
+    if (selectedNotes.length === 0) return;
+
+    const selectedIds = selectedNotes.map(note => note.id);
+    const updatedAt = new Date().toISOString();
+
+    const { error: restoreError } = await supabase
+      .from('whiteboard_notes')
+      .update({
+        is_archived: false,
+        updated_at: updatedAt,
+      })
+      .in('id', selectedIds)
+      .eq('user_id', profile.id);
+
+    if (restoreError) {
+      setError(restoreError.message);
+      return;
+    }
+
+    setNotes(current =>
+      current.map(note =>
+        selectedIds.includes(note.id)
+          ? { ...note, is_archived: false, updated_at: updatedAt }
+          : note,
+      ),
+    );
+
+    if (activeNoteId && selectedIds.includes(activeNoteId)) {
+      const nextArchivedNote = notes.find(note => !selectedIds.includes(note.id) && note.is_archived);
+
+      if (nextArchivedNote) {
+        loadedNoteIdRef.current = '';
+        setActiveNoteId(nextArchivedNote.id);
+        setTitle(nextArchivedNote.title || 'Untitled Note');
+      } else {
+        setActiveNoteId('');
+        setTitle('');
+        if (editorRef.current) editorRef.current.innerHTML = '';
+      }
+    }
+
+    clearSelection();
+  };
+
+  const restoreSelectedNotes = () => {
+    const selectedNotes = getSelectedNotesForSection();
+    if (selectedNotes.length === 0) return;
+
+    setConfirmDialog({
+      title: 'Restore selected notes?',
+      description: `${selectedNotes.length} selected note${selectedNotes.length === 1 ? '' : 's'} will move back to Active Notes.`,
+      confirmLabel: 'Restore',
+      tone: 'default',
+      onConfirm: performRestoreSelectedNotes,
+    });
+  };
+
+  const performDeleteSelectedNotes = async () => {
+    if (!profile) return;
+
+    const selectedNotes = getSelectedNotesForSection();
+    if (selectedNotes.length === 0) return;
+
+    const selectedIds = selectedNotes.map(note => note.id);
+
+    const { error: deleteError } = await supabase
+      .from('whiteboard_notes')
+      .delete()
+      .in('id', selectedIds)
+      .eq('user_id', profile.id);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    const remainingNotes = notes.filter(note => !selectedIds.includes(note.id));
+    setNotes(remainingNotes);
+
+    if (activeNoteId && selectedIds.includes(activeNoteId)) {
+      const nextNote = remainingNotes.find(note =>
+        noteSection === 'archived' ? note.is_archived : !note.is_archived,
+      );
+
+      if (nextNote) {
+        loadedNoteIdRef.current = '';
+        setActiveNoteId(nextNote.id);
+        setTitle(nextNote.title || 'Untitled Note');
+      } else {
+        setActiveNoteId('');
+        setTitle('');
+        if (editorRef.current) editorRef.current.innerHTML = '';
+      }
+    }
+
+    clearSelection();
+  };
+
+  const deleteSelectedNotes = () => {
+    const selectedNotes = getSelectedNotesForSection();
+    if (selectedNotes.length === 0) return;
+
+    setConfirmDialog({
+      title: 'Delete selected notes permanently?',
+      description: `${selectedNotes.length} selected note${selectedNotes.length === 1 ? '' : 's'} will be permanently deleted. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+      onConfirm: performDeleteSelectedNotes,
+    });
+  };
+
+  const filteredNotes = notes.filter(note => {
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSection = noteSection === 'archived' ? note.is_archived : !note.is_archived;
+
+    if (!matchesSection) return false;
+    if (!query) return true;
+
+    return (
+      note.title.toLowerCase().includes(query) ||
+      note.plain_text.toLowerCase().includes(query)
+    );
+  });
+
+  const selectableSectionNoteIds = filteredNotes.map(note => note.id);
+  const allVisibleSelected =
+    selectableSectionNoteIds.length > 0 &&
+    selectableSectionNoteIds.every(noteId => selectedNoteIds.has(noteId));
 
   return (
-    <div className="max-w-5xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">
-            My Whiteboard
-          </PHeading>
-          <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-            Private workspace — only you can see this
-          </PText>
-        </div>
-        <div className="flex items-center gap-4">
-          <SaveIndicator status={saveStatus} />
-          <button
-            type="button"
-            onClick={() => setShowPreview(p => !p)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-              showPreview
-                ? 'bg-primary text-background-base border-primary'
-                : 'bg-canvas border-contrast-low text-contrast-medium hover:text-primary hover:border-primary'
-            }`}
-            style={{ fontFamily: FONT }}
-          >
-            <PIcon
-              name={showPreview ? 'close' : 'document'}
-              size="x-small"
-              color="inherit"
-            />
-            {showPreview ? 'Edit' : 'Preview'}
-          </button>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
+      <PageHeader
+        eyebrow="Employee Portal"
+        title="Whiteboard"
+        description="Private notes, drafts, and working thoughts."
+        actions={
+          <div className="flex items-center gap-3">
+            <SaveIndicator status={saveStatus} />
+            <button
+              type="button"
+              onClick={createNote}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              New Note
+            </button>
+          </div>
+        }
+      />
 
-      {/* Editor card */}
-      <div className="bg-surface rounded-2xl border border-contrast-low overflow-hidden">
-        {/* Toolbar */}
-        {!showPreview && (
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-contrast-low bg-canvas flex-wrap">
-            <ToolbarBtn label="B" title="Bold (**text**)" onClick={() => handleFormat('bold')} />
-            <ToolbarBtn label="I" title="Italic (_text_)" onClick={() => handleFormat('italic')} />
-            <div className="w-px h-6 bg-contrast-low mx-1" />
-            <ToolbarBtn label="H1" title="Heading 1" onClick={() => handleFormat('h1')} />
-            <ToolbarBtn label="H2" title="Heading 2" onClick={() => handleFormat('h2')} />
-            <div className="w-px h-6 bg-contrast-low mx-1" />
-            <ToolbarBtn label="·—" title="Bullet list" onClick={() => handleFormat('ul')} />
-            <div className="ml-auto flex items-center gap-2">
-              <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
-                Markdown formatting
-              </PText>
-              <PIcon name="information" size="x-small" color="contrast-low" />
+      {error && (
+        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+        <aside className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className="border-b border-border p-4">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Search notes"
+                className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+              />
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteSection('active');
+                  clearSelection();
+                  setActiveNoteId('');
+                  setTitle('');
+                  if (editorRef.current) editorRef.current.innerHTML = '';
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  noteSection === 'active'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Active ({activeNotesCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNoteSection('archived');
+                  clearSelection();
+                  setActiveNoteId('');
+                  setTitle('');
+                  if (editorRef.current) editorRef.current.innerHTML = '';
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  noteSection === 'archived'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Archived ({archivedNotesCount})
+              </button>
             </div>
           </div>
-        )}
 
-        {/* Content area */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-              Loading your notes…
-            </PText>
+          <div className="border-b border-border px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={toggleSelectAllVisible}
+                disabled={selectableSectionNoteIds.length === 0}
+                className="text-xs font-semibold text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {allVisibleSelected ? 'Deselect All' : 'Select All'}
+              </button>
+
+              {selectedSectionCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="text-xs font-semibold text-muted-foreground transition hover:text-foreground"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+
+            {selectedSectionCount > 0 && (
+              <div className="mt-3 rounded-xl border border-border bg-background p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    {selectedSectionCount} selected
+                  </div>
+
+                  <div className="ml-auto flex items-center gap-2">
+                    {noteSection === 'active' ? (
+                      <button
+                        type="button"
+                        title="Archive selected"
+                        aria-label="Archive selected notes"
+                        onClick={archiveSelectedNotes}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Archive className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          title="Restore selected"
+                          aria-label="Restore selected notes"
+                          onClick={restoreSelectedNotes}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete selected"
+                          aria-label="Delete selected notes"
+                          onClick={deleteSelectedNotes}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-destructive/30 bg-card text-destructive transition-colors hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        ) : showPreview ? (
-          <div
-            className="min-h-[480px] p-6 text-primary leading-relaxed"
-            style={{ fontFamily: FONT, fontSize: '0.95rem' }}
-            dangerouslySetInnerHTML={{
-              __html: content
-                ? renderMarkdown(content)
-                : '<span style="color:var(--p-color-contrast-low);font-style:italic">Nothing here yet — switch to Edit mode and start writing.</span>',
-            }}
-          />
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={handleChange}
-            placeholder={`Start writing your notes here…\n\nYou can use Markdown:\n• **bold**, _italic_\n• # Heading 1, ## Heading 2\n• - bullet list items\n\nAuto-saves every 500ms.`}
-            className="w-full min-h-[480px] p-6 bg-transparent resize-none focus:outline-none text-primary placeholder:text-contrast-low leading-relaxed"
-            style={{ fontFamily: FONT, fontSize: '0.95rem', lineHeight: '1.75' }}
-            spellCheck
-          />
-        )}
 
-        {/* Footer bar */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-contrast-low bg-canvas">
-          <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
-            {wordCount} word{wordCount !== 1 ? 's' : ''} · {content.length} characters
-          </PText>
-          <div className="flex items-center gap-2">
-            <PIcon name="lock" size="x-small" color="contrast-low" />
-            <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
-              Private — auto-saves to your account
-            </PText>
+          <div className="max-h-[18rem] overflow-y-auto p-2 lg:max-h-[calc(100vh-17rem)]">
+            {loading ? (
+              <p className="px-3 py-4 text-sm text-muted-foreground">Loading notes...</p>
+            ) : filteredNotes.length === 0 ? (
+              <div className="px-3 py-8 text-center">
+                <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  {noteSection === 'archived' ? 'No archived notes' : 'No notes found'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {noteSection === 'archived'
+                    ? 'Archived notes will appear here.'
+                    : 'Create a new note to start writing.'}
+                </p>
+              </div>
+            ) : (
+              filteredNotes.map(note => (
+                <div
+                  key={note.id}
+                  className={`flex gap-2 rounded-xl px-2 py-2 transition-colors ${
+                    activeNoteId === note.id
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedNoteIds.has(note.id)}
+                    onChange={() => toggleNoteSelection(note.id)}
+                    className="mt-1 h-4 w-4 rounded border-border"
+                    aria-label={`Select ${note.title || 'Untitled Note'}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => selectNote(note)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <span className="block truncate text-sm font-semibold">
+                      {note.title || 'Untitled Note'}
+                    </span>
+                    <span className="mt-1 block line-clamp-2 text-xs">
+                      {note.plain_text || 'Empty note'}
+                    </span>
+                    <span className="mt-2 block text-[11px] text-muted-foreground">
+                      {formatUpdatedAt(note.updated_at)}
+                    </span>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <section className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          {activeNote ? (
+            <>
+              <div className="border-b border-border p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <input
+                    value={title}
+                    onChange={event => {
+                      const nextTitle = event.target.value;
+                      setTitle(nextTitle);
+                      scheduleSave(nextTitle);
+                    }}
+                    placeholder="Untitled Note"
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-0 text-xl font-semibold text-foreground outline-none transition placeholder:text-muted-foreground focus:border-border focus:bg-background focus:px-3"
+                  />
+
+                  {activeNote.is_archived ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        title="Restore note"
+                        aria-label="Restore note"
+                        onClick={restoreNote}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Delete note"
+                        aria-label="Delete note"
+                        onClick={deleteNote}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 bg-background text-destructive transition-colors hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Archive note"
+                      aria-label="Archive note"
+                      onClick={archiveNote}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Archive className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <ToolbarButton title="Bold" onClick={() => runCommand('bold')}>
+                    <Bold className="h-4 w-4" />
+                  </ToolbarButton>
+                  <ToolbarButton title="Italic" onClick={() => runCommand('italic')}>
+                    <Italic className="h-4 w-4" />
+                  </ToolbarButton>
+                  <ToolbarButton title="Underline" onClick={() => runCommand('underline')}>
+                    <Underline className="h-4 w-4" />
+                  </ToolbarButton>
+
+                  <div className="mx-1 h-6 w-px bg-border" />
+
+                  <div className="mx-1 h-6 w-px bg-border" />
+
+                  <ToolbarButton title="Align Left" onClick={() => runCommand('justifyLeft')}>
+                    <AlignLeft className="h-4 w-4" />
+                  </ToolbarButton>
+                  <ToolbarButton title="Align Center" onClick={() => runCommand('justifyCenter')}>
+                    <AlignCenter className="h-4 w-4" />
+                  </ToolbarButton>
+                  <ToolbarButton title="Align Right" onClick={() => runCommand('justifyRight')}>
+                    <AlignRight className="h-4 w-4" />
+                  </ToolbarButton>
+
+                  <div className="mx-1 h-6 w-px bg-border" />
+
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => setIsColorPanelOpen(current => !current)}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Palette className="h-4 w-4" />
+                      Color
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isColorPanelOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isColorPanelOpen && (
+                      <div className="absolute left-0 top-11 z-30 flex items-center gap-2 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+                        {TEXT_COLORS.map(color => (
+                          <button
+                            key={color}
+                            type="button"
+                            title="Text color"
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={() => {
+                              applyTextColor(color);
+                              setIsColorPanelOpen(false);
+                            }}
+                            className={`relative h-6 w-6 rounded-full border transition ${
+                              selectedTextColor === color ? 'border-foreground ring-2 ring-foreground/20' : 'border-border'
+                            }`}
+                            style={{ backgroundColor: color }}
+                          >
+                            {selectedTextColor === color && (
+                              <Check className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => setIsHighlightPanelOpen(current => !current)}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Highlighter className="h-4 w-4" />
+                      Highlight
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isHighlightPanelOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isHighlightPanelOpen && (
+                      <div className="absolute left-0 top-11 z-30 flex items-center gap-2 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+                        <button
+                          type="button"
+                          title="No highlight"
+                          onMouseDown={event => event.preventDefault()}
+                          onClick={() => {
+                            clearHighlight();
+                            setIsHighlightPanelOpen(false);
+                          }}
+                          className={`flex h-6 w-6 items-center justify-center rounded-full border bg-background transition ${
+                            selectedHighlightColor === '' ? 'border-foreground ring-2 ring-foreground/20' : 'border-border'
+                          }`}
+                        >
+                          <Eraser className="h-3 w-3 text-muted-foreground" />
+                        </button>
+
+                        {HIGHLIGHT_COLORS.map(color => (
+                          <button
+                            key={color}
+                            type="button"
+                            title="Highlight"
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={() => {
+                              applyHighlightColor(color);
+                              setIsHighlightPanelOpen(false);
+                            }}
+                            className={`relative h-6 w-6 rounded-full border transition ${
+                              selectedHighlightColor === color ? 'border-foreground ring-2 ring-foreground/20' : 'border-border'
+                            }`}
+                            style={{ backgroundColor: color }}
+                          >
+                            {selectedHighlightColor === color && (
+                              <Check className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 text-foreground" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={handleEditorInput}
+                onMouseUp={saveEditorSelection}
+                onKeyUp={saveEditorSelection}
+                onFocus={saveEditorSelection}
+                className="whiteboard-editor min-h-[32rem] px-5 py-5 text-base leading-7 text-foreground outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] lg:min-h-[calc(100vh-23rem)]"
+                data-placeholder="Start writing your note..."
+              />
+
+              <div className="border-t border-border bg-background px-4 py-2 text-xs text-muted-foreground">
+                {wordCount} word{wordCount !== 1 ? 's' : ''} - {characterCount} characters
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-[28rem] flex-col items-center justify-center p-8 text-center">
+              <FileText className="h-10 w-10 text-muted-foreground" />
+              <h2 className="mt-4 text-lg font-semibold text-foreground">No note selected</h2>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                Create a new note or select an existing note from the list.
+              </p>
+              <button
+                type="button"
+                onClick={createNote}
+                className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                New Note
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">{confirmDialog.title}</h2>
+            </div>
+
+            <div className="p-5">
+              <p className="text-sm leading-6 text-muted-foreground">{confirmDialog.description}</p>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const action = confirmDialog.onConfirm;
+                    setConfirmDialog(null);
+                    await action();
+                  }}
+                  className={`inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors ${
+                    confirmDialog.tone === 'danger'
+                      ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                      : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                  }`}
+                >
+                  {confirmDialog.confirmLabel}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Hint */}
-      <div className="mt-4 flex items-start gap-2 px-2">
-        <PIcon name="information" size="x-small" color="contrast-low" />
-        <PText size="xx-small" color="contrast-low" style={{ fontFamily: FONT }}>
-          Your whiteboard automatically saves changes. Use the Preview button to see rendered Markdown.
-          This note is completely private and only visible to you.
-        </PText>
-      </div>
+      )}
     </div>
   );
 }
-
-
-
