@@ -9,6 +9,7 @@ import {
   AlignRight,
   AlertTriangle,
   Archive,
+  ArrowLeft,
   Bold,
   Check,
   Eraser,
@@ -17,6 +18,7 @@ import {
   FileText,
   Highlighter,
   Italic,
+  MoreHorizontal,
   Palette,
   Plus,
   RefreshCw,
@@ -147,6 +149,8 @@ export default function Whiteboard() {
   const [selectedTextColor, setSelectedTextColor] = useState(TEXT_COLORS[0]);
   const [selectedHighlightColor, setSelectedHighlightColor] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
+  const [isNoteActionsOpen, setIsNoteActionsOpen] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -316,6 +320,8 @@ export default function Whiteboard() {
     setNotes(current => [note, ...current]);
     setActiveNoteId(note.id);
     setTitle(note.title);
+    setIsMobileEditorOpen(true);
+    setIsNoteActionsOpen(false);
     setWordCount(0);
     setCharacterCount(0);
     setSaveStatus('saved');
@@ -474,6 +480,8 @@ export default function Whiteboard() {
     setActiveNoteId(note.id);
     setTitle(note.title || 'Untitled Note');
     setSaveStatus('idle');
+    setIsMobileEditorOpen(true);
+    setIsNoteActionsOpen(false);
   };
 
   const saveEditorSelection = () => {
@@ -809,6 +817,8 @@ export default function Whiteboard() {
                   clearSelection();
                   setActiveNoteId('');
                   setTitle('');
+                  setIsMobileEditorOpen(false);
+                  setIsNoteActionsOpen(false);
                   if (editorRef.current) editorRef.current.innerHTML = '';
                 }}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
@@ -826,6 +836,8 @@ export default function Whiteboard() {
                   clearSelection();
                   setActiveNoteId('');
                   setTitle('');
+                  setIsMobileEditorOpen(false);
+                  setIsNoteActionsOpen(false);
                   if (editorRef.current) editorRef.current.innerHTML = '';
                 }}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
@@ -960,11 +972,24 @@ export default function Whiteboard() {
           </div>
         </aside>
 
-        <section className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+        <section className={`${isMobileEditorOpen ? 'fixed inset-0 z-[70] block h-[100dvh] w-[100dvw] overflow-hidden rounded-none border-0' : 'hidden rounded-2xl'} border border-border bg-card text-card-foreground shadow-sm lg:static lg:z-auto lg:block lg:h-auto lg:w-auto lg:overflow-visible lg:rounded-2xl lg:border`}>
           {activeNote ? (
             <>
-              <div className="border-b border-border p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="border-b border-border px-3 py-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileEditorOpen(false);
+                      setIsNoteActionsOpen(false);
+                    }}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+                    aria-label="Back to notes"
+                    title="Back"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+
                   <input
                     value={title}
                     onChange={event => {
@@ -973,44 +998,66 @@ export default function Whiteboard() {
                       scheduleSave(nextTitle);
                     }}
                     placeholder="Untitled Note"
-                    className="h-10 min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-0 text-xl font-semibold text-foreground outline-none transition placeholder:text-muted-foreground focus:border-border focus:bg-background focus:px-3"
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-0 text-lg font-semibold text-foreground outline-none transition placeholder:text-muted-foreground focus:border-border focus:bg-background focus:px-3 sm:text-xl"
                   />
 
-                  {activeNote.is_archived ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        title="Restore note"
-                        aria-label="Restore note"
-                        onClick={restoreNote}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Delete note"
-                        aria-label="Delete note"
-                        onClick={deleteNote}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 bg-background text-destructive transition-colors hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
+                  <div className="relative shrink-0">
                     <button
                       type="button"
-                      title="Archive note"
-                      aria-label="Archive note"
-                      onClick={archiveNote}
+                      title="Note actions"
+                      aria-label="Note actions"
+                      onClick={() => setIsNoteActionsOpen(current => !current)}
                       className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      <Archive className="h-4 w-4" />
+                      <MoreHorizontal className="h-4 w-4" />
                     </button>
-                  )}
+
+                    {isNoteActionsOpen && (
+                      <div className="absolute right-0 top-12 z-[90] min-w-40 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+                        {activeNote.is_archived ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsNoteActionsOpen(false);
+                                restoreNote();
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                              Restore
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsNoteActionsOpen(false);
+                                deleteNote();
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsNoteActionsOpen(false);
+                              archiveNote();
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <Archive className="h-4 w-4" />
+                            Archive
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2 overflow-visible sm:mt-4">
                   <ToolbarButton title="Bold" onClick={() => runCommand('bold')}>
                     <Bold className="h-4 w-4" />
                   </ToolbarButton>
@@ -1020,8 +1067,6 @@ export default function Whiteboard() {
                   <ToolbarButton title="Underline" onClick={() => runCommand('underline')}>
                     <Underline className="h-4 w-4" />
                   </ToolbarButton>
-
-                  <div className="mx-1 h-6 w-px bg-border" />
 
                   <div className="mx-1 h-6 w-px bg-border" />
 
@@ -1037,20 +1082,47 @@ export default function Whiteboard() {
 
                   <div className="mx-1 h-6 w-px bg-border" />
 
-                  <div className="relative">
+                  <div className="relative flex shrink-0 items-center gap-2">
                     <button
                       type="button"
                       onMouseDown={event => event.preventDefault()}
-                      onClick={() => setIsColorPanelOpen(current => !current)}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      onClick={() => {
+                        setIsHighlightPanelOpen(false);
+                        setIsColorPanelOpen(current => !current);
+                      }}
+                      className={`inline-flex h-9 w-12 items-center justify-center gap-1 rounded-lg border text-sm font-medium transition-colors ${
+                        isColorPanelOpen
+                          ? 'border-foreground bg-muted text-foreground'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                      aria-label="Text color"
+                      title="Text color"
                     >
                       <Palette className="h-4 w-4" />
-                      Color
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isColorPanelOpen ? 'rotate-180' : ''}`} />
                     </button>
 
+                    <button
+                      type="button"
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => {
+                        setIsColorPanelOpen(false);
+                        setIsHighlightPanelOpen(current => !current);
+                      }}
+                      className={`inline-flex h-9 w-12 items-center justify-center gap-1 rounded-lg border text-sm font-medium transition-colors ${
+                        isHighlightPanelOpen
+                          ? 'border-foreground bg-muted text-foreground'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                      aria-label="Highlight color"
+                      title="Highlight color"
+                    >
+                      <Highlighter className="h-4 w-4" />
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isHighlightPanelOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
                     {isColorPanelOpen && (
-                      <div className="absolute left-0 top-11 z-30 flex items-center gap-2 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+                      <div className="absolute left-0 top-11 z-[90] flex w-max max-w-[calc(100vw-1.5rem)] items-center gap-1.5 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg">
                         {TEXT_COLORS.map(color => (
                           <button
                             key={color}
@@ -1073,22 +1145,9 @@ export default function Whiteboard() {
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onMouseDown={event => event.preventDefault()}
-                      onClick={() => setIsHighlightPanelOpen(current => !current)}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <Highlighter className="h-4 w-4" />
-                      Highlight
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isHighlightPanelOpen ? 'rotate-180' : ''}`} />
-                    </button>
 
                     {isHighlightPanelOpen && (
-                      <div className="absolute left-0 top-11 z-30 flex items-center gap-2 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+                      <div className="absolute left-0 top-11 z-[90] flex w-max max-w-[calc(100vw-1.5rem)] items-center gap-1.5 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg">
                         <button
                           type="button"
                           title="No highlight"
@@ -1138,11 +1197,11 @@ export default function Whiteboard() {
                 onMouseUp={saveEditorSelection}
                 onKeyUp={saveEditorSelection}
                 onFocus={saveEditorSelection}
-                className="whiteboard-editor min-h-[32rem] px-5 py-5 text-base leading-7 text-foreground outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] lg:min-h-[calc(100vh-23rem)]"
+                className="whiteboard-editor h-[calc(100dvh-13.5rem)] w-full overflow-x-hidden overflow-y-auto break-words px-3 py-4 text-base leading-7 text-foreground outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] sm:min-h-[32rem] sm:px-5 sm:py-5 lg:h-auto lg:min-h-[calc(100vh-23rem)]"
                 data-placeholder="Start writing your note..."
               />
 
-              <div className="border-t border-border bg-background px-4 py-2 text-xs text-muted-foreground">
+              <div className="border-t border-border bg-background px-3 py-2 text-xs text-muted-foreground sm:px-4">
                 {wordCount} word{wordCount !== 1 ? 's' : ''} - {characterCount} characters
               </div>
             </>
