@@ -77,22 +77,22 @@ export default function Dashboard() {
     fetch();
   }, []);
 
-  const chartColor = theme === 'dark' ? '#ffffff' : '#25dc3a';
-  const textColor = theme === 'dark' ? '#000000' : '#0800f5';
-  const gridColor = theme === 'dark' ? '#000000' : '#ff1515';
+  const chartColor = theme === 'dark' ? '#F5F5F5' : '#2F2F2F';
+  const textColor = theme === 'dark' ? '#D7D7D7' : '#4B4B4B';
+  const gridColor = theme === 'dark' ? '#2F2F2F' : '#E4E4E4';
 
   const kpiCards = [
-    { label: 'Total Leads', value: kpi.totalLeads.toString(), icon: ArrowRight, color: 'bg-info-soft text-info' },
-    { label: 'Conversion Rate', value: kpi.totalLeads > 0 ? `${Math.round((kpi.convertedLeads / kpi.totalLeads) * 100)}%` : '0%', icon: TrendingUp, color: 'bg-success-soft text-success' },
-    { label: 'Active Projects', value: kpi.activeProjects.toString(), icon: Settings, color: 'bg-warning-soft text-warning' },
-    { label: 'Total Revenue', value: formatINR(kpi.totalRevenue), icon: Calculator, color: 'bg-surface' },
+    { label: 'Total Leads', value: kpi.totalLeads.toString(), icon: ArrowRight, color: 'bg-sky-500/10 text-sky-700 dark:text-sky-300' },
+    { label: 'Conversion Rate', value: kpi.totalLeads > 0 ? `${Math.round((kpi.convertedLeads / kpi.totalLeads) * 100)}%` : '0%', icon: TrendingUp, color: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+    { label: 'Active Projects', value: kpi.activeProjects.toString(), icon: Settings, color: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+    { label: 'Total Revenue', value: formatINR(kpi.totalRevenue), icon: Calculator, color: 'bg-muted text-foreground' },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
-        <span className="text-sm text-slate-600">Welcome back! Here's your business overview.</span>
+        <span className="text-sm text-muted-foreground">A quick operational view of leads, projects, and revenue movement.</span>
       </div>
 
       {/* KPI Cards */}
@@ -103,7 +103,7 @@ export default function Dashboard() {
           return (
             <div
               key={card.label}
-              className="bg-surface rounded-xl border border-contrast-low p-4 sm:p-5 flex items-start gap-3 min-w-0 overflow-hidden"
+              className="bg-card rounded-xl border border-border p-4 sm:p-5 flex items-start gap-3 min-w-0 overflow-hidden"
             >
               <div
                 className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${card.color}`}
@@ -112,7 +112,7 @@ export default function Dashboard() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <span className="text-[11px] sm:text-xs text-slate-600 uppercase tracking-wide block truncate">
+                <span className="text-[11px] sm:text-xs text-muted-foreground uppercase tracking-wide block truncate">
                   {card.label}
                 </span>
 
@@ -128,7 +128,7 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Monthly Revenue */}
-        <div className="bg-surface rounded-xl border border-contrast-low p-5">
+        <div className="bg-card rounded-xl border border-border p-5">
           <h3 className="text-lg font-bold mb-4">Monthly Revenue</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={monthlyRevenue} margin={{ top: 0, right: 0, left: 10, bottom: 0 }}>
@@ -145,20 +145,20 @@ export default function Dashboard() {
         </div>
 
         {/* Lead Funnel */}
-        <div className="bg-surface rounded-xl border border-contrast-low p-5">
+        <div className="bg-card rounded-xl border border-border p-5">
           <h3 className="text-lg font-bold mb-4">Lead Funnel</h3>
           {loading ? (
             <div className="h-52 flex items-center justify-center">
-              <span className="text-sm text-slate-600">Loading...</span>
+              <span className="text-sm text-muted-foreground">Loading...</span>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
               {leadFunnel.map(item => (
                 <div key={item.name} className="flex items-center gap-3">
                   <div className="w-24 text-right">
-                    <span className="text-xs text-slate-600">{item.name}</span>
+                    <span className="text-xs text-muted-foreground">{item.name}</span>
                   </div>
-                  <div className="flex-1 bg-contrast-low/30 rounded-full h-6 overflow-hidden">
+                  <div className="flex-1 bg-muted/60 rounded-full h-6 overflow-hidden">
                     <div
                       className="h-full rounded-full flex items-center justify-end pr-2 transition-all"
                       style={{

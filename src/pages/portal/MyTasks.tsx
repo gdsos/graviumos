@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import TaskDetailModal from "../../components/tasks/TaskDetailModal";
@@ -39,10 +39,7 @@ const EMPTY_FORM: TaskFormState = {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        className="block text-xs font-medium text-contrast-high"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
-      >
+      <label className="block text-xs font-medium text-foreground">
         {label}
       </label>
       {children}
@@ -51,8 +48,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 }
 
 // ——— Constants ————————————————————————————————————————————————————————————————
-
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing', 'Overdue', 'Completed'];
 
@@ -295,7 +290,7 @@ export default function MyTasks() {
   // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
-    <div className="max-w-full" style={{ fontFamily: FONT }}>
+    <div className="max-w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -323,15 +318,14 @@ export default function MyTasks() {
 
       {/* Tabs for department heads */}
       {isDeptHeadOnly && (
-        <div className="flex gap-6 mb-6 border-b border-contrast-low pb-0">
+        <div className="mb-6 flex gap-6 border-b border-border pb-0">
           <button
             onClick={() => setActiveTab('all')}
             className={`px-0 py-3 font-medium text-sm transition-colors ${
               activeTab === 'all'
                 ? 'text-primary border-b-2 border-primary -mb-[2px]'
-                : 'text-contrast-medium hover:text-primary'
+                : 'text-muted-foreground hover:text-primary'
             }`}
-            style={{ fontFamily: FONT }}
           >
             All Tasks
           </button>
@@ -340,9 +334,8 @@ export default function MyTasks() {
             className={`px-0 py-3 font-medium text-sm transition-colors ${
               activeTab === 'assigned'
                 ? 'text-primary border-b-2 border-primary -mb-[2px]'
-                : 'text-contrast-medium hover:text-primary'
+                : 'text-muted-foreground hover:text-primary'
             }`}
-            style={{ fontFamily: FONT }}
           >
             My Tasks
           </button>
