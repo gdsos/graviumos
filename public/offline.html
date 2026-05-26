@@ -1,24 +1,348 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050506" />
     <title>Offline - Gravium OS</title>
     <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050506;
+        --card: rgba(20, 20, 21, 0.86);
+        --line: rgba(245, 245, 245, 0.12);
+        --line-strong: rgba(245, 245, 245, 0.2);
+        --text: #f5f5f5;
+        --muted: rgba(245, 245, 245, 0.68);
+        --quiet: rgba(245, 245, 245, 0.46);
+        --wood: #603b2a;
+        --olive: #555d3a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
       body {
-        background: #0b0b0f;
-        color: white;
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 18% 16%, rgba(96, 59, 42, 0.24), transparent 28rem),
+          radial-gradient(circle at 82% 84%, rgba(85, 93, 58, 0.2), transparent 30rem),
+          linear-gradient(135deg, #050506 0%, #0c0c0d 48%, #050506 100%);
+        color: var(--text);
+        font-family:
+          "Neue Montreal",
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(245, 245, 245, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(245, 245, 245, 0.045) 1px, transparent 1px);
+        background-size: 46px 46px;
+        mask-image: radial-gradient(circle at center, black, transparent 72%);
+      }
+
+      .page {
+        position: relative;
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 22px;
+      }
+
+      .card {
+        width: min(620px, 100%);
+        border: 1px solid var(--line);
+        border-radius: 34px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.026)),
+          var(--card);
+        box-shadow:
+          0 26px 90px rgba(0, 0, 0, 0.42),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(24px);
+      }
+
+      .top {
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--line);
+        padding: 20px 22px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .brand img {
+        display: block;
+        width: 128px;
+        height: auto;
+        object-fit: contain;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid rgba(255, 212, 121, 0.22);
+        border-radius: 999px;
+        background: rgba(255, 212, 121, 0.08);
+        padding: 8px 12px;
+        color: rgba(255, 226, 167, 0.94);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .dot {
+        position: relative;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #ffd479;
+      }
+
+      .dot::after {
+        content: "";
+        position: absolute;
+        inset: -6px;
+        border: 1px solid rgba(255, 212, 121, 0.42);
+        border-radius: inherit;
+        animation: pulse 1.7s infinite;
+      }
+
+      .body {
+        padding: clamp(28px, 6vw, 56px);
+      }
+
+      .eyebrow {
+        color: var(--quiet);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 14px 0 0;
+        font-size: clamp(42px, 8vw, 76px);
+        line-height: 0.96;
+        letter-spacing: -0.06em;
+      }
+
+      p {
+        margin: 20px 0 0;
+        max-width: 470px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 30px;
+      }
+
+      button,
+      a {
+        font: inherit;
+      }
+
+      .btn {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
         justify-content: center;
-        height: 100vh;
-        font-family: sans-serif;
-        font-size: x-large;
+        border-radius: 999px;
+        padding: 0 18px;
+        text-decoration: none;
+        transition:
+          transform 0.18s ease,
+          background 0.18s ease,
+          border-color 0.18s ease;
+        cursor: pointer;
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn-primary {
+        border: 1px solid rgba(245, 245, 245, 0.94);
+        background: #f5f5f5;
+        color: #000000;
+        font-weight: 800;
+      }
+
+      .btn-secondary {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+      }
+
+      .meta {
+        margin-top: 30px;
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+        color: var(--quiet);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .meta strong {
+        color: var(--text);
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+          transform: scale(0.7);
+        }
+
+        100% {
+          opacity: 0;
+          transform: scale(1.65);
+        }
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          min-height: 100vh;
+          padding: 12px;
+          place-items: center;
+        }
+
+        .card {
+          border-radius: 26px;
+        }
+
+        .top {
+          padding: 16px;
+        }
+
+        .brand img {
+          width: 112px;
+        }
+
+        .status {
+          padding: 7px 10px;
+          font-size: 11px;
+        }
+
+        .body {
+          padding: 30px 22px 24px;
+        }
+
+        h1 {
+          font-size: clamp(40px, 12vw, 54px);
+          line-height: 1;
+        }
+
+        p {
+          margin-top: 18px;
+          font-size: 15px;
+        }
+
+        .actions {
+          display: grid;
+          grid-template-columns: 1fr;
+          margin-top: 26px;
+        }
+
+        .btn {
+          width: 100%;
+        }
+
+        .meta {
+          margin-top: 24px;
+          padding-top: 14px;
+        }
       }
     </style>
   </head>
+
   <body>
-    <div>
-      <h1>You are offline</h1>
-      <p>Gravium OS will sync when you're back online.</p>
-    </div>
+    <main class="page">
+      <section class="card" aria-labelledby="offline-title">
+        <header class="top">
+          <div class="brand">
+            <img src="/brand/gravium-wordmark-dark.png" alt="Gravium OS" />
+          </div>
+
+          <div class="status" id="status-pill">
+            <span class="dot" aria-hidden="true"></span>
+            Offline
+          </div>
+        </header>
+
+        <div class="body">
+          <div class="eyebrow">Network unavailable</div>
+          <h1 id="offline-title">You are offline.</h1>
+          <p>
+            Keep this tab open. Gravium OS will continue when your connection is restored.
+          </p>
+
+          <div class="actions">
+            <button class="btn btn-primary" type="button" onclick="window.location.reload()">
+              Check Again
+            </button>
+            <a class="btn btn-secondary" href="/">
+              Return Home
+            </a>
+          </div>
+
+          <div class="meta">
+            Last checked: <strong id="last-checked">just now</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const checkedEl = document.getElementById("last-checked");
+      const statusPill = document.getElementById("status-pill");
+
+      function updateCheckedTime() {
+        checkedEl.textContent = new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      window.addEventListener("online", () => {
+        statusPill.innerHTML = "Connection restored";
+        updateCheckedTime();
+        setTimeout(() => window.location.reload(), 900);
+      });
+
+      window.addEventListener("offline", updateCheckedTime);
+      setInterval(updateCheckedTime, 15000);
+      updateCheckedTime();
+    </script>
   </body>
 </html>
