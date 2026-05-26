@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravium-cache-v1";
+const CACHE_NAME = "gravium-os-cache-v2-offline-redesign";
 
 const urlsToCache = [
   "/",
