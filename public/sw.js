@@ -1,46 +1,84 @@
-const CACHE_NAME = "gravium-os-cache-v2-offline-redesign";
+const CACHE_NAME = "gravium-os-cache-v3-offline-brand-assets";
 
-const urlsToCache = [
+const PRECACHE_URLS = [
   "/",
-  "/offline.html",
   "/index.html",
-  "/manifest.json"
+  "/offline.html",
+  "/manifest.json",
+  "/favicon-v2.png",
+  "/brand/gravium-wordmark-dark.png",
+  "/brand/gravium-wordmark-light.png",
+  "/brand/gravium-icon-dark.png",
+  "/brand/gravium-icon-light.png",
 ];
 
 self.addEventListener("install", event => {
+  self.skipWaiting();
+
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(urlsToCache);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
   );
 });
 
 self.addEventListener("activate", event => {
+  self.clients.claim();
+
   event.waitUntil(
-    caches.keys().then(keys =>
+    caches.keys().then(cacheNames =>
       Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
+        cacheNames
+          .filter(cacheName => cacheName !== CACHE_NAME)
+          .map(cacheName => caches.delete(cacheName))
       )
     )
   );
 });
 
 self.addEventListener("fetch", event => {
-  // SPA navigation handling (IMPORTANT)
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match("/offline.html"))
-    );
+  const request = event.request;
+
+  if (request.method !== "GET") {
     return;
   }
 
-  // normal assets
+  const acceptsHtml =
+    request.mode === "navigate" ||
+    request.headers.get("accept")?.includes("text/html");
+
+  if (acceptsHtml) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          const responseClone = response.clone();
+
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(request, responseClone);
+          });
+
+          return response;
+        })
+        .catch(() =>
+          caches.match(request).then(cachedResponse =>
+            cachedResponse || caches.match("/offline.html")
+          )
+        )
+    );
+
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request).then(response => {
-        return response || caches.match("/offline.html");
+    caches.match(request).then(cachedResponse => {
+      if (cachedResponse) return cachedResponse;
+
+      return fetch(request).then(response => {
+        const responseClone = response.clone();
+
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(request, responseClone);
+        });
+
+        return response;
       });
     })
   );
