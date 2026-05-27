@@ -71,27 +71,46 @@ export default function CreateAdminPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background p-8 text-foreground">
+    <div className="relative flex min-h-screen bg-background text-foreground">
       <div className="absolute right-6 top-6 z-20">
         <ThemeModeToggle />
       </div>
 
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-sm">
-        <div className="mb-10 flex items-center justify-center gap-2">
+      <div className="relative hidden overflow-hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-16">
+        <img
+          src="/loginbg.jpg"
+          alt="Background"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+
+        <div className="absolute inset-0 bg-black/75" />
+
+        <div className="relative z-10 flex flex-col items-center text-center">
           <GraviumLogo
-            variant="wordmark"
-            className="h-9 w-auto object-contain"
+            variant="icon"
+            logoTheme="dark"
+            className="h-[200px] w-auto object-contain"
           />
-          <span className="text-2xl font-bold text-foreground">OS</span>
         </div>
+      </div>
 
-        <h1 className="mb-2 text-3xl font-bold text-foreground">
-          Create Admin Account
-        </h1>
+      <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto p-6 py-16 sm:p-8 lg:p-16">
+        <div className="w-full max-w-md">
+          <div className="mb-10 flex items-center justify-center gap-2 lg:hidden">
+            <GraviumLogo
+              variant="wordmark"
+              className="h-8 w-auto object-contain"
+            />
+            <span className="text-2xl font-medium text-foreground">OS</span>
+          </div>
 
-        <p className="mb-8 text-muted-foreground">
-          Set up your Super Admin account for Gravium OS
-        </p>
+          <h1 className="mb-2 text-2xl font-bold text-foreground">
+            Create Admin Account
+          </h1>
+
+          <p className="mb-8 text-xs text-muted-foreground">
+            Set up your Super Admin account for Gravium OS
+          </p>
 
         {success && (
           <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
@@ -214,16 +233,17 @@ export default function CreateAdminPage() {
           </Button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-xs text-muted-foreground">
-            Already have an account?{' '}
-            <Link
-              to="/login/admin"
-              className="font-medium text-foreground underline hover:text-muted-foreground"
-            >
-              Sign in
-            </Link>
-          </p>
+          <div className="mt-8 border-t border-border pt-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              Already have an account?{' '}
+              <Link
+                to="/login/admin"
+                className="font-medium text-foreground underline hover:text-muted-foreground"
+              >
+                Sign in
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
