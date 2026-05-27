@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase, type Task, type Subtask, type Department } from '../../lib/supabase';
+import { supabase, type Task, type Subtask, type Department, type Profile } from '../../lib/supabase';
 import { Button } from '../ui/button';
 import { Pencil, User, Trash2, List } from 'lucide-react';
 import {
@@ -10,11 +10,7 @@ import {
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
 interface TaskWithDetails extends Task {
-  assignee?: {
-    id?: string;
-    full_name?: string | null;
-    email?: string | null;
-  };
+  assignee?: Profile;
   subtasks: Subtask[];
   effectiveStatus: TaskStatus;
   overdueByDays?: number;
@@ -27,6 +23,7 @@ interface TaskDetailModalProps {
   departments: Department[];
   canManage: boolean;
   onRefresh: () => void;
+  onTaskUpdated?: (task: TaskWithDetails) => void;
   onTaskDeleted?: (taskId: string) => void;
 }
 
@@ -94,6 +91,7 @@ export default function TaskDetailModal({
   departments,
   canManage,
   onRefresh,
+  onTaskUpdated,
   onTaskDeleted,
 }: TaskDetailModalProps) {
   const [currentTask, setCurrentTask] = useState<TaskWithDetails | null>(task);
@@ -296,15 +294,16 @@ export default function TaskDetailModal({
         completed_at: completedAt,
       };
 
-      setCurrentTask({
+      const enrichedUpdatedTask: TaskWithDetails = {
         ...updatedTask,
         effectiveStatus: calcEffectiveStatus(updatedTask),
         overdueByDays: calcOverdueDays(updatedTask),
-      });
+      };
+
+      setCurrentTask(enrichedUpdatedTask);
+      onTaskUpdated?.(enrichedUpdatedTask);
 
       setEditingTask(false);
-
-      onRefresh();
     }
   };
 

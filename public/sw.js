@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravium-os-cache-v3-offline-brand-assets";
+const CACHE_NAME = "gravium-os-cache-v4-no-api-cache";
 
 const PRECACHE_URLS = [
   "/",
@@ -36,8 +36,16 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const request = event.request;
+  const requestUrl = new URL(request.url);
 
   if (request.method !== "GET") {
+    return;
+  }
+
+  // Never cache external/API requests such as Supabase.
+  // Cached API reads can make live app data disappear after normal refresh.
+  if (requestUrl.origin !== self.location.origin) {
+    event.respondWith(fetch(request));
     return;
   }
 

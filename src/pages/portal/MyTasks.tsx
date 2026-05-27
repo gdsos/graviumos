@@ -306,7 +306,12 @@ export default function MyTasks() {
       completed_at: null,
     };
 
-    const { error: err } = await supabase.from('tasks').insert(payload);
+    const { data, error: err } = await supabase
+      .from('tasks')
+      .insert(payload)
+      .select()
+      .single();
+
     setCreating(false);
 
     if (err) {
@@ -314,9 +319,44 @@ export default function MyTasks() {
       return;
     }
 
+    if (data) {
+
+      const createdTask = data as Task;
+
+      const deptMap: Record<string, string> = {};
+
+      for (const department of departments) {
+        deptMap[department.id] = department.name;
+      }
+
+      const optimisticTask: TaskWithDetails = {
+        ...createdTask,
+        subtasks: [],
+        effectiveStatus: calcEffectiveStatus(createdTask),
+        overdueByDays: calcOverdueDays(createdTask),
+        deptName: createdTask.department_id ? deptMap[createdTask.department_id] : undefined,
+      };
+
+      setTasks(prev => [
+        optimisticTask,
+        ...prev.filter(task => task.id !== optimisticTask.id),
+      ]);
+
+      setFilterAssignee('');
+
+      if (createdTask.assigned_to === profile?.id) {
+        setActiveTab('assigned');
+      } else {
+        setActiveTab('all');
+      }
+    }
+
     setShowCreateModal(false);
     setCreateForm(EMPTY_FORM);
-    fetchTasks();
+
+    window.setTimeout(() => {
+      void fetchTasks();
+    }, 750);
   };
 
   // ——— Subtask operations ————————————————————————————————————————————————————
@@ -338,6 +378,23 @@ export default function MyTasks() {
     setShowDetailModal(false);
   }
 };
+
+  const handleTaskUpdated = (
+    updatedTask: TaskWithDetails
+  ) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === updatedTask.id
+          ? {
+              ...task,
+              ...updatedTask,
+            }
+          : task
+      )
+    );
+
+    setDetailTask(updatedTask);
+  };
 
   // Sync detail task when tasks list updates
   useEffect(() => {
@@ -636,6 +693,7 @@ export default function MyTasks() {
         departments={departments}
         canManage={isDeptHead() && !isAdmin()}
         onRefresh={fetchTasks}
+        onTaskUpdated={handleTaskUpdated}
         onTaskDeleted={handleTaskDeleted}
       />
     </div>
