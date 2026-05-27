@@ -8,6 +8,7 @@ interface DateInputProps {
   disabled?: boolean;
   className?: string;
   placement?: 'up' | 'down';
+  popoverMode?: 'absolute' | 'fixed';
 }
 
 type CalendarView = 'days' | 'months' | 'years';
@@ -68,12 +69,18 @@ export function DateInput({
   disabled = false,
   className = '',
   placement = 'down',
+  popoverMode = 'absolute',
 }: DateInputProps) {
   const selectedDate = parseDateValue(value);
   const [isOpen, setIsOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<CalendarView>('days');
   const [viewDate, setViewDate] = useState(selectedDate || new Date());
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const [floatingPosition, setFloatingPosition] = useState({
+    left: 0,
+    top: 0,
+    width: 304,
+  });
 
   const monthDays = useMemo(() => getMonthDays(viewDate), [viewDate]);
   const yearRange = useMemo(() => getYearRange(viewDate.getFullYear()), [viewDate]);
@@ -106,6 +113,32 @@ export function DateInput({
         setCalendarView('days');
 
         window.setTimeout(() => {
+          const rect = rootRef.current?.getBoundingClientRect();
+
+          if (rect && popoverMode === 'fixed') {
+            const calendarWidth = 304;
+            const calendarHeight = 430;
+            const safeGap = 12;
+            const preferredTop =
+              placement === 'up'
+                ? rect.top - calendarHeight - 8
+                : rect.bottom + 8;
+
+            setFloatingPosition({
+              left: Math.max(
+                safeGap,
+                Math.min(rect.left, window.innerWidth - calendarWidth - safeGap)
+              ),
+              top: Math.max(
+                safeGap,
+                Math.min(preferredTop, window.innerHeight - calendarHeight - safeGap)
+              ),
+              width: calendarWidth,
+            });
+
+            return;
+          }
+
           rootRef.current?.scrollIntoView({
             behavior: 'smooth',
             block: 'center',
@@ -211,9 +244,20 @@ export function DateInput({
 
       {isOpen && (
         <div
-          className={`absolute left-0 z-[220] w-[19rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl ${
-            placement === 'up' ? 'bottom-12' : 'top-12'
+          className={`z-[220] w-[19rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl ${
+            popoverMode === 'fixed'
+              ? 'fixed'
+              : `absolute left-0 ${placement === 'up' ? 'bottom-12' : 'top-12'}`
           }`}
+          style={
+            popoverMode === 'fixed'
+              ? {
+                  left: floatingPosition.left,
+                  top: floatingPosition.top,
+                  width: floatingPosition.width,
+                }
+              : undefined
+          }
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-3">
             <button

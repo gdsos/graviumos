@@ -4,8 +4,9 @@ import { useLocation } from 'react-router-dom';
 import { supabase, type Project, type ProjectExpense, type ProjectCashReceived, formatINR } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
+import { DateInput } from '../../components/common/DateInput';
 import type { Task, Subtask, Profile } from '../../lib/supabase';
-import { Plus, Trash2, X, Edit2 } from 'lucide-react';
+import { Check, ChevronDown, Plus, Trash2, X, Edit2 } from 'lucide-react';
 import TaskDetailModal from '../../components/tasks/TaskDetailModal';
 import { getPortalDepartmentMemberIds, getProjectAccess } from './projectAccess';
 import type { ProjectWorkspaceMode } from './projectTypes';
@@ -85,7 +86,7 @@ function calcOverdueDays(task: Task): number | undefined {
 function FormField({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-900 mb-1.5">
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {label}{required && ' *'}
       </label>
       {children}
@@ -106,9 +107,12 @@ function StatCard({
 }) {
   const displayValue = typeof value === 'number' && currency ? formatINR(value) : value;
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">{label}</p>
-      <p className={`text-lg font-bold ${valueClassName}`}>
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+
+      <p className={`mt-2 text-base font-semibold text-foreground ${valueClassName}`}>
         {displayValue}
       </p>
     </div>
@@ -116,6 +120,76 @@ function StatCard({
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+
+
+interface ProjectOption {
+  value: string;
+  label: string;
+}
+
+function ProjectFormDropdown({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select',
+}: {
+  value: string;
+  options: ProjectOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(option => option.value === value);
+
+  return (
+    <div
+      className={`relative ${open ? 'z-[120]' : 'z-0'}`}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span className="truncate">{selected?.label || placeholder}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-[130] mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ProjectWorkspaceProps {
   mode: ProjectWorkspaceMode;
@@ -954,9 +1028,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 <>
                   <button
                     onClick={() => setDetailTab('overview')}
-                    className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'overview'
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
+                    className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${detailTab === 'overview'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                   >
                     Overview
@@ -964,9 +1038,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
                   <button
                     onClick={() => setDetailTab('expenses')}
-                    className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'expenses'
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
+                    className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${detailTab === 'expenses'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                   >
                     Expenses
@@ -974,9 +1048,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
                   <button
                     onClick={() => setDetailTab('cash')}
-                    className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'cash'
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
+                    className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${detailTab === 'cash'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                   >
                     Cash
@@ -987,9 +1061,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
               {/* Everyone gets Timeline */}
               <button
                 onClick={() => setDetailTab('timeline')}
-                className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'timeline'
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
+                className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${detailTab === 'timeline'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
               >
                 Timeline
@@ -999,9 +1073,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
               {canViewTasks && (
                 <button
                   onClick={() => setDetailTab('tasks')}
-                  className={`text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap ${detailTab === 'tasks'
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-600 hover:bg-slate-100'
+                  className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${detailTab === 'tasks'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                 >
                   Tasks
@@ -1013,7 +1087,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             {/* Tab content */}
             <div className="mt-4 flex-1 overflow-y-auto pr-1">
               {detailLoading ? (
-                <p className="text-slate-600 text-sm">Loading...</p>
+                <p className="text-sm text-muted-foreground">Loading...</p>
               ) : detailTab === 'overview' && financials ? (
                 <div className="flex flex-col gap-6">
                   {canEditFinancials ? (
@@ -1024,7 +1098,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         <StatCard label="Actual COGS" value={financials.actualCogs} />
                         <StatCard label="Net Profit" value={financials.netProfit} />
                       </div>
-                      <div className="border-t border-slate-200 pt-4">
+                      <div className="border-t border-border pt-4">
                           <div className="grid grid-cols-2 gap-4">
                             <StatCard label="Design Fee" value={financials.designFee} />
                             <StatCard label="Incentive" value={financials.incentive} />
@@ -1036,12 +1110,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     </>
                   ) : (
                     <div className="flex items-center justify-center py-8">
-                      <p className="text-xs text-slate-500">Financials locked for non-finance users</p>
+                      <p className="text-xs text-muted-foreground">Financials locked for non-finance users</p>
                     </div>
                   )}
 
-                    <div className="border-t border-slate-200 pt-4">
-                      <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-4">
+                    <div className="border-t border-border pt-4">
+                      <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         Cash Position
                       </h3>
 
@@ -1061,9 +1135,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     </div>
 
                   {selectedProject.description && (
-                    <div className="border-t border-slate-200 pt-4">
-                      <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-2">Description</h3>
-                      <p className="text-sm text-slate-600">{selectedProject.description}</p>
+                    <div className="border-t border-border pt-4">
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Description</h3>
+                      <p className="text-sm text-muted-foreground">{selectedProject.description}</p>
                     </div>
                   )}
                 </div>
@@ -1072,20 +1146,21 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   {canManageSubEntries && (
                     <form onSubmit={handleAddExpense} className="flex flex-col gap-2">
                           <div className="flex flex-col gap-1">
-                            <span className="text-[11px] text-slate-500 tracking-wide">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                               Date (DD/MM/YYYY)
                             </span>
 
-                            <input
-                              type="date"
+                            <DateInput
                               value={expenseForm.expense_date}
-                              onChange={e =>
+                              onChange={value =>
                                 setExpenseForm(f => ({
                                   ...f,
-                                  expense_date: e.target.value,
+                                  expense_date: value,
                                 }))
                               }
-                              className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                              placeholder="Select date"
+                              placement="down"
+                              popoverMode="fixed"
                             />
                           </div>
                       <input
@@ -1093,7 +1168,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         placeholder="Description"
                         value={expenseForm.description}
                         onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))}
-                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                        className="form-input"
                       />
                       <input
                         type="number"
@@ -1105,9 +1180,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                 amount: e.target.value === '' ? 0 : Number(e.target.value),
                               }))
                             }
-                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                        className="form-input"
                       />
-                      {subError && <p className="text-xs text-red-600">{subError}</p>}
+                      {subError && <p className="text-xs text-destructive">{subError}</p>}
                       <Button type="submit" size="sm" disabled={subSaving}>
                         Add Expense
                       </Button>
@@ -1116,26 +1191,26 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
                   <div className="flex flex-col gap-2">
                     {expenses.map(exp => (
-                      <div key={exp.id} className="flex justify-between items-center p-2 bg-slate-50 rounded">
+                      <div key={exp.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
                         <div>
                           <p className="text-xs font-medium">{exp.description}</p>
-                          <p className="text-xs text-slate-500">{new Date(exp.expense_date).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(exp.expense_date).toLocaleDateString()}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold">{formatINR(exp.amount)}</p>
                           {canManageSubEntries && (
                             <button
                               onClick={() => setDeleteTarget({ type: 'expense', id: exp.id })}
-                              className="p-1 hover:bg-red-100 rounded"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
                             >
-                              <Trash2 size={12} className="text-red-600" />
+                              <Trash2 size={12} />
                             </button>
                           )}
                         </div>
                       </div>
                     ))}
                     {expenses.length > 0 && (
-                      <div className="flex justify-between items-center p-2 bg-slate-100 rounded font-semibold border-t-2">
+                      <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 p-3 font-semibold">
                         <p className="text-xs">Total</p>
                         <p className="text-sm font-bold text-red-600">{formatINR(expenses.reduce((sum, e) => sum + e.amount, 0))}</p>
                       </div>
@@ -1149,42 +1224,43 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                             <div className="flex gap-2">
                               {/* Date */}
                               <div className="flex flex-col gap-1 flex-1">
-                                <span className="text-[11px] text-slate-500 tracking-wide">
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                                   Date (DD/MM/YYYY)
                                 </span>
 
-                                <input
-                                  type="date"
+                                <DateInput
                                   value={cashForm.received_date}
-                                  onChange={e =>
+                                  onChange={value =>
                                     setCashForm(f => ({
                                       ...f,
-                                      received_date: e.target.value,
+                                      received_date: value,
                                     }))
                                   }
-                                  className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                                  placeholder="Select date"
+                                  placement="down"
+                                  popoverMode="fixed"
                                 />
                               </div>
 
                               {/* GST Dropdown */}
                               <div className="flex flex-col gap-1 w-40">
-                                <span className="text-[11px] text-slate-500 tracking-wide">
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                                   GST Treatment
                                 </span>
 
-                                <select
+                                <ProjectFormDropdown
                                   value={cashForm.gst_treatment}
-                                  onChange={e =>
+                                  onChange={value =>
                                     setCashForm(f => ({
                                       ...f,
-                                      gst_treatment: e.target.value as 'GST' | 'NO_GST',
+                                      gst_treatment: value as 'GST' | 'NO_GST',
                                     }))
                                   }
-                                  className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
-                                >
-                                  <option value="GST">GST 18%</option>
-                                  <option value="NO_GST">No GST 0%</option>
-                                </select>
+                                  options={[
+                                    { value: 'GST', label: 'GST 18%' },
+                                    { value: 'NO_GST', label: 'No GST 0%' },
+                                  ]}
+                                />
                               </div>
                             </div>
                       <input
@@ -1192,7 +1268,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         placeholder="Description"
                         value={cashForm.description}
                         onChange={e => setCashForm(f => ({ ...f, description: e.target.value }))}
-                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                        className="form-input"
                       />
                       <input
                         type="number"
@@ -1204,9 +1280,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                   amount: e.target.value === '' ? 0 : Number(e.target.value),
                                 }))
                               }  
-                        className="px-3 py-2 rounded border-2 border-slate-200 text-sm focus:outline-none focus:border-slate-900"
+                        className="form-input"
                       />
-                      {subError && <p className="text-xs text-red-600">{subError}</p>}
+                      {subError && <p className="text-xs text-destructive">{subError}</p>}
                       <Button type="submit" size="sm" disabled={subSaving}>
                         Add Entry
                       </Button>
@@ -1215,26 +1291,26 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
                   <div className="flex flex-col gap-2">
                     {cashReceived.map(cash => (
-                      <div key={cash.id} className="flex justify-between items-center p-2 bg-slate-50 rounded">
+                      <div key={cash.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
                         <div>
                           <p className="text-xs font-medium">{cash.description}</p>
-                          <p className="text-xs text-slate-500">{new Date(cash.received_date).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(cash.received_date).toLocaleDateString()}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold">{formatINR(cash.amount)}</p>
                           {canManageSubEntries && (
                             <button
                               onClick={() => setDeleteTarget({ type: 'cash', id: cash.id })}
-                              className="p-1 hover:bg-red-100 rounded"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
                             >
-                              <Trash2 size={12} className="text-red-600" />
+                              <Trash2 size={12} />
                             </button>
                           )}
                         </div>
                       </div>
                     ))}
                     {cashReceived.length > 0 && (
-                      <div className="flex justify-between items-center p-2 bg-slate-100 rounded font-semibold border-t-2">
+                      <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 p-3 font-semibold">
                         <p className="text-xs">Total Received</p>
                         <p className="text-sm font-bold text-emerald-600">{formatINR(cashReceived.reduce((sum, c) => sum + c.amount, 0))}</p>
                       </div>
@@ -1245,7 +1321,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 <div className="flex flex-col gap-6">
                   {tasks.length === 0 ? (
                     <div className="flex items-center justify-center py-8">
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-muted-foreground">
                         No tasks found for this project
                       </p>
                     </div>
@@ -1269,11 +1345,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                           <div key={status}>
                             {/* Section Header */}
                             <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                 {status}
                               </h3>
 
-                              <span className="text-xs text-slate-400">
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                                 {filtered.length}
                               </span>
                             </div>
@@ -1284,30 +1360,30 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                 <button
                                   key={task.id}
                                   onClick={() => setSelectedTask(task)}
-                                  className="w-full text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition"
+                                  className="w-full rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-muted-foreground/35 hover:bg-muted/20"
                                 >
                                   {/* Top */}
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                      <h3 className="text-sm font-semibold text-slate-900 truncate">
+                                      <h3 className="truncate text-sm font-semibold text-foreground">
                                         {task.title}
                                       </h3>
 
                                       {task.description && (
-                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                                           {task.description}
                                         </p>
                                       )}
                                     </div>
 
                                     <span
-                                      className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shrink-0 ${task.effectiveStatus === 'Completed'
-                                          ? 'bg-emerald-100 text-emerald-700'
+                                      className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${task.effectiveStatus === 'Completed'
+                                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                                           : task.effectiveStatus === 'Overdue'
-                                            ? 'bg-red-100 text-red-700'
+                                            ? 'border-destructive/20 bg-destructive/10 text-destructive'
                                             : task.effectiveStatus === 'Ongoing'
-                                              ? 'bg-blue-100 text-blue-700'
-                                              : 'bg-slate-100 text-slate-700'
+                                              ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                              : 'border-border bg-muted text-muted-foreground'
                                         }`}
                                     >
                                       {task.effectiveStatus}
@@ -1317,7 +1393,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                   {/* Assignee + Deadline */}
                                   <div className="flex flex-wrap items-center gap-3 mt-3">
                                     {task.assignee && (
-                                      <div className="text-[11px] text-slate-600">
+                                      <div className="text-[11px] text-muted-foreground">
                                         Assigned to:{' '}
                                         <span className="font-medium">
                                           {task.assignee.full_name}
@@ -1326,7 +1402,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                     )}
 
                                     {task.deadline && (
-                                      <div className="text-[11px] text-slate-600">
+                                      <div className="text-[11px] text-muted-foreground">
                                         Due:{' '}
                                         <span className="font-medium">
                                           {new Date(
@@ -1337,7 +1413,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                     )}
 
                                     {task.overdueByDays && (
-                                      <div className="text-[11px] text-red-600 font-medium">
+                                      <div className="text-[11px] font-medium text-destructive">
                                         {task.overdueByDays} day(s) late
                                       </div>
                                     )}
@@ -1346,7 +1422,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                   {/* Subtasks Progress */}
                                   {task.subtasks.length > 0 && (
                                     <div className="mt-3">
-                                      <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                                      <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
                                         <span>Subtasks</span>
 
                                         <span>
@@ -1359,9 +1435,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                         </span>
                                       </div>
 
-                                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                                         <div
-                                          className="h-full bg-slate-900 rounded-full transition-all"
+                                          className="h-full rounded-full bg-primary transition-all"
                                           style={{
                                             width: `${(task.subtasks.filter(
                                               s => s.is_completed
@@ -1385,7 +1461,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 </div>
               ) : detailTab === 'timeline' ? (
                 <div className="flex items-center justify-center py-10">
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted-foreground">
                     Timeline coming soon
                   </p>
                 </div>
@@ -1397,132 +1473,177 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-bold">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-none border border-border bg-card shadow-2xl sm:rounded-3xl">
+            <div className="border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Project Setup
+              </p>
+
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 {editingProject ? 'Edit Project' : 'New Project'}
               </h2>
             </div>
 
-            <form onSubmit={handleSaveProject} className="flex flex-col gap-4 p-6">
-              {modalError && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm text-red-900">{modalError}</p>
+            <form onSubmit={handleSaveProject} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="flex flex-col gap-5">
+                  {modalError && (
+                    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+                      <p className="text-sm text-destructive">{modalError}</p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Project Name" required>
+                      <input
+                        type="text"
+                        required
+                        value={form.name}
+                        onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                        className="form-input"
+                        placeholder="Project name"
+                      />
+                    </FormField>
+
+                    <FormField label="Client" required>
+                      <input
+                        type="text"
+                        required
+                        value={form.client}
+                        onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+                        className="form-input"
+                        placeholder="Client name"
+                      />
+                    </FormField>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Status">
+                      <ProjectFormDropdown
+                        value={form.status}
+                        onChange={value =>
+                          setForm(f => ({
+                            ...f,
+                            status: value as typeof form.status,
+                          }))
+                        }
+                        options={PROJECT_STATUSES.map(status => ({
+                          value: status,
+                          label: status,
+                        }))}
+                      />
+                    </FormField>
+
+                    <FormField label="Design Fee %">
+                      <input
+                        type="number"
+                        value={form.design_fee_pct}
+                        onChange={e =>
+                          setForm(f => ({
+                            ...f,
+                            design_fee_pct: e.target.value === '' ? 0 : Number(e.target.value),
+                          }))
+                        }
+                        className="form-input"
+                        placeholder="0"
+                      />
+                    </FormField>
+                  </div>
+
+                  {canEditFinancials && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField label="Revenue">
+                        <input
+                          type="number"
+                          value={form.revenue}
+                          onChange={e =>
+                            setForm(f => ({
+                              ...f,
+                              revenue: e.target.value === '' ? 0 : Number(e.target.value),
+                            }))
+                          }
+                          className="form-input"
+                          placeholder="0"
+                        />
+                      </FormField>
+
+                      <FormField label="Est. COGS">
+                        <input
+                          type="number"
+                          value={form.estimated_cogs}
+                          onChange={e =>
+                            setForm(f => ({
+                              ...f,
+                              estimated_cogs: e.target.value === '' ? 0 : Number(e.target.value),
+                            }))
+                          }
+                          className="form-input"
+                          placeholder="0"
+                        />
+                      </FormField>
+                    </div>
+                  )}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Start Date">
+                      <DateInput
+                        value={form.start_date}
+                        onChange={value =>
+                          setForm(f => ({
+                            ...f,
+                            start_date: value,
+                          }))
+                        }
+                        placeholder="Select start date"
+                      />
+                    </FormField>
+
+                    <FormField label="End Date">
+                      <DateInput
+                        value={form.end_date}
+                        onChange={value =>
+                          setForm(f => ({
+                            ...f,
+                            end_date: value,
+                          }))
+                        }
+                        placeholder="Select end date"
+                      />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Description">
+                    <textarea
+                      value={form.description}
+                      onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                      rows={4}
+                      className="form-textarea min-h-28 resize-none"
+                      placeholder="Optional description"
+                    />
+                  </FormField>
                 </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Project Name" required>
-                  <input
-                    type="text"
-                    required
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                    placeholder="Project name"
-                  />
-                </FormField>
-
-                <FormField label="Client" required>
-                  <input
-                    type="text"
-                    required
-                    value={form.client}
-                    onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                    placeholder="Client name"
-                  />
-                </FormField>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Status">
-                  <select
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+              <div className="shrink-0 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModal(false)}
+                    className="h-10 rounded-xl"
                   >
-                    {PROJECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </FormField>
+                    Cancel
+                  </Button>
 
-                <FormField label="Design Fee %">
-                  <input
-                    type="number"
-                    value={form.design_fee_pct}
-                    onChange={e => setForm(f => ({ ...f, design_fee_pct: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                    placeholder="0"
-                  />
-                </FormField>
-              </div>
-
-              {canEditFinancials && (
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField label="Revenue">
-                    <input
-                      type="number"
-                      value={form.revenue}
-                      onChange={e => setForm(f => ({ ...f, revenue: parseFloat(e.target.value) || 0 }))}
-                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                      placeholder="0"
-                    />
-                  </FormField>
-
-                  <FormField label="Est. COGS">
-                    <input
-                      type="number"
-                      value={form.estimated_cogs}
-                      onChange={e => setForm(f => ({ ...f, estimated_cogs: parseFloat(e.target.value) || 0 }))}
-                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                      placeholder="0"
-                    />
-                  </FormField>
+                  <Button type="submit" disabled={saving} className="h-10 rounded-xl">
+                    {saving
+                      ? 'Saving...'
+                      : editingProject
+                        ? 'Save Changes'
+                        : 'Create Project'}
+                  </Button>
                 </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Start Date">
-                  <input
-                    type="date"
-                    value={form.start_date}
-                    onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                  />
-                </FormField>
-
-                <FormField label="End Date">
-                  <input
-                    type="date"
-                    value={form.end_date}
-                    onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                  />
-                </FormField>
-              </div>
-
-              <FormField label="Description">
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900 resize-none"
-                  placeholder="Optional description"
-                />
-              </FormField>
-
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? 'Saving...' : (editingProject ? 'Save Changes' : 'Create Project')}
-                </Button>
               </div>
             </form>
           </div>
@@ -1531,43 +1652,59 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-sm w-full">
-            <div className="p-6">
-              <h3 className="text-lg font-bold text-red-900 mb-2">Delete Confirmation</h3>
-              <p className="text-sm text-slate-600 mb-4">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+            <div className="border-b border-border px-5 py-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-destructive">
+                Delete Confirmation
+              </p>
+
+              <h3 className="text-lg font-semibold text-foreground">
                 {deleteTarget.type === 'project'
-                  ? 'This action will permanently delete the project and all associated expenses and cash records. This cannot be undone.'
+                  ? 'Delete this project?'
+                  : deleteTarget.type === 'expense'
+                    ? 'Delete this expense?'
+                    : 'Delete this cash entry?'}
+              </h3>
+            </div>
+
+            <div className="px-5 py-4">
+              <p className="text-sm text-muted-foreground">
+                {deleteTarget.type === 'project'
+                  ? 'This will permanently delete the project and its associated expense and cash records. This cannot be undone.'
                   : 'This action cannot be undone.'}
               </p>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setDeleteTarget(null)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={async () => {
-                    if (deleteTarget.type === 'project') {
-                      await handleDeleteProject(deleteTarget.id);
-                    } else if (deleteTarget.type === 'expense') {
-                      await handleDeleteExpense(deleteTarget.id);
-                    } else {
-                      await handleDeleteCash(deleteTarget.id);
-                    }
-                  }}
-                  className="flex-1"
-                >
-                  Delete
-                </Button>
-              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteTarget(null)}
+                className="h-10 rounded-xl"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (deleteTarget.type === 'project') {
+                    await handleDeleteProject(deleteTarget.id);
+                  } else if (deleteTarget.type === 'expense') {
+                    await handleDeleteExpense(deleteTarget.id);
+                  } else {
+                    await handleDeleteCash(deleteTarget.id);
+                  }
+                }}
+                className="h-10 rounded-xl"
+              >
+                Delete
+              </Button>
             </div>
           </div>
         </div>
       )}
+
       <TaskDetailModal
         task={selectedTask}
         open={!!selectedTask}
