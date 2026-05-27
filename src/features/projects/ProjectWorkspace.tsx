@@ -38,10 +38,10 @@ interface TaskWithDetails extends Task {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  Active: 'bg-green-100 text-green-900',
-  Completed: 'bg-blue-100 text-blue-900',
-  'On Hold': 'bg-amber-100 text-amber-900',
-  Cancelled: 'bg-red-100 text-red-900',
+  Active: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  Completed: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  'On Hold': 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  Cancelled: 'border-destructive/20 bg-destructive/10 text-destructive',
 };
 
 const PROJECT_STATUSES = ['Active', 'Completed', 'On Hold', 'Cancelled'] as const;
@@ -629,40 +629,56 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const financials = selectedProject ? calcFinancials(selectedProject) : null;
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-200">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">Projects</h1>
-          <p className="text-xs text-slate-600">Manage active and past projects</p>
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Gravium OS
+            </p>
+
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Projects
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              Manage active and past projects across design, execution, finance, tasks, and timeline.
+            </p>
+          </div>
+
+          {canManage && (
+            <Button
+              onClick={openCreate}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium"
+            >
+              <Plus size={16} />
+              New Project
+            </Button>
+          )}
         </div>
-        {canManage && (
-          <Button onClick={openCreate} className="flex items-center gap-2">
-            <Plus size={16} /> New Project
-          </Button>
-        )}
       </div>
 
       {error && (
-        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-          <p className="text-sm text-red-900">{error}</p>
+        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
       {/* Two-panel layout */}
-      <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 lg:flex-row lg:overflow-hidden">
         {/* Left panel: Project list */}
         <div
           className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedProject ? 'hidden lg:flex' : 'flex'
             }`}
         >
           {loading ? (
-            <div className="flex items-center justify-center h-48">
-              <p className="text-slate-600">Loading projects...</p>
+            <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 p-6">
+              <p className="text-sm text-muted-foreground">Loading projects...</p>
             </div>
           ) : projects.length === 0 ? (
-            <div className="flex items-center justify-center h-48">
-              <p className="text-slate-600">No projects yet</p>
+            <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 p-6">
+              <p className="text-sm text-muted-foreground">No projects yet</p>
             </div>
           ) : (
             <>
@@ -678,21 +694,21 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     <div
                       key={proj.id}
                       onClick={() => openDetail(proj)}
-                      className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm active:scale-[0.99] transition"
+                      className="rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition active:scale-[0.99] hover:border-muted-foreground/35 hover:bg-muted/20"
                     >
                       {/* Top */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <h3 className="text-sm font-semibold text-slate-900 truncate">
+                          <h3 className="truncate text-sm font-semibold text-foreground">
                             {proj.name}
                           </h3>
-                          <p className="text-xs text-slate-500 mt-0.5 truncate">
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
                             {proj.client}
                           </p>
                         </div>
 
                         <span
-                          className={`text-[11px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide shrink-0 ${STATUS_COLORS[proj.status]}`}
+                          className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_COLORS[proj.status]}`}
                         >
                           {proj.status}
                         </span>
@@ -702,19 +718,19 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       {canEditFinancials && (
                         <div className="grid grid-cols-2 gap-3 mt-4">
                           <div>
-                            <p className="text-[10px] text-slate-500 uppercase">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                               Revenue
                             </p>
-                            <p className="text-sm font-semibold text-slate-900">
+                            <p className="text-sm font-semibold text-foreground">
                               {formatINR(stats.revenue)}
                             </p>
                           </div>
 
                           <div>
-                            <p className="text-[10px] text-slate-500 uppercase">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                               Profit
                             </p>
-                            <p className="text-sm font-semibold text-slate-900">
+                            <p className="text-sm font-semibold text-foreground">
                               {formatINR(stats.netProfit)}
                             </p>
                           </div>
@@ -730,9 +746,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                 e.stopPropagation();
                                 openEdit(proj);
                               }}
-                              className="p-2 rounded-md hover:bg-blue-50 transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                             >
-                              <Edit2 size={16} className="text-blue-600" />
+                              <Edit2 size={16} />
                             </button>
 
                             <button
@@ -740,9 +756,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                 e.stopPropagation();
                                 setDeleteTarget({ type: 'project', id: proj.id });
                               }}
-                              className="p-2 rounded-md hover:bg-red-50 transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15"
                             >
-                              <Trash2 size={16} className="text-red-600" />
+                              <Trash2 size={16} />
                             </button>
                           </>
                         )}
@@ -753,33 +769,33 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
               </div>
 
               {/* DESKTOP VIEW */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden overflow-hidden rounded-2xl border border-border bg-card/60 md:block">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200">
-                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         Name
                       </th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         Client
                       </th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-900">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         Status
                       </th>
 
                       {canEditFinancials && (
-                        <th className="text-right px-4 py-3 font-semibold text-slate-900">
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                           Revenue
                         </th>
                       )}
 
                       {canEditFinancials && (
-                        <th className="text-right px-4 py-3 font-semibold text-slate-900">
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                           Est. Profit
                         </th>
                       )}
 
-                      <th className="text-center px-4 py-3 font-semibold text-slate-900">
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         Actions
                       </th>
                     </tr>
@@ -793,32 +809,32 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         <tr
                           key={proj.id}
                           onClick={() => openDetail(proj)}
-                          className="border-b border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                          className="cursor-pointer border-b border-border transition-colors hover:bg-muted/30"
                         >
-                          <td className="px-4 py-3 font-medium text-slate-900">
+                          <td className="px-4 py-3 font-medium text-foreground">
                             {proj.name}
                           </td>
 
-                          <td className="px-4 py-3 text-slate-600">
+                          <td className="px-4 py-3 text-muted-foreground">
                             {proj.client}
                           </td>
 
                           <td className="px-4 py-3">
                             <span
-                              className={`text-xs font-semibold px-2 py-1 rounded uppercase tracking-wide ${STATUS_COLORS[proj.status]}`}
+                              className={`rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${STATUS_COLORS[proj.status]}`}
                             >
                               {proj.status}
                             </span>
                           </td>
 
                           {canEditFinancials && (
-                            <td className="px-4 py-3 text-right text-slate-600">
+                            <td className="px-4 py-3 text-right text-muted-foreground">
                               {formatINR(stats.revenue)}
                             </td>
                           )}
 
                           {canEditFinancials && (
-                            <td className="px-4 py-3 text-right text-slate-600">
+                            <td className="px-4 py-3 text-right text-muted-foreground">
                               {formatINR(stats.netProfit)}
                             </td>
                           )}
@@ -832,9 +848,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                       e.stopPropagation();
                                       openEdit(proj);
                                     }}
-                                    className="p-1 hover:bg-blue-100 rounded"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                   >
-                                    <Edit2 size={14} className="text-blue-600" />
+                                    <Edit2 size={14} />
                                   </button>
 
                                   <button
@@ -842,9 +858,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                       e.stopPropagation();
                                       setDeleteTarget({ type: 'project', id: proj.id });
                                     }}
-                                    className="p-1 hover:bg-red-100 rounded"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
                                   >
-                                    <Trash2 size={14} className="text-red-600" />
+                                    <Trash2 size={14} />
                                   </button>
                                 </>
                               )}
