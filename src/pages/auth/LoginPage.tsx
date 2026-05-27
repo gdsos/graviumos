@@ -116,7 +116,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
           </p>
 
           {error && (
-            <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <div className="mb-6 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
               <p className="text-sm font-medium text-destructive">Login failed</p>
               <p className="mt-1 text-sm text-destructive/80">{error}</p>
             </div>
@@ -124,7 +124,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-5">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Email address
               </label>
 
@@ -134,12 +134,12 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                 onChange={e => setEmail(e.target.value)}
                 required
                 placeholder="you@gravium.com"
-                className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 font-medium text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+                className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Password
               </label>
 
@@ -151,7 +151,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                   required
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 pr-16 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+                  className="h-11 w-full rounded-xl border border-border bg-background px-3 pr-16 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
                 />
 
                 <button
@@ -164,7 +164,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
               </div>
             </div>
 
-            <Button type="submit" disabled={loading} className="mt-2 w-full">
+            <Button type="submit" disabled={loading} className="mt-2 h-11 w-full rounded-xl">
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>

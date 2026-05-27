@@ -113,7 +113,7 @@ export default function CreateAdminPage() {
           </p>
 
         {success && (
-          <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+          <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
             <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
               Admin account created!
             </p>
@@ -124,7 +124,7 @@ export default function CreateAdminPage() {
         )}
 
         {error && (
-          <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+          <div className="mb-6 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
             <p className="text-sm font-medium text-destructive">Error</p>
             <p className="mt-1 text-sm text-destructive/80">{error}</p>
           </div>
@@ -132,7 +132,7 @@ export default function CreateAdminPage() {
 
         <form onSubmit={handleCreate} className="flex flex-col gap-5">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Full Name
             </label>
 
@@ -142,12 +142,12 @@ export default function CreateAdminPage() {
               onChange={e => setFullName(e.target.value)}
               required
               placeholder="John Doe"
-              className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Email address
             </label>
 
@@ -157,12 +157,12 @@ export default function CreateAdminPage() {
               onChange={e => setEmail(e.target.value)}
               required
               placeholder="admin@gravium.com"
-              className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Password
             </label>
 
@@ -173,7 +173,7 @@ export default function CreateAdminPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="Min. 8 characters"
-                className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 pr-12 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+                className="h-11 w-full rounded-xl border border-border bg-background px-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
               />
 
               <button
@@ -189,7 +189,7 @@ export default function CreateAdminPage() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Confirm Password
             </label>
 
@@ -199,12 +199,12 @@ export default function CreateAdminPage() {
               onChange={e => setConfirmPassword(e.target.value)}
               required
               placeholder="Repeat password"
-              className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Admin Key
             </label>
 
@@ -215,7 +215,7 @@ export default function CreateAdminPage() {
                 onChange={e => setAdminKey(e.target.value)}
                 required
                 placeholder="Enter the admin key"
-                className="w-full rounded-lg border-2 border-border bg-background px-4 py-3 pr-12 text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none"
+                className="h-11 w-full rounded-xl border border-border bg-background px-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
               />
 
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -228,7 +228,7 @@ export default function CreateAdminPage() {
             </p>
           </div>
 
-          <Button type="submit" disabled={loading} className="mt-2 w-full">
+          <Button type="submit" disabled={loading} className="mt-2 h-11 w-full rounded-xl">
             {loading ? 'Creating...' : 'Create Admin Account'}
           </Button>
         </form>
