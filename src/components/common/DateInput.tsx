@@ -7,6 +7,7 @@ interface DateInputProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  placement?: 'up' | 'down';
 }
 
 type CalendarView = 'days' | 'months' | 'years';
@@ -66,6 +67,7 @@ export function DateInput({
   placeholder = 'Select date',
   disabled = false,
   className = '',
+  placement = 'down',
 }: DateInputProps) {
   const selectedDate = parseDateValue(value);
   const [isOpen, setIsOpen] = useState(false);
@@ -99,7 +101,19 @@ export function DateInput({
 
     setIsOpen(current => {
       const next = !current;
-      if (next) setCalendarView('days');
+
+      if (next) {
+        setCalendarView('days');
+
+        window.setTimeout(() => {
+          rootRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest',
+          });
+        }, 0);
+      }
+
       return next;
     });
   };
@@ -196,7 +210,11 @@ export function DateInput({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-12 z-50 w-[19rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl">
+        <div
+          className={`absolute left-0 z-[220] w-[19rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl ${
+            placement === 'up' ? 'bottom-12' : 'top-12'
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-border px-3 py-3">
             <button
               type="button"

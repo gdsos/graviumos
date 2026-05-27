@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
+import { DateInput } from '../../components/common/DateInput';
 import { useAuth } from '../../contexts/AuthContext';
 import TaskDetailModal from "../../components/tasks/TaskDetailModal";
 import TasksBoard from "../../components/tasks/TasksBoard";
-import { Calendar, Plus, Check, ChevronDown } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Plus, Check, ChevronDown } from 'lucide-react';
 
 // ——— Types ————————————————————————————————————————————————————————————————————
 
@@ -72,6 +74,83 @@ function calcOverdueDays(task: Task): number | undefined {
 
 // ——— Main Component ———————————————————————————————————————————————————————————
 
+
+
+interface TaskOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+function TaskFormDropdown({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select',
+  disabled = false,
+}: {
+  value: string;
+  options: TaskOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(option => option.value === value);
+  const selectedLabel = selected?.label || placeholder;
+
+  return (
+    <div
+      className={`relative ${open ? "z-[120]" : "z-0"}`}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute bottom-full left-0 z-[200] mb-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={`${option.value}-${option.label}`}
+                type="button"
+                disabled={option.disabled}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  if (option.disabled) return;
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TaskScopeFilter({
   value,
@@ -163,7 +242,6 @@ export default function MyTasks() {
   const [creating, setCreating] = useState(false);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const deadlineDateRef = useRef<HTMLInputElement>(null);
 
   const [detailTask, setDetailTask] = useState<TaskWithDetails | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -521,188 +599,194 @@ export default function MyTasks() {
       )}
 
       {/* —— Create Task Modal (for dept heads) —————————————————————————————— */}
+      {/* ?? Create Task Modal (for dept heads) ?????????????????????????????? */}
       {isDeptHead() && !isAdmin() && showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+            <div className="border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Task Setup
+              </p>
 
-            {/* Modal Header */}
-            <div className="sticky top-0 border-b border-border bg-card/95 px-6 py-4 backdrop-blur">
-              <h2 className="text-lg font-bold">Add Task</h2>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                Add Task
+              </h2>
             </div>
 
-            <form onSubmit={handleCreateTask} className="flex flex-col gap-4 p-6">
+            <form
+              onSubmit={handleCreateTask}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="flex flex-col gap-5">
+                  {createError && (
+                    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+                      <p className="text-sm font-medium text-destructive">
+                        Error
+                      </p>
 
-              {createError && (
-                <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
-                  <p className="text-sm font-medium text-destructive">Error</p>
-                  <p className="mt-1 text-sm text-destructive/85">{createError}</p>
-                </div>
-              )}
+                      <p className="mt-1 text-sm text-destructive/85">
+                        {createError}
+                      </p>
+                    </div>
+                  )}
 
-              {/* Title */}
-              <FormField label="Title *">
-                <input
-                  type="text"
-                  required
-                  value={createForm.title}
-                  onChange={e =>
-                    setCreateForm(f => ({ ...f, title: e.target.value }))
-                  }
-                  className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-                  placeholder="Task title"
-                />
-              </FormField>
-
-              {/* Description */}
-              <FormField label="Description">
-                <textarea
-                  value={createForm.description}
-                  onChange={e =>
-                    setCreateForm(f => ({ ...f, description: e.target.value }))
-                  }
-                  rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
-                  placeholder="Optional description"
-                />
-              </FormField>
-
-              {/* Department + Assignee */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Department">
-                  <select
-                    value={createForm.department_id}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        department_id: e.target.value,
-                        assigned_to: '',
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border border-border bg-muted text-foreground"
-                    disabled
-                  >
-                    <option value="">— Select —</option>
-                    {departments.map(d => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-
-                <FormField label="Assign To">
-                  <select
-                    value={createForm.assigned_to}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        assigned_to: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
-                  >
-                    <option value="">Unassigned</option>
-                    {allProfiles
-                      .filter(
-                        p =>
-                          p.department_ids?.includes(createForm.department_id) &&
-                          p.is_active
-                      )
-                      .map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name || p.email}
-                        </option>
-                      ))}
-                  </select>
-                </FormField>
-              </div>
-
-              {/* Project */}
-              {projects.length > 0 && (
-                <FormField label="Project">
-                  <select
-                    value={createForm.project_id}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        project_id: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
-                  >
-                    <option value="">— No Project —</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              )}
-
-              {/* Deadline + Status */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Deadline Date">
-                  <div className="relative">
+                  <FormField label="Title *">
                     <input
-                      ref={deadlineDateRef}
-                      type="date"
-                      value={createForm.deadline_date}
-                      onChange={e =>
-                        setCreateForm(f => ({
-                          ...f,
-                          deadline_date: e.target.value,
+                      type="text"
+                      required
+                      value={createForm.title}
+                      onChange={event =>
+                        setCreateForm(current => ({
+                          ...current,
+                          title: event.target.value,
                         }))
                       }
-                      className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors pr-9"
+                      className="form-input"
+                      placeholder="Task title"
                     />
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2"
-                      onClick={() => deadlineDateRef.current?.showPicker()}
-                    >
-                      <Calendar size={14} className="text-muted-foreground" />
-                    </button>
-                  </div>
-                </FormField>
+                  </FormField>
 
-                <FormField label="Status">
-                  <select
-                    value={createForm.status}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        status: e.target.value as TaskStatus,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
-                  >
-                    {STATUSES.filter(s => s !== 'Overdue').map(s => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
+                  <FormField label="Description">
+                    <textarea
+                      value={createForm.description}
+                      onChange={event =>
+                        setCreateForm(current => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      rows={4}
+                      className="min-h-28 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
+                      placeholder="Optional description"
+                    />
+                  </FormField>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Department">
+                      <TaskFormDropdown
+                        value={createForm.department_id}
+                        placeholder="Select department"
+                        disabled
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            department_id: value,
+                            assigned_to: '',
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Select Department' },
+                          ...departments.map(department => ({
+                            value: department.id,
+                            label: department.name,
+                          })),
+                        ]}
+                      />
+                    </FormField>
+
+                    <FormField label="Assign To">
+                      <TaskFormDropdown
+                        value={createForm.assigned_to}
+                        placeholder="Unassigned"
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            assigned_to: value,
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Unassigned' },
+                          ...allProfiles
+                            .filter(
+                              profile =>
+                                profile.department_ids?.includes(createForm.department_id) &&
+                                profile.is_active
+                            )
+                            .map(profile => ({
+                              value: profile.id,
+                              label: profile.full_name || profile.email || 'Unnamed Member',
+                            })),
+                        ]}
+                      />
+                    </FormField>
+                  </div>
+
+                  {projects.length > 0 && (
+                    <FormField label="Project">
+                      <TaskFormDropdown
+                        value={createForm.project_id}
+                        placeholder="No Project"
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            project_id: value,
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'No Project' },
+                          ...projects.map(project => ({
+                            value: project.id,
+                            label: project.name,
+                          })),
+                        ]}
+                      />
+                    </FormField>
+                  )}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Deadline Date">
+                      <DateInput
+                        value={createForm.deadline_date}
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            deadline_date: value,
+                          }))
+                        }
+                        placeholder="Select deadline"
+                        placement="up"
+                      />
+                    </FormField>
+
+                    <FormField label="Status">
+                      <TaskFormDropdown
+                        value={createForm.status}
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            status: value as TaskStatus,
+                          }))
+                        }
+                        options={STATUSES.map(status => ({
+                          value: status,
+                          label: status,
+                        }))}
+                      />
+                    </FormField>
+                  </div>
+                </div>
               </div>
 
-              {/* Footer */}
-              <div className="flex gap-3 justify-end pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-lg border border-border hover:bg-muted"
-                >
-                  Cancel
-                </button>
+              <div className="shrink-0 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowCreateModal(false)}
+                    className="h-10 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
 
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {creating ? 'Creating...' : 'Create Task'}
-                </button>
+                  <Button
+                    type="submit"
+                    disabled={creating}
+                    className="h-10 rounded-xl"
+                  >
+                    {creating ? 'Creating...' : 'Create Task'}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
