@@ -2,7 +2,7 @@
 import { supabase, type Announcement, type Department } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
-import { Info, Bell, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Check, Info, Bell, Trash2, ChevronUp, ChevronDown, X } from 'lucide-react';
 
 interface AnnouncementWithDept extends Announcement {
   department?: Department;
@@ -25,8 +25,8 @@ const emptyForm: NewAnnouncementForm = {
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-900 mb-1 uppercase tracking-wide">
-        {label}{required && <span className="text-red-600 ml-1">*</span>}
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}{required && <span className="ml-1 text-destructive">*</span>}
       </label>
       {children}
     </div>
@@ -49,7 +49,77 @@ function RelativeTime({ date }: { date: string }) {
   else if (diffDays < 7) label = `${diffDays} days ago`;
   else label = d.toLocaleDateString('en-IN');
 
-  return <span title={d.toLocaleString('en-IN')} className="text-xs text-slate-500">{label}</span>;
+  return <span title={d.toLocaleString('en-IN')} className="text-xs text-muted-foreground">{label}</span>;
+}
+
+
+interface AnnouncementOption {
+  value: string;
+  label: string;
+}
+
+function AnnouncementDropdown({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select',
+}: {
+  value: string;
+  options: AnnouncementOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(option => option.value === value);
+
+  return (
+    <div
+      className={`relative ${open ? 'z-[120]' : 'z-0'}`}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span className="truncate">{selected?.label || placeholder}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-[130] mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Announcements() {
@@ -178,38 +248,51 @@ export default function Announcements() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Announcements</h1>
-          <p className="text-sm text-slate-600 max-w-xl">
-            {canManage
-              ? 'Post and manage company-wide or department-specific announcements.'
-              : 'Stay updated with the latest company news and notices.'}
-          </p>
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Gravium OS
+            </p>
+
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Announcements
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              {canManage
+                ? 'Post and manage company-wide or department-specific announcements.'
+                : 'Stay updated with the latest company news and notices.'}
+            </p>
+          </div>
+
+          {canManage && (
+            <Button
+              onClick={openCreate}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium"
+            >
+              <Bell size={16} />
+              New Announcement
+            </Button>
+          )}
         </div>
-        {canManage && (
-          <Button onClick={openCreate} className="h-11">
-            <Bell size={16} />
-            New Announcement
-          </Button>
-        )}
       </div>
 
       {notification && (
-        <div className={`mb-6 rounded-2xl border px-4 py-4 ${notification.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
+        <div className={`mb-6 rounded-2xl border px-4 py-4 ${notification.type === 'success' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-destructive/20 bg-destructive/10 text-destructive'}`}>
           <p className="text-sm font-semibold">{notification.type === 'success' ? 'Success' : 'Error'}</p>
           <p className="text-sm mt-1">{notification.message}</p>
         </div>
       )}
 
       {loading ? (
-        <div className="grid place-items-center h-48 rounded-3xl border border-slate-200 bg-slate-50">
-          <p className="text-sm text-slate-600">Loading announcements…</p>
+        <div className="grid place-items-center h-48 rounded-3xl border border-dashed border-border bg-card/50">
+          <p className="text-sm text-muted-foreground">Loading announcements…</p>
         </div>
       ) : announcements.length === 0 ? (
-        <div className="grid place-items-center gap-4 h-48 rounded-3xl border border-slate-200 bg-slate-50 text-slate-600">
-          <Info size={28} className="text-slate-400" />
+        <div className="grid place-items-center gap-4 h-48 rounded-3xl border border-dashed border-border bg-card/50 text-muted-foreground">
+          <Info size={28} className="text-muted-foreground" />
           <p className="text-sm">No announcements yet.</p>
           {canManage && (
             <Button onClick={openCreate} variant="outline" className="mt-3">
@@ -228,17 +311,17 @@ export default function Announcements() {
             const isCompanyWide = announcement.target_type === 'company';
 
             return (
-              <div key={announcement.id} className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div key={announcement.id} className="rounded-3xl border border-border bg-card shadow-sm">
                 <div className="flex flex-col gap-4 p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                         <Info size={18} />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="text-base font-semibold text-slate-900 truncate">{announcement.title}</h2>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span className={`rounded-full px-2.5 py-1 ${isCompanyWide ? 'bg-sky-100 text-sky-900' : 'bg-amber-100 text-amber-900'}`}>
+                        <h2 className="text-base font-semibold text-foreground truncate">{announcement.title}</h2>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className={`rounded-full border px-2.5 py-1 font-semibold ${isCompanyWide ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
                             {isCompanyWide ? 'Company-wide' : announcement.department?.name ?? 'Department'}
                           </span>
                           <RelativeTime date={announcement.created_at} />
@@ -249,7 +332,7 @@ export default function Announcements() {
                       {isLong && (
                         <button
                           onClick={() => toggleExpand(announcement.id)}
-                          className="rounded-full p-2 text-slate-600 hover:bg-slate-100 transition-colors"
+                          className="rounded-full p-2 text-muted-foreground hover:bg-muted transition-colors"
                           aria-label={isExpanded ? 'Collapse announcement' : 'Expand announcement'}
                         >
                           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -258,7 +341,7 @@ export default function Announcements() {
                       {canManage && (
                         <button
                           onClick={() => setDeleteTarget(announcement)}
-                          className="rounded-full p-2 text-red-600 hover:bg-red-100 transition-colors"
+                          className="rounded-full p-2 text-destructive hover:bg-destructive/10 transition-colors"
                           aria-label="Delete announcement"
                         >
                           <Trash2 size={16} />
@@ -267,7 +350,7 @@ export default function Announcements() {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700 whitespace-pre-wrap">
+                  <div className="rounded-3xl border border-dashed border-border bg-card/50 p-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">
                     {preview}
                   </div>
                 </div>
@@ -278,99 +361,140 @@ export default function Announcements() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden">
-            <div className="border-b border-slate-200 px-6 py-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">New Announcement</h2>
-                <p className="text-sm text-slate-600">Create a new message for your organization.</p>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-none border border-border bg-card shadow-2xl sm:rounded-3xl">
+            <div className="border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Announcement Setup
+                  </p>
+
+                  <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                    New Announcement
+                  </h2>
+
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Create a new message for your organization.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => !saving && setShowModal(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Close announcement modal"
+                >
+                  <X size={18} />
+                </button>
               </div>
-              <button onClick={() => !saving && setShowModal(false)} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 transition-colors">
-                <ChevronUp size={18} className="rotate-45" />
-              </button>
             </div>
-            <form onSubmit={handleCreate} className="space-y-4 p-6">
-              {modalError && (
-                <div className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-                  {modalError}
-                </div>
-              )}
-              <FormField label="Title" required>
-                <input
-                  type="text"
-                  required
-                  value={form.title}
-                  onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none"
-                  placeholder="e.g. Office closed on Monday"
-                />
-              </FormField>
-              <FormField label="Content" required>
-                <textarea
-                  required
-                  value={form.content}
-                  onChange={e => setForm(prev => ({ ...prev, content: e.target.value }))}
-                  rows={5}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none resize-none"
-                  placeholder="Write the full announcement here…"
-                />
-              </FormField>
-              <FormField label="Audience">
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 rounded-3xl border border-slate-200 px-4 py-3 cursor-pointer text-sm text-slate-900 hover:border-slate-900 transition-colors">
+
+            <form onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="flex flex-col gap-5">
+                  {modalError && (
+                    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                      {modalError}
+                    </div>
+                  )}
+
+                  <FormField label="Title" required>
                     <input
-                      type="radio"
-                      name="target_type"
-                      value="company"
-                      checked={form.target_type === 'company'}
-                      onChange={() => setForm(prev => ({ ...prev, target_type: 'company', target_department_id: '' }))}
-                      className="h-4 w-4 accent-slate-900"
+                      type="text"
+                      required
+                      value={form.title}
+                      onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+                      className="form-input"
+                      placeholder="e.g. Office closed on Monday"
                     />
-                    <span>Company-wide — visible to all active employees</span>
-                  </label>
-                  <label className="flex items-center gap-3 rounded-3xl border border-slate-200 px-4 py-3 cursor-pointer text-sm text-slate-900 hover:border-slate-900 transition-colors">
-                    <input
-                      type="radio"
-                      name="target_type"
-                      value="department"
-                      checked={form.target_type === 'department'}
-                      onChange={() => setForm(prev => ({ ...prev, target_type: 'department' }))}
-                      className="h-4 w-4 accent-slate-900"
+                  </FormField>
+
+                  <FormField label="Content" required>
+                    <textarea
+                      required
+                      value={form.content}
+                      onChange={e => setForm(prev => ({ ...prev, content: e.target.value }))}
+                      rows={5}
+                      className="form-textarea min-h-36 resize-none"
+                      placeholder="Write the full announcement here..."
                     />
-                    <span>Department-specific — visible only to selected department</span>
-                  </label>
+                  </FormField>
+
+                  <FormField label="Audience">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/40">
+                        <input
+                          type="radio"
+                          name="target_type"
+                          value="company"
+                          checked={form.target_type === 'company'}
+                          onChange={() => setForm(prev => ({ ...prev, target_type: 'company', target_department_id: '' }))}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span>Company-wide</span>
+                      </label>
+
+                      <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/40">
+                        <input
+                          type="radio"
+                          name="target_type"
+                          value="department"
+                          checked={form.target_type === 'department'}
+                          onChange={() => setForm(prev => ({ ...prev, target_type: 'department' }))}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span>Department-specific</span>
+                      </label>
+                    </div>
+                  </FormField>
+
+                  {form.target_type === 'department' && (
+                    <FormField label="Select department" required>
+                      <AnnouncementDropdown
+                        value={form.target_department_id}
+                        onChange={value =>
+                          setForm(prev => ({
+                            ...prev,
+                            target_department_id: value,
+                          }))
+                        }
+                        placeholder="Choose a department..."
+                        options={departments.map(dept => ({
+                          value: dept.id,
+                          label: `${dept.name} (${dept.code})`,
+                        }))}
+                      />
+                    </FormField>
+                  )}
+
+                  <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    {form.target_type === 'company'
+                      ? 'All active employees will receive an in-app notification.'
+                      : form.target_department_id
+                        ? 'All active members of the selected department will be notified.'
+                        : 'Members of the selected department will be notified.'}
+                  </div>
                 </div>
-              </FormField>
-              {form.target_type === 'department' && (
-                <FormField label="Select department" required>
-                  <select
-                    required
-                    value={form.target_department_id}
-                    onChange={e => setForm(prev => ({ ...prev, target_department_id: e.target.value }))}
-                    className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none"
-                  >
-                    <option value="">Choose a department…</option>
-                    {departments.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.name} ({dept.code})</option>
-                    ))}
-                  </select>
-                </FormField>
-              )}
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                {form.target_type === 'company'
-                  ? 'All active employees will receive an in-app notification.'
-                  : form.target_department_id
-                    ? 'All active members of the selected department will be notified.'
-                    : 'Members of the selected department will be notified.'}
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2 border-t border-slate-200">
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  <Bell size={16} />
-                  {saving ? 'Publishing...' : 'Publish'}
-                </Button>
+
+              <div className="shrink-0 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModal(false)}
+                    disabled={saving}
+                    className="h-10 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button type="submit" disabled={saving} className="h-10 rounded-xl">
+                    <Bell size={16} />
+                    {saving ? 'Publishing...' : 'Publish'}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
@@ -378,25 +502,40 @@ export default function Announcements() {
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-900">
-                <Info size={20} />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-slate-900">Delete Announcement</h2>
-                <p className="text-sm text-slate-600 mt-1">This action cannot be undone.</p>
-              </div>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+            <div className="border-b border-border px-5 py-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-destructive">
+                Delete Confirmation
+              </p>
+
+              <h2 className="text-lg font-semibold text-foreground">
+                Delete Announcement?
+              </h2>
             </div>
-            <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Are you sure you want to delete “{deleteTarget.title}”? This will remove it for all users.
+
+            <div className="px-5 py-4">
+              <p className="text-sm text-muted-foreground">
+                This will remove ?{deleteTarget.title}? for all users. This action cannot be undone.
+              </p>
             </div>
-            <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-end">
-              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="h-10 rounded-xl"
+              >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="h-10 rounded-xl"
+              >
                 {deleting ? 'Deleting...' : 'Delete'}
               </Button>
             </div>
