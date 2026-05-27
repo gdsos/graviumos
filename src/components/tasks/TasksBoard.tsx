@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Calendar, Check, ChevronDown, LayoutGrid, List, Search, User, X } from 'lucide-react';
 import type { Task, Subtask, Profile } from '../../lib/supabase';
 
@@ -414,52 +414,50 @@ function TaskListItem({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-muted-foreground/35 hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_auto]"
+      className="w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-muted-foreground/35 hover:bg-muted/20"
     >
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-start gap-2">
-          <p className="min-w-0 flex-1 text-sm font-semibold text-foreground">
-            {task.title}
-          </p>
-          <StatusPill status={task.effectiveStatus} />
-        </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="min-w-0 text-sm font-semibold text-foreground">
+              {task.title}
+            </p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <User size={14} />
-            {getTaskAssigneeLabel(task)}
-          </span>
+            {hasSubtasks && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                {task.subtasks.filter(s => s.is_completed).length}/{task.subtasks.length} subtasks
+              </span>
+            )}
+          </div>
 
-          <span
-            className={`inline-flex items-center gap-1.5 ${
-              deadlineOverdue ? 'text-destructive' : ''
-            }`}
-          >
-            <Calendar size={14} />
-            {formatDeadline(task.deadline)}
-          </span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground sm:justify-end">
+            <span className="inline-flex items-center gap-1.5">
+              <User size={14} />
+              {getTaskAssigneeLabel(task)}
+            </span>
 
-          {hasSubtasks && (
-            <span>{task.subtasks.filter(s => s.is_completed).length}/{task.subtasks.length} subtasks</span>
-          )}
+            <span
+              className={`inline-flex items-center gap-1.5 ${
+                deadlineOverdue ? 'text-destructive' : ''
+              }`}
+            >
+              <Calendar size={14} />
+              {formatDeadline(task.deadline)}
+            </span>
+          </div>
         </div>
 
         {hasSubtasks && (
-          <div className="mt-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
             <ProgressBar value={progress} />
+
+            <span className="text-xs font-semibold text-muted-foreground">
+              {progress}%
+            </span>
           </div>
         )}
-      </div>
 
-      <div className="flex items-center justify-between gap-3 sm:justify-end">
-        {hasSubtasks && (
-          <span className="text-xs font-semibold text-muted-foreground">
-            {progress}%
-          </span>
-        )}
-        <span className="text-xs font-medium text-muted-foreground">
-          View
-        </span>
+
       </div>
     </button>
   );
@@ -516,15 +514,22 @@ export default function TasksBoard({
   filterPrefix,
   onCardClick,
 }: TasksBoardProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const savedViewMode = window.localStorage.getItem('gravium-tasks-view-mode');
 
-  useEffect(() => {
+    if (savedViewMode === 'kanban' || savedViewMode === 'list') {
+      return savedViewMode;
+    }
+
     const isSmallScreen = window.matchMedia('(max-width: 767px)').matches;
 
-    if (isSmallScreen) {
-      setViewMode('list');
-    }
-  }, []);
+    return isSmallScreen ? 'list' : 'kanban';
+  });
+
+  const handleViewModeChange = (nextViewMode: ViewMode) => {
+    setViewMode(nextViewMode);
+    window.localStorage.setItem('gravium-tasks-view-mode', nextViewMode);
+  };
 
   const filteredTasks = filterAssignee
     ? tasks.filter(t => t.assigned_to === filterAssignee)
@@ -574,7 +579,7 @@ export default function TasksBoard({
 
         <ViewModeDropdown
           value={viewMode}
-          onChange={setViewMode}
+          onChange={handleViewModeChange}
         />
         </div>
       </div>
@@ -599,19 +604,48 @@ export default function TasksBoard({
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
           {filteredTasks.length === 0 ? (
             <div className="flex min-h-44 items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 p-6 text-sm text-muted-foreground">
               No tasks found
             </div>
           ) : (
-            filteredTasks.map(task => (
-              <TaskListItem
-                key={task.id}
-                task={task}
-                onClick={() => onCardClick(task)}
-              />
-            ))
+            STATUSES.map(status => {
+              const statusTasks = grouped[status];
+
+              if (statusTasks.length === 0) {
+                return null;
+              }
+
+              return (
+                <section
+                  key={status}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex items-center justify-between border-b border-border pb-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        {status}
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                      {statusTasks.length}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {statusTasks.map(task => (
+                      <TaskListItem
+                        key={task.id}
+                        task={task}
+                        onClick={() => onCardClick(task)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })
           )}
         </div>
       )}

@@ -10,6 +10,7 @@ import { Calendar, Plus, Check, ChevronDown } from 'lucide-react';
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
 interface TaskWithDetails extends Task {
+  assignee?: Profile;
   subtasks: Subtask[];
   effectiveStatus: TaskStatus;
   overdueByDays?: number;
@@ -246,10 +247,35 @@ export default function MyTasks() {
     const deptMap: Record<string, string> = {};
     for (const d of departments) deptMap[d.id] = d.name;
 
+    // Fetch assignee profiles so Portal task rows do not show assigned tasks as Unassigned.
+    const assigneeIds = [
+      ...new Set(
+        (tasksData as Task[])
+          .map(task => task.assigned_to)
+          .filter(Boolean) as string[]
+      ),
+    ];
+
+    let assigneeMap: Record<string, Profile> = {};
+
+    if (assigneeIds.length > 0) {
+      const { data: assigneeData } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, department_ids, is_active, role')
+        .in('id', assigneeIds);
+
+      if (assigneeData) {
+        for (const assignee of assigneeData as Profile[]) {
+          assigneeMap[assignee.id] = assignee;
+        }
+      }
+    }
+
     const enriched: TaskWithDetails[] = (tasksData as Task[]).map(t => {
       const subtasks = subtaskMap[t.id] || [];
       return {
         ...t,
+        assignee: t.assigned_to ? assigneeMap[t.assigned_to] : undefined,
         subtasks,
         effectiveStatus: calcEffectiveStatus(t),
         overdueByDays: calcOverdueDays(t),
