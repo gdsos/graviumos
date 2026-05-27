@@ -9,7 +9,7 @@ import {
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
-import { Calendar, Plus } from 'lucide-react';
+import { Calendar, Plus, Check, ChevronDown, Search } from 'lucide-react';
 import TaskDetailModal from '../../components/tasks/TaskDetailModal';
 import TasksBoard from '../../components/tasks/TasksBoard';
 import { createNotification } from '../../lib/notifications';
@@ -61,7 +61,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-900 mb-1.5">
+      <label className="block text-xs font-medium text-foreground mb-1.5">
         {label}
       </label>
 
@@ -93,6 +93,114 @@ const EMPTY_FORM: TaskFormState = {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+
+
+interface DepartmentFilterOption {
+  name: string;
+  count: number;
+  index: number;
+}
+
+function DepartmentFilter({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: DepartmentFilterOption[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selected = options.find(option => option.name === value);
+  const selectedLabel = selected?.name || 'Select Department';
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  return (
+    <div
+      className="relative min-w-0 flex-1 sm:min-w-[220px]"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(current => !current);
+          setQuery('');
+        }}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl">
+          <div className="hidden items-center gap-2 border-b border-border px-3 py-2 sm:flex">
+            <Search size={14} className="text-muted-foreground" />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Search department"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-64 overflow-y-auto p-1">
+            {filteredOptions.map(option => {
+              const isSelected = option.name === value;
+
+              return (
+                <button
+                  key={option.name}
+                  type="button"
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => {
+                    onChange(option.name);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                    isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  <span className="truncate">{option.name}</span>
+
+                  <span className="flex items-center gap-2">
+                    {option.count > 0 && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                        {option.count}
+                      </span>
+                    )}
+
+                    {isSelected && <Check size={14} />}
+                  </span>
+                </button>
+              );
+            })}
+
+            {filteredOptions.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                No department found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Tasks() {
   const location = useLocation();
@@ -627,51 +735,94 @@ export default function Tasks() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+
+  const departmentFilterOptions = DEPT_NAMES.reduce<DepartmentFilterOption[]>(
+    (items, deptName, index) => {
+      const dept =
+        departments.find(
+          d => d.name === deptName
+        );
+
+      if (
+        !isAdmin() &&
+        dept &&
+        !profile?.department_ids?.includes(
+          dept.id
+        )
+      ) {
+        return items;
+      }
+
+      items.push({
+        name: deptName,
+        index,
+        count: dept ? tabTasks(dept.id).length : 0,
+      });
+
+      return items;
+    },
+    []
+  );
+
+  const handleDepartmentFilterChange = (deptName: string) => {
+    const nextIndex = Array.from<string>(DEPT_NAMES).indexOf(deptName);
+
+    if (nextIndex < 0) return;
+
+    setActiveTabIndex(nextIndex);
+    setFilterAssignee('');
+  };
+
   return (
-    <div className="max-w-full">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
       {/* Header */}
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">
-            Tasks
-          </h1>
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Gravium OS
+            </p>
 
-          <p className="text-xs text-slate-600">
-            Manage department tasks
-            across your organisation
-          </p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Tasks
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              Manage department tasks across your organisation.
+            </p>
+          </div>
+
+          {canManage && (
+            <Button
+              onClick={openCreate}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium"
+            >
+              <Plus size={16} />
+              Add Task
+            </Button>
+          )}
         </div>
-
-        {canManage && (
-          <Button
-            onClick={openCreate}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Add Task
-          </Button>
-        )}
       </div>
 
       {/* Error */}
 
       {error && (
-        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-          <p className="text-sm font-medium text-red-900">
+        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+          <p className="text-sm font-medium text-destructive">
             Error
           </p>
 
-          <p className="text-sm text-red-800 mt-1">
+          <p className="mt-1 text-sm text-destructive/85">
             {error}
           </p>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Department Switcher */}
 
-      <div className="border-b border-slate-200 mb-6">
-        <div className="flex gap-6 overflow-x-auto">
+      <div className="mb-6 hidden overflow-x-auto rounded-2xl border border-border bg-card/60 p-2 md:block">
+        <div className="flex min-w-max gap-2">
           {DEPT_NAMES.map(
             (deptName, idx) => {
               const dept =
@@ -696,6 +847,8 @@ export default function Tasks() {
                   tabTasks(dept.id).length;
               }
 
+              const isActive = idx === activeTabIndex;
+
               return (
                 <button
                   key={deptName}
@@ -708,17 +861,25 @@ export default function Tasks() {
                       ''
                     );
                   }}
-                  className={`py-3 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
-                    idx === activeTabIndex
-                      ? 'border-slate-900 text-slate-900'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  {deptName}
+                  <span>{deptName}</span>
 
-                  {deptTaskCount > 0
-                    ? ` (${deptTaskCount})`
-                    : ''}
+                  {deptTaskCount > 0 && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        isActive
+                          ? 'bg-primary-foreground/15 text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {deptTaskCount}
+                    </span>
+                  )}
                 </button>
               );
             }
@@ -739,6 +900,15 @@ export default function Tasks() {
             setFilterAssignee
           }
           deptMembers={deptMembers}
+          filterPrefix={
+            <div className="min-w-0 flex-1 sm:min-w-[220px] md:hidden">
+              <DepartmentFilter
+                value={activeDeptName}
+                options={departmentFilterOptions}
+                onChange={handleDepartmentFilterChange}
+              />
+            </div>
+          }
           onCardClick={setSelectedTask}
         />
       )}
@@ -746,9 +916,9 @@ export default function Tasks() {
       {/* Modal */}
 
       {showTaskModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="sticky top-0 border-b border-border bg-card/95 px-6 py-4 backdrop-blur">
               <h2 className="text-lg font-bold">
                 {editingTask
                   ? 'Edit Task'
@@ -761,12 +931,12 @@ export default function Tasks() {
               className="flex flex-col gap-4 p-6"
             >
               {formError && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-900">
+                <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+                  <p className="text-sm font-medium text-destructive">
                     Error
                   </p>
 
-                  <p className="text-sm text-red-800 mt-1">
+                  <p className="mt-1 text-sm text-destructive/85">
                     {formError}
                   </p>
                 </div>
@@ -786,7 +956,7 @@ export default function Tasks() {
                         e.target.value,
                     }))
                   }
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+                  className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                   placeholder="Task title"
                 />
               </FormField>
@@ -804,7 +974,7 @@ export default function Tasks() {
                     }))
                   }
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors resize-none"
+                  className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
                   placeholder="Optional description"
                 />
               </FormField>
@@ -829,7 +999,7 @@ export default function Tasks() {
                       !isAdmin() &&
                       isDeptHead()
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     <option value="">
                       — Select —
@@ -858,7 +1028,7 @@ export default function Tasks() {
                           e.target.value,
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     <option value="">
                       Unassigned
@@ -903,7 +1073,7 @@ export default function Tasks() {
                           e.target.value,
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     <option value="">
                       — No Project —
@@ -941,7 +1111,7 @@ export default function Tasks() {
                             e.target.value,
                         }))
                       }
-                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors pr-9"
+                      className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors pr-9"
                     />
 
                     <button
@@ -955,7 +1125,7 @@ export default function Tasks() {
                     >
                       <Calendar
                         size={14}
-                        className="text-slate-600"
+                        className="text-muted-foreground"
                       />
                     </button>
                   </div>
@@ -972,7 +1142,7 @@ export default function Tasks() {
                             .value as TaskStatus,
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     {STATUSES.map(s => (
                       <option
@@ -988,7 +1158,7 @@ export default function Tasks() {
 
               {/* Actions */}
 
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-2 border-t border-border">
                 <Button
                   type="button"
                   variant="outline"

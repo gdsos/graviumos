@@ -3,7 +3,7 @@ import { supabase, type Task, type Subtask, type Profile } from '../../lib/supab
 import { useAuth } from '../../contexts/AuthContext';
 import TaskDetailModal from "../../components/tasks/TaskDetailModal";
 import TasksBoard from "../../components/tasks/TasksBoard";
-import { Calendar, Plus } from 'lucide-react';
+import { Calendar, Plus, Check, ChevronDown } from 'lucide-react';
 
 // ——— Types ————————————————————————————————————————————————————————————————————
 
@@ -70,6 +70,82 @@ function calcOverdueDays(task: Task): number | undefined {
 // ——— Sub-components ———————————————————————————————————————————————————————————
 
 // ——— Main Component ———————————————————————————————————————————————————————————
+
+
+function TaskScopeFilter({
+  value,
+  onChange,
+}: {
+  value: 'all' | 'assigned';
+  onChange: (value: 'all' | 'assigned') => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const options: {
+    value: 'all' | 'assigned';
+    label: string;
+  }[] = [
+    {
+      value: 'all',
+      label: 'All Tasks',
+    },
+    {
+      value: 'assigned',
+      label: 'My Tasks',
+    },
+  ];
+
+  const selected = options.find(option => option.value === value) || options[0];
+
+  return (
+    <div
+      className="relative min-w-0 flex-1 sm:min-w-[220px]"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span className="truncate">{selected.label}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span>{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function MyTasks() {
   const { profile, departments, isDeptHead, isAdmin } = useAuth();
@@ -290,64 +366,46 @@ export default function MyTasks() {
   // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
-    <div className="max-w-full">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">
-            {isDeptHeadOnly ? 'Tasks' : 'My Tasks'}
-          </h1>
-          <p className="text-xs text-slate-600">
-            {isDeptHeadOnly
-              ? activeTab === 'assigned'
-                ? `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you`
-                : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} in your department`
-              : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you`}
-          </p>
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Gravium OS
+            </p>
+
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              {isDeptHeadOnly ? 'Tasks' : 'My Tasks'}
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              {isDeptHeadOnly
+                ? activeTab === 'assigned'
+                  ? `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you.`
+                  : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} in your department.`
+                : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you.`}
+            </p>
+          </div>
+
+          {isDeptHeadOnly && (
+            <button
+              onClick={openCreateModal}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus size={16} />
+              Add Task
+            </button>
+          )}
         </div>
-        {isDeptHeadOnly && (
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
-          >
-            <Plus size={16} />
-            Add Task
-          </button>
-        )}
       </div>
 
-      {/* Tabs for department heads */}
-      {isDeptHeadOnly && (
-        <div className="mb-6 flex gap-6 border-b border-border pb-0">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-0 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'all'
-                ? 'text-primary border-b-2 border-primary -mb-[2px]'
-                : 'text-muted-foreground hover:text-primary'
-            }`}
-          >
-            All Tasks
-          </button>
-          <button
-            onClick={() => setActiveTab('assigned')}
-            className={`px-0 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'assigned'
-                ? 'text-primary border-b-2 border-primary -mb-[2px]'
-                : 'text-muted-foreground hover:text-primary'
-            }`}
-          >
-            My Tasks
-          </button>
-        </div>
-      )}
-
       {error && (
-        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-          <p className="text-sm font-medium text-red-900">
+        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+          <p className="text-sm font-medium text-destructive">
             Error loading tasks
           </p>
-          <p className="text-sm text-red-800 mt-1">
+          <p className="mt-1 text-sm text-destructive/85">
             {error}
           </p>
         </div>
@@ -356,7 +414,7 @@ export default function MyTasks() {
       {/* Kanban board */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             Loading your tasks…
           </p>
         </div>
@@ -367,26 +425,34 @@ export default function MyTasks() {
             filterAssignee={filterAssignee}
             setFilterAssignee={setFilterAssignee}
             deptMembers={allProfiles}
+            filterPrefix={
+              isDeptHeadOnly ? (
+                <TaskScopeFilter
+                  value={activeTab}
+                  onChange={setActiveTab}
+                />
+              ) : undefined
+            }
             onCardClick={openDetail}
           />
       )}
 
       {/* —— Create Task Modal (for dept heads) —————————————————————————————— */}
       {isDeptHead() && !isAdmin() && showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl">
 
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
+            <div className="sticky top-0 border-b border-border bg-card/95 px-6 py-4 backdrop-blur">
               <h2 className="text-lg font-bold">Add Task</h2>
             </div>
 
             <form onSubmit={handleCreateTask} className="flex flex-col gap-4 p-6">
 
               {createError && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-900">Error</p>
-                  <p className="text-sm text-red-800 mt-1">{createError}</p>
+                <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+                  <p className="text-sm font-medium text-destructive">Error</p>
+                  <p className="mt-1 text-sm text-destructive/85">{createError}</p>
                 </div>
               )}
 
@@ -399,7 +465,7 @@ export default function MyTasks() {
                   onChange={e =>
                     setCreateForm(f => ({ ...f, title: e.target.value }))
                   }
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+                  className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                   placeholder="Task title"
                 />
               </FormField>
@@ -412,7 +478,7 @@ export default function MyTasks() {
                     setCreateForm(f => ({ ...f, description: e.target.value }))
                   }
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors resize-none"
+                  className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
                   placeholder="Optional description"
                 />
               </FormField>
@@ -429,7 +495,7 @@ export default function MyTasks() {
                         assigned_to: '',
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-slate-100 text-slate-900"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-muted text-foreground"
                     disabled
                   >
                     <option value="">— Select —</option>
@@ -450,7 +516,7 @@ export default function MyTasks() {
                         assigned_to: e.target.value,
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     <option value="">Unassigned</option>
                     {allProfiles
@@ -479,7 +545,7 @@ export default function MyTasks() {
                         project_id: e.target.value,
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     <option value="">— No Project —</option>
                     {projects.map(p => (
@@ -505,14 +571,14 @@ export default function MyTasks() {
                           deadline_date: e.target.value,
                         }))
                       }
-                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors pr-9"
+                      className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors pr-9"
                     />
                     <button
                       type="button"
                       className="absolute right-2 top-1/2 -translate-y-1/2"
                       onClick={() => deadlineDateRef.current?.showPicker()}
                     >
-                      <Calendar size={14} className="text-slate-600" />
+                      <Calendar size={14} className="text-muted-foreground" />
                     </button>
                   </div>
                 </FormField>
@@ -526,7 +592,7 @@ export default function MyTasks() {
                         status: e.target.value as TaskStatus,
                       }))
                     }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:border-primary transition-colors"
                   >
                     {STATUSES.filter(s => s !== 'Overdue').map(s => (
                       <option key={s} value={s}>
@@ -538,11 +604,11 @@ export default function MyTasks() {
               </div>
 
               {/* Footer */}
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
+              <div className="flex gap-3 justify-end pt-2 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg border border-border hover:bg-muted"
                 >
                   Cancel
                 </button>
@@ -550,7 +616,7 @@ export default function MyTasks() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Task'}
                 </button>
