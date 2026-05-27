@@ -795,9 +795,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         </th>
                       )}
 
-                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Actions
-                      </th>
+                      {!selectedProject && (
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
 
@@ -839,33 +841,35 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                             </td>
                           )}
 
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              {canManage && (
-                                <>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEdit(proj);
-                                    }}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
+                          {!selectedProject && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-2">
+                                {canManage && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openEdit(proj);
+                                      }}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    >
+                                      <Edit2 size={14} />
+                                    </button>
 
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteTarget({ type: 'project', id: proj.id });
-                                    }}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTarget({ type: 'project', id: proj.id });
+                                      }}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -878,28 +882,72 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
         {/* Right panel: Detail panel */}
         {selectedProject && (
-          <div className="w-full lg:w-96 flex flex-col border-t lg:border-t-0 lg:border-l border-slate-200 pt-6 lg:pt-0 lg:pl-6 min-h-0">
+          <div className="fixed inset-0 z-[80] flex min-h-0 w-full flex-col bg-background px-4 pb-28 pt-5 lg:relative lg:inset-auto lg:z-auto lg:w-[42rem] lg:rounded-2xl lg:border lg:border-border lg:bg-card/60 lg:p-4">
             {/* Detail header */}
-            <div className="pb-4 border-b border-slate-200 flex items-start justify-between">
-              <div className="flex-1">
-                <h2 className="text-xl font-bold text-slate-900">{selectedProject.name}</h2>
-                <p className="text-sm text-slate-600 mt-1">{selectedProject.client}</p>
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-background pb-4 lg:bg-transparent">
+              <div className="min-w-0 flex-1">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Project Details
+                </p>
+
+                <h2 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                  {selectedProject.name}
+                </h2>
+
+                <p className="mt-1 truncate text-sm text-muted-foreground">
+                  {selectedProject.client}
+                </p>
+
                 {selectedProject.start_date && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    {new Date(selectedProject.start_date).toLocaleDateString()} {selectedProject.end_date ? `- ${new Date(selectedProject.end_date).toLocaleDateString()}` : ''}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {new Date(selectedProject.start_date).toLocaleDateString()}{' '}
+                    {selectedProject.end_date
+                      ? `- ${new Date(selectedProject.end_date).toLocaleDateString()}`
+                      : ''}
                   </p>
                 )}
               </div>
-              <button
-                onClick={closeDetail}
-                className="p-1 hover:bg-slate-100 rounded transition-colors"
-              >
-                <X size={20} />
-              </button>
+
+              <div className="flex shrink-0 items-center gap-2">
+                {canManage && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(selectedProject)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      aria-label="Edit project"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDeleteTarget({
+                          type: 'project',
+                          id: selectedProject.id,
+                        })
+                      }
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15"
+                      aria-label="Delete project"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={closeDetail}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Close project details"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mt-4 pb-3 border-b border-slate-200 overflow-x-auto">
+            <div className="mt-4 flex gap-2 overflow-x-auto border-b border-border pb-3">
 
               {/* Finance/Admin Only */}
               {canEditFinancials && (
@@ -963,7 +1011,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             </div>
 
             {/* Tab content */}
-            <div className="flex-1 overflow-y-auto mt-4">
+            <div className="mt-4 flex-1 overflow-y-auto pr-1">
               {detailLoading ? (
                 <p className="text-slate-600 text-sm">Loading...</p>
               ) : detailTab === 'overview' && financials ? (
