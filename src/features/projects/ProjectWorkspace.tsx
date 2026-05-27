@@ -208,6 +208,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   // ─── State ────────────────────────────────────────────────────────────────
 
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectExpensesByProjectId, setProjectExpensesByProjectId] = useState<
+    Record<string, ProjectExpense[]>
+  >({});
+  const [projectCashByProjectId, setProjectCashByProjectId] = useState<
+    Record<string, ProjectCashReceived[]>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, _setError] = useState('');
   const [selectedTask, setSelectedTask] = useState<TaskWithDetails | null>(null);
@@ -267,14 +273,18 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   // ─── Calculations ────────────────────────────────────────────────────────
 
-  function calcFinancials(proj: Project) {
+  function calcFinancials(
+    proj: Project,
+    sourceExpenses: ProjectExpense[] = expenses,
+    sourceCashReceived: ProjectCashReceived[] = cashReceived
+  ) {
   const grossRevenue = proj.revenue || 0;
 
   // ─── GST CALCULATION (FIXED - YOUR FINAL VERSION) ───────────────────────
 
   const gstOnRevenue = grossRevenue * 0.18;
 
-  const gstAdjustment = cashReceived.reduce((sum, c) => {
+  const gstAdjustment = sourceCashReceived.reduce((sum, c) => {
     const treatment = c.gst_treatment as string;
     if (treatment === 'NO_GST' || treatment === 'NO_GST 0%') {
       return sum + c.amount * 0.18;
@@ -288,7 +298,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   // ─── COSTS ──────────────────────────────────────────────────────────────
 
-  const actualCogs = expenses.reduce(
+  const actualCogs = sourceExpenses.reduce(
     (sum, e) => sum + (e.amount || 0),
     0
   );
@@ -309,7 +319,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   // ─── CASH FLOW ─────────────────────────────────────────────────────────
 
-  const totalCashReceived = cashReceived.reduce(
+  const totalCashReceived = sourceCashReceived.reduce(
     (sum, c) => sum + (c.amount || 0),
     0
   );
@@ -350,7 +360,48 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       .order('created_at', { ascending: false });
 
     if (!err && data) {
-      setProjects(data as Project[]);
+      const projectRows = data as Project[];
+      setProjects(projectRows);
+
+      const projectIds = projectRows.map(project => project.id);
+
+      if (projectIds.length > 0) {
+        const [expensesRes, cashRes] = await Promise.all([
+          supabase
+            .from('project_expenses')
+            .select('*')
+            .in('project_id', projectIds),
+          supabase
+            .from('project_cash_received')
+            .select('*')
+            .in('project_id', projectIds),
+        ]);
+
+        const expensesMap: Record<string, ProjectExpense[]> = {};
+        const cashMap: Record<string, ProjectCashReceived[]> = {};
+
+        for (const expense of (expensesRes.data || []) as ProjectExpense[]) {
+          if (!expensesMap[expense.project_id]) {
+            expensesMap[expense.project_id] = [];
+          }
+
+          expensesMap[expense.project_id].push(expense);
+        }
+
+        for (const cash of (cashRes.data || []) as ProjectCashReceived[]) {
+          if (!cashMap[cash.project_id]) {
+            cashMap[cash.project_id] = [];
+          }
+
+          cashMap[cash.project_id].push(cash);
+        }
+
+        setProjectExpensesByProjectId(expensesMap);
+        setProjectCashByProjectId(cashMap);
+      } else {
+        setProjectExpensesByProjectId({});
+        setProjectCashByProjectId({});
+      }
     }
     setLoading(false);
   }, []);
@@ -630,7 +681,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     }
 
     if (data) {
-      setExpenses([...expenses, data[0] as ProjectExpense]);
+      const newExpense = data[0] as ProjectExpense;
+      setExpenses([...expenses, newExpense]);
+      setProjectExpensesByProjectId(current => ({
+        ...current,
+        [newExpense.project_id]: [...(current[newExpense.project_id] || []), newExpense],
+      }));
       setExpenseForm({ expense_date: '', description: '', amount: 0 });
       setSubError('');
     }
@@ -638,7 +694,17 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   const handleDeleteExpense = async (id: string) => {
     await supabase.from('project_expenses').delete().eq('id', id);
+    const deletedExpense = expenses.find(expense => expense.id === id);
     setExpenses(expenses.filter(e => e.id !== id));
+
+    if (deletedExpense) {
+      setProjectExpensesByProjectId(current => ({
+        ...current,
+        [deletedExpense.project_id]: (current[deletedExpense.project_id] || []).filter(
+          expense => expense.id !== id
+        ),
+      }));
+    }
     setDeleteTarget(null);
   };
 
@@ -668,7 +734,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     }
 
     if (data) {
-      setCashReceived([...cashReceived, data[0] as ProjectCashReceived]);
+      const newCash = data[0] as ProjectCashReceived;
+      setCashReceived([...cashReceived, newCash]);
+      setProjectCashByProjectId(current => ({
+        ...current,
+        [newCash.project_id]: [...(current[newCash.project_id] || []), newCash],
+      }));
       setCashForm({
         received_date: '',
         description: '',
@@ -681,7 +752,17 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   const handleDeleteCash = async (id: string) => {
     await supabase.from('project_cash_received').delete().eq('id', id);
+    const deletedCash = cashReceived.find(cash => cash.id === id);
     setCashReceived(cashReceived.filter(c => c.id !== id));
+
+    if (deletedCash) {
+      setProjectCashByProjectId(current => ({
+        ...current,
+        [deletedCash.project_id]: (current[deletedCash.project_id] || []).filter(
+          cash => cash.id !== id
+        ),
+      }));
+    }
     setDeleteTarget(null);
   };
 
@@ -762,7 +843,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       }`}
                   >
                 {projects.map(proj => {
-                  const stats = calcFinancials(proj);
+                  const stats = calcFinancials(
+                    proj,
+                    projectExpensesByProjectId[proj.id] || [],
+                    projectCashByProjectId[proj.id] || []
+                  );
 
                   return (
                     <div
@@ -879,7 +964,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
                   <tbody>
                     {projects.map(proj => {
-                      const stats = calcFinancials(proj);
+                      const stats = calcFinancials(
+                        proj,
+                        projectExpensesByProjectId[proj.id] || [],
+                        projectCashByProjectId[proj.id] || []
+                      );
 
                       return (
                         <tr
