@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   supabase,
   type Announcement,
@@ -16,50 +16,89 @@ import {
   Megaphone,
   ArrowRight,
   ArrowLeft,
+  LogIn,
+  LogOut,
+  CalendarDays,
 } from 'lucide-react';
-
-// ——— Constants ——————————————————————————————————————————————————————————————
-
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
-const STATUS_BADGE: Record<TaskStatus, string> = {
-  'Not Started': 'bg-slate-100 text-slate-700',
-  Ongoing: 'bg-blue-100 text-blue-700',
-  Overdue: 'bg-red-100 text-red-700',
-  Completed: 'bg-green-100 text-green-700',
-};
+interface PortalProjectMini {
+  id: string;
+  name: string;
+  client_name?: string | null;
+  status?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
 
-// ——— Helpers ——————————————————————————————————————————————————————————————————
+const STATUS_BADGE: Record<TaskStatus, string> = {
+  'Not Started': 'border-border bg-muted text-muted-foreground',
+  Ongoing: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  Overdue: 'border-destructive/20 bg-destructive/10 text-destructive',
+  Completed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+};
 
 function todayDateString(): string {
   return new Date().toLocaleDateString('en-CA');
 }
 
 function formatTime(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  if (!iso) return '-';
+
+  return new Date(iso).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
 function formatRelativeDate(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
+
   const hrs = Math.floor(mins / 60);
+
   if (hrs < 24) return `${hrs}h ago`;
+
   const days = Math.floor(hrs / 24);
+
   return `${days}d ago`;
 }
 
 function calcEffectiveStatus(task: Task): TaskStatus {
   if (task.status === 'Completed') return 'Completed';
   if (task.deadline && new Date(task.deadline) < new Date()) return 'Overdue';
+
   return task.status;
 }
 
-// ——— Sub-components ———————————————————————————————————————————————————————————
+function getTaskDueDistance(deadline: string | null) {
+  if (!deadline) return Number.POSITIVE_INFINITY;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const due = new Date(deadline);
+  due.setHours(0, 0, 0, 0);
+
+  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
+}
+
+function formatTaskDueLabel(deadline: string | null) {
+  if (!deadline) return 'No deadline';
+
+  const days = getTaskDueDistance(deadline);
+
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return 'Due today';
+  if (days === 1) return 'Due tomorrow';
+
+  return `Due in ${days}d`;
+}
 
 function KpiScoreCircle({ score }: { score: number }) {
   const pct = Math.min(Math.max(score / 10, 0), 1);
@@ -67,23 +106,29 @@ function KpiScoreCircle({ score }: { score: number }) {
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - pct);
 
-  let ringColor = '#16a34a'; // green
-  if (score < 5) ringColor = '#dc2626'; // red
-  else if (score < 7.5) ringColor = '#d97706'; // amber
+  let ringColor = '#16a34a';
+
+  if (score < 5) ringColor = '#dc2626';
+  else if (score < 7.5) ringColor = '#d97706';
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative w-28 h-28">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+    <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+      <div className="relative h-28 w-28 shrink-0">
+        <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
           <circle
-            cx="50" cy="50" r={radius}
+            cx="50"
+            cy="50"
+            r={radius}
             fill="none"
-            stroke="#e2e8f0"
+            stroke="currentColor"
             strokeWidth="8"
-            opacity="0.25"
+            className="text-muted"
           />
+
           <circle
-            cx="50" cy="50" r={radius}
+            cx="50"
+            cy="50"
+            r={radius}
             fill="none"
             stroke={ringColor}
             strokeWidth="8"
@@ -93,24 +138,28 @@ function KpiScoreCircle({ score }: { score: number }) {
             style={{ transition: 'stroke-dashoffset 0.6s ease' }}
           />
         </svg>
+
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className="text-3xl font-bold leading-none"
-            style={{ fontFamily: FONT, color: ringColor }}
-          >
+          <span className="text-3xl font-semibold leading-none" style={{ color: ringColor }}>
             {score.toFixed(1)}
           </span>
-          <span
-            className="text-xs text-slate-500 mt-0.5"
-            style={{ fontFamily: FONT }}
-          >
-            / 10
-          </span>
+          <span className="mt-1 text-xs text-muted-foreground">/ 10</span>
         </div>
       </div>
-      <p className="text-xs text-slate-600" style={{ fontFamily: FONT }}>
-        KPI Score
-      </p>
+
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+          Performance Score
+        </p>
+
+        <p className="mt-2 text-sm text-muted-foreground">
+          {score >= 8
+            ? 'Excellent performance. Keep the momentum steady.'
+            : score >= 6
+              ? 'Good work. A few more timely completions will improve this.'
+              : 'Room for improvement. Focus on current tasks and deadlines.'}
+        </p>
+      </div>
     </div>
   );
 }
@@ -122,42 +171,30 @@ function TaskSummaryCard({
   status: TaskStatus;
   count: number;
 }) {
-  const bg: Record<TaskStatus, string> = {
-    'Not Started': 'bg-white border-slate-200',
-    Ongoing: 'bg-blue-50 border-slate-200',
-    Overdue: 'bg-red-50 border-slate-200',
-    Completed: 'bg-green-50 border-slate-200',
-  };
-
   return (
-    <div className={`rounded-xl border p-3 flex flex-col gap-1 ${bg[status]}`}>
+    <div className="rounded-2xl border border-border bg-background p-4">
       <span
-        className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${STATUS_BADGE[status]}`}
+        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${STATUS_BADGE[status]}`}
       >
         {status}
       </span>
-      <span
-        className="text-2xl font-bold mt-1"
-        style={{ fontFamily: FONT, color: '#2563eb' }}
-      >
-        {count}
-      </span>
-      <p
-        className="text-xs text-slate-500"
-        style={{ fontFamily: FONT }}
-      >
-        task{count !== 1 ? 's' : ''}
-      </p>
+
+      <div className="mt-5 flex items-end justify-between gap-3">
+        <span className="text-3xl font-semibold tracking-tight text-foreground">
+          {count}
+        </span>
+
+        <span className="text-xs text-muted-foreground">
+          task{count !== 1 ? 's' : ''}
+        </span>
+      </div>
     </div>
   );
 }
 
-// ——— Main Component ———————————————————————————————————————————————————————————
-
 export default function Overview() {
   const { profile, userDepartments } = useAuth();
 
-  // Attendance
   const [attendance, setAttendance] = useState<Attendance | null>(null);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState('');
@@ -166,7 +203,8 @@ export default function Overview() {
   const [locationStamp, setLocationStamp] = useState('');
   const [locationLoading, setLocationLoading] = useState(false);
 
-  // Tasks summary
+  const [assignedTasks, setAssignedTasks] = useState<Task[]>([]);
+  const [assignedProjects, setAssignedProjects] = useState<PortalProjectMini[]>([]);
   const [taskCounts, setTaskCounts] = useState<Record<TaskStatus, number>>({
     'Not Started': 0,
     Ongoing: 0,
@@ -175,15 +213,11 @@ export default function Overview() {
   });
   const [tasksLoading, setTasksLoading] = useState(true);
 
-  // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
 
-  // Notifications
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifsLoading, setNotifsLoading] = useState(true);
-
-  // ——— Geolocation —————————————————————————————————————————————————————————
 
   const resolveLocation = useCallback((): Promise<string> => {
     return new Promise(resolve => {
@@ -195,7 +229,7 @@ export default function Overview() {
       setLocationLoading(true);
 
       navigator.geolocation.getCurrentPosition(
-        async (pos) => {
+        async pos => {
           const { latitude, longitude } = pos.coords;
 
           try {
@@ -206,25 +240,20 @@ export default function Overview() {
             const data = await response.json();
 
             setLocationLoading(false);
-
-            // readable place name
             resolve(
-              `${data.locality || data.city || 'Unknown area'}, ${data.principalSubdivision || data.countryName
+              `${data.locality || data.city || 'Unknown area'}, ${
+                data.principalSubdivision || data.countryName
               }`
             );
           } catch (error) {
             setLocationLoading(false);
-
-            // fallback to coordinates
             resolve(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
           }
         },
-
         () => {
           setLocationLoading(false);
           resolve('Location not available');
         },
-
         {
           enableHighAccuracy: true,
           timeout: 10000,
@@ -233,22 +262,22 @@ export default function Overview() {
     });
   }, []);
 
-  // Get location on mount for display
   useEffect(() => {
     resolveLocation().then(loc => setLocationStamp(loc));
   }, [resolveLocation]);
 
-  // ——— Fetch today's attendance ————————————————————————————————————————————
-
   const fetchAttendance = useCallback(async () => {
     if (!profile) return;
+
     setAttendanceLoading(true);
+
     const { data } = await supabase
       .from('attendance')
       .select('*')
       .eq('employee_id', profile.id)
       .eq('date', todayDateString())
       .maybeSingle();
+
     setAttendance(data as Attendance | null);
     setAttendanceLoading(false);
   }, [profile]);
@@ -257,32 +286,33 @@ export default function Overview() {
     fetchAttendance();
   }, [fetchAttendance]);
 
-  // ——— Attendance actions ——————————————————————————————————————————————————
-
   const handleCheckIn = async () => {
     if (!profile) return;
     if (attendance?.check_in) return;
+
     setAttendanceError('');
     setCheckingIn(true);
+
     const loc = await resolveLocation();
     const now = new Date().toISOString();
-    const { error } = await supabase
-      .from('attendance')
-      .upsert(
-        {
-          employee_id: profile.id,
-          date: todayDateString(),
-          check_in: now,
-          status: 'Present',
-          location_stamp: loc,
-          admin_override: false,
-          notes: '',
-        },
-        {
-          onConflict: 'employee_id,date',
-        }
-      );
+
+    const { error } = await supabase.from('attendance').upsert(
+      {
+        employee_id: profile.id,
+        date: todayDateString(),
+        check_in: now,
+        status: 'Present',
+        location_stamp: loc,
+        admin_override: false,
+        notes: '',
+      },
+      {
+        onConflict: 'employee_id,date',
+      }
+    );
+
     setCheckingIn(false);
+
     if (error) {
       setAttendanceError(error.message);
     } else {
@@ -293,14 +323,19 @@ export default function Overview() {
 
   const handleCheckOut = async () => {
     if (!profile || !attendance) return;
+
     setAttendanceError('');
     setCheckingOut(true);
+
     const now = new Date().toISOString();
+
     const { error } = await supabase
       .from('attendance')
       .update({ check_out: now, updated_at: now })
       .eq('id', attendance.id);
+
     setCheckingOut(false);
+
     if (error) {
       setAttendanceError(error.message);
     } else {
@@ -308,15 +343,15 @@ export default function Overview() {
     }
   };
 
-  // ——— Fetch tasks summary ——————————————————————————————————————————————————
-
   useEffect(() => {
     if (!profile) return;
+
     (async () => {
       setTasksLoading(true);
+
       const { data, error } = await supabase
         .from('tasks')
-        .select('status, deadline, completed_at')
+        .select('*')
         .eq('assigned_to', profile.id);
 
       if (error) {
@@ -331,26 +366,47 @@ export default function Overview() {
         Overdue: 0,
         Completed: 0,
       };
-      if (data) {
-        for (const t of data as Pick<Task, 'status' | 'deadline' | 'completed_at'>[]) {
-          const effective = calcEffectiveStatus(t as Task);
-          counts[effective]++;
-        }
+
+      const taskRows = (data as Task[]) || [];
+      setAssignedTasks(taskRows);
+
+      const projectIds = Array.from(
+        new Set(
+          taskRows
+            .map(task => task.project_id)
+            .filter((projectId): projectId is string => Boolean(projectId))
+        )
+      );
+
+      if (projectIds.length > 0) {
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('id, name, client_name, status, start_date, end_date')
+          .in('id', projectIds);
+
+        setAssignedProjects((projectData as PortalProjectMini[]) || []);
+      } else {
+        setAssignedProjects([]);
       }
+
+      for (const task of taskRows) {
+        const effective = calcEffectiveStatus(task);
+        counts[effective]++;
+      }
+
       setTaskCounts(counts);
       setTasksLoading(false);
     })();
   }, [profile]);
 
-  // ——— Fetch announcements ——————————————————————————————————————————————————
-
   useEffect(() => {
     if (!profile) return;
+
     (async () => {
       setAnnouncementsLoading(true);
+
       const deptIds = profile.department_ids || [];
 
-      // Fetch company-wide + dept-specific announcements
       const { data } = await supabase
         .from('announcements')
         .select('*')
@@ -358,377 +414,638 @@ export default function Overview() {
         .limit(20);
 
       if (data) {
-        const relevant = (data as Announcement[]).filter(a => {
-          if (a.target_type === 'company') return true;
-          if (a.target_type === 'department' && a.target_department_id) {
-            return deptIds.includes(a.target_department_id);
-          }
-          return false;
-        }).slice(0, 5);
+        const relevant = (data as Announcement[])
+          .filter(announcement => {
+            if (announcement.target_type === 'company') return true;
+
+            if (announcement.target_type === 'department' && announcement.target_department_id) {
+              return deptIds.includes(announcement.target_department_id);
+            }
+
+            return false;
+          })
+          .slice(0, 5);
+
         setAnnouncements(relevant);
       }
+
       setAnnouncementsLoading(false);
     })();
   }, [profile]);
 
-  // ——— Fetch notifications ——————————————————————————————————————————————————
-
   useEffect(() => {
     if (!profile) return;
+
     (async () => {
       setNotifsLoading(true);
+
       const { data } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', profile.id)
         .order('created_at', { ascending: false })
         .limit(5);
+
       setNotifications((data as Notification[]) || []);
       setNotifsLoading(false);
     })();
   }, [profile]);
 
-  // ——— Mark notification as read —————————————————————————————————————————
-
   const markRead = async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === id ? { ...notification, is_read: true } : notification
+      )
+    );
   };
 
-  // ——— Attendance state derived ——————————————————————————————————————————
+  const activeTasks = useMemo(
+    () =>
+      assignedTasks
+        .filter(task => task.status !== 'Completed')
+        .sort((a, b) => {
+          const statusWeight = (task: Task) => {
+            const effective = calcEffectiveStatus(task);
 
-  const isCheckedIn = !!(attendance?.check_in);
-  const isCheckedOut = !!(attendance?.check_out);
+            if (effective === 'Overdue') return 0;
+            if (effective === 'Ongoing') return 1;
+            return 2;
+          };
+
+          const weightDiff = statusWeight(a) - statusWeight(b);
+
+          if (weightDiff !== 0) return weightDiff;
+
+          return getTaskDueDistance(a.deadline) - getTaskDueDistance(b.deadline);
+        }),
+    [assignedTasks]
+  );
+
+  const nextActionTask = activeTasks[0] || null;
+
+  const dueSoonTasks = useMemo(
+    () =>
+      assignedTasks
+        .filter(task => task.status !== 'Completed' && task.deadline)
+        .sort((a, b) => getTaskDueDistance(a.deadline) - getTaskDueDistance(b.deadline))
+        .slice(0, 4),
+    [assignedTasks]
+  );
+
+  const projectMiniCards = useMemo(
+    () =>
+      assignedProjects
+        .map(project => {
+          const activeCount = assignedTasks.filter(
+            task => task.project_id === project.id && task.status !== 'Completed'
+          ).length;
+
+          const nextDeadline = assignedTasks
+            .filter(task => task.project_id === project.id && task.status !== 'Completed' && task.deadline)
+            .sort((a, b) => getTaskDueDistance(a.deadline) - getTaskDueDistance(b.deadline))[0]?.deadline || null;
+
+          return {
+            ...project,
+            activeCount,
+            nextDeadline,
+          };
+        })
+        .sort((a, b) => b.activeCount - a.activeCount)
+        .slice(0, 3),
+    [assignedProjects, assignedTasks]
+  );
+
+  const isCheckedIn = !!attendance?.check_in;
+  const isCheckedOut = !!attendance?.check_out;
   const attendanceComplete = isCheckedIn && isCheckedOut;
 
-  // ——— Render ———————————————————————————————————————————————————————————————
-
   return (
-    <div className="max-w-7xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
-            {profile?.full_name?.split(' ')[0] || 'there'} 👋
-          </h1>
-          <p
-            className="text-slate-500"
-            style={{ fontFamily: FONT }}
-          >
-            Here's your personal workspace overview
-          </p>
-        </div>
-        {/* Department badges */}
-        <div className="flex flex-wrap gap-2">
-          {userDepartments.map(dept => (
-            <span
-              key={dept.id}
-              className="px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-700"
-            >
-              {dept.code} · {dept.name}
-            </span>
-          ))}
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-7xl px-4 pb-32 sm:px-6 lg:px-8 lg:pb-10">
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Employee Portal
+            </p>
 
-      {/* —— Row 1: KPI + Attendance ———————————————————————————————————————— */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-5">
-        {/* KPI Score Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center gap-4">
-          <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
-            Performance Score
-          </h3>
-          <KpiScoreCircle score={profile?.kpi_score ?? 0} />
-          <p
-            className="text-xs text-slate-500 text-center"
-            style={{ fontFamily: FONT }}
-          >
-            {(profile?.kpi_score ?? 0) >= 8
-              ? 'Excellent performance — keep it up!'
-              : (profile?.kpi_score ?? 0) >= 6
-              ? 'Good work — a little more to excel'
-              : 'Room for improvement — reach out for support'}
-          </p>
-        </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
+              {profile?.full_name?.split(' ')[0] || 'there'}
+            </h1>
 
-        {/* Attendance Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4 md:col-span-1 xl:col-span-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
-              Today's Attendance
-            </h3>
-            <p
-              className="text-xs text-slate-500"
-              style={{ fontFamily: FONT }}
->
-              {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              Your workday overview, attendance status, assigned tasks, and latest updates.
             </p>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            {userDepartments.length > 0 ? (
+              userDepartments.map(department => (
+                <span
+                  key={department.id}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                >
+                  {department.code} - {department.name}
+                </span>
+              ))
+            ) : (
+              <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                No department assigned
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+          <KpiScoreCircle score={profile?.kpi_score ?? 0} />
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-8">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Attendance
+            </p>
+
+            <div className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+
+              <span>
+                {new Date().toLocaleDateString('en-IN', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: 'short',
+                })}
+              </span>
+            </div>
+          </div>
+
           {attendanceError && (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm font-medium text-red-900">
+            <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-3">
+              <p className="text-sm font-medium text-destructive">
                 Attendance error
               </p>
-              <p className="text-sm text-red-700 mt-1">
+
+              <p className="mt-1 text-xs text-destructive/80">
                 {attendanceError}
               </p>
             </div>
           )}
 
           {attendanceLoading ? (
-            <div className="flex items-center gap-2 py-4">
-              <Clock className="w-4 h-4 text-slate-400" />
-              <p
-                className="text-slate-500"
-                style={{ fontFamily: FONT }}
-              >
-                Loading attendance…
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-background p-4">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Loading attendance...
               </p>
             </div>
           ) : (
-            <>
-              {/* Check-in / Check-out time display */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1 bg-slate-50 rounded-xl border border-slate-200 p-4">
-                    <p
-                      className="text-[11px] uppercase tracking-wider text-slate-500"
-                      style={{ fontFamily: FONT }}
-                    >
-                    Check-In
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                      <ArrowRight
-                        className={`w-4 h-4 ${isCheckedIn ? 'text-green-600' : 'text-slate-400'
-                          }`}
-                      />
-                      <p
-                        className={`text-base font-semibold ${isCheckedIn ? 'text-green-600' : 'text-slate-500'
-                          }`}
-                        style={{ fontFamily: FONT }}
-                      >
-                      {isCheckedIn ? formatTime(attendance!.check_in) : '—'}
+            <div className="grid gap-3 sm:grid-cols-[1fr_12rem] sm:items-stretch">
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Checked In
                     </p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1 bg-slate-50 rounded-xl border border-slate-200 p-4">
-                  <p
-                    className="text-[11px] uppercase tracking-wider text-slate-500"
-                    style={{ fontFamily: FONT }}
-                  >
-                    Check-Out
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                      <ArrowLeft
-                        className={`w-4 h-4 ${isCheckedOut ? 'text-blue-600' : 'text-slate-400'
-                          }`}
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <ArrowRight
+                        className={`h-4 w-4 ${
+                          isCheckedIn ? 'text-emerald-500' : 'text-muted-foreground'
+                        }`}
                       />
-                      <p
-                        className={`text-base font-semibold ${isCheckedOut ? 'text-blue-600' : 'text-slate-500'
-                          }`}
-                        style={{ fontFamily: FONT }}
-                      >
-                        {isCheckedOut ? formatTime(attendance!.check_out) : '—'}
-                      </p>
-                  </div>
-                </div>
-              </div>
 
-              {/* Location stamp */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                <MapPin className="w-4 h-4 text-slate-500" />
-                  <p
-                    className="text-xs text-slate-500"
-                    style={{ fontFamily: FONT }}
-                  >
-                  {locationLoading ? 'Getting location…' : (locationStamp || attendance?.location_stamp || 'Location not available')}
-                </p>
-              </div>
-
-              {/* Action buttons */}
-                <div className="w-full">
-                  {attendanceComplete ? (
-                    <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-50 border border-slate-200">
-                      <Check className="w-4 h-4 text-green-600" />
                       <p
-                        className="text-sm font-semibold text-green-600"
-                        style={{ fontFamily: FONT }}
+                        className={`text-base font-semibold ${
+                          isCheckedIn ? 'text-foreground' : 'text-muted-foreground'
+                        }`}
                       >
-                        Attendance Complete
+                        {isCheckedIn ? formatTime(attendance!.check_in) : '-'}
                       </p>
                     </div>
-                  ) : !isCheckedIn ? (
-                    <button
-                      onClick={handleCheckIn}
-                      disabled={checkingIn}
-                      className="w-full px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium"
-                    >
-                      {checkingIn ? 'Checking...' : 'Check In'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleCheckOut}
-                      disabled={checkingOut}
-                      className="w-full px-4 py-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 font-medium"
-                    >
-                      {checkingOut ? 'Checking...' : 'Check Out'}
-                    </button>
-                  )}
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Checked Out
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <ArrowLeft
+                        className={`h-4 w-4 ${
+                          isCheckedOut ? 'text-blue-500' : 'text-muted-foreground'
+                        }`}
+                      />
+
+                      <p
+                        className={`text-base font-semibold ${
+                          isCheckedOut ? 'text-foreground' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {isCheckedOut ? formatTime(attendance!.check_out) : '-'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-            </>
+
+                <div className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+
+                  <p className="truncate text-xs text-muted-foreground">
+                    {locationLoading
+                      ? 'Getting location...'
+                      : locationStamp || attendance?.location_stamp || 'Location not available'}
+                  </p>
+                </div>
+              </div>
+
+              {attendanceComplete ? (
+                <div className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-4 text-center">
+                  <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    Complete
+                  </p>
+                </div>
+              ) : !isCheckedIn ? (
+                <button
+                  onClick={handleCheckIn}
+                  disabled={checkingIn}
+                  className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 hover:bg-primary/90 disabled:translate-y-0 disabled:opacity-50"
+                >
+                  <LogIn className="h-5 w-5" />
+                  {checkingIn ? 'Checking...' : 'Check In'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleCheckOut}
+                  disabled={checkingOut}
+                  className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm font-semibold text-amber-700 shadow-lg shadow-amber-500/10 transition-transform hover:-translate-y-0.5 hover:bg-amber-500/15 disabled:translate-y-0 disabled:opacity-50 dark:text-amber-300"
+                >
+                  <LogOut className="h-5 w-5" />
+                  {checkingOut ? 'Checking...' : 'Check Out'}
+                </button>
+              )}
+            </div>
           )}
         </div>
-      </div>
 
-      {/* —— Row 2: Task Summary ————————————————————————————————————————————— */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
-            My Tasks
-          </h3>
-          <p
-            className="text-xs text-slate-500"
-            style={{ fontFamily: FONT }}
-          >
-            Total: {tasksLoading ? '…' : Object.values(taskCounts).reduce((a, b) => a + b, 0)}
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Next Action
           </p>
-        </div>
 
-        {tasksLoading ? (
-          <div className="flex gap-4">
-            {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(s => (
-              <div key={s} className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 h-20 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(s => (
-              <TaskSummaryCard key={s} status={s} count={taskCounts[s]} />
-            ))}
-          </div>
-        )}
-      </div>
+          {tasksLoading ? (
+            <div className="mt-5 h-28 animate-pulse rounded-2xl border border-border bg-muted/40" />
+          ) : nextActionTask ? (
+            <div className="mt-5 flex min-h-40 flex-col justify-between rounded-2xl border border-border bg-background p-4">
+              <div>
+                <p className="line-clamp-2 text-lg font-semibold leading-snug text-foreground">
+                  {nextActionTask.title}
+                </p>
 
-      {/* —— Row 3: Announcements + Notifications ——————————————————————————— */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {/* Announcements */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Megaphone className="w-4 h-4 text-slate-700" />
-            <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
-              Announcements
-            </h3>
-          </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      STATUS_BADGE[calcEffectiveStatus(nextActionTask)]
+                    }`}
+                  >
+                    {calcEffectiveStatus(nextActionTask)}
+                  </span>
 
-          {announcementsLoading ? (
-            <div className="flex flex-col gap-2">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-14 rounded-lg bg-slate-50 animate-pulse" />
-              ))}
-            </div>
-          ) : announcements.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
-              <Info className="w-5 h-5 text-slate-400" />
-              <p className="text-sm text-slate-500" style={{ fontFamily: FONT }}>
-                No announcements right now
+                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                    {formatTaskDueLabel(nextActionTask.deadline)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="mt-5 text-xs text-muted-foreground">
+                Open My Tasks to continue or update this task.
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {announcements.map(ann => (
+            <div className="mt-5 flex min-h-40 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-4">
+              <p className="text-sm font-medium text-foreground">
+                No active task right now
+              </p>
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                New assignments will appear here when they are added.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-8">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Workload
+              </p>
+
+              <h2 className="mt-2 text-lg font-semibold text-foreground">
+                My Tasks
+              </h2>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Total: {tasksLoading ? '...' : Object.values(taskCounts).reduce((a, b) => a + b, 0)}
+            </p>
+          </div>
+
+          {tasksLoading ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(status => (
                 <div
-                  key={ann.id}
-                  className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 flex flex-col gap-1 hover:border-slate-300 transition-colors"
+                  key={status}
+                  className="h-24 animate-pulse rounded-2xl border border-border bg-muted/40"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(status => (
+                <TaskSummaryCard key={status} status={status} count={taskCounts[status]} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Projects
+              </p>
+
+              <h2 className="mt-2 text-lg font-semibold text-foreground">
+                My Projects
+              </h2>
+            </div>
+
+            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+              {projectMiniCards.length}
+            </span>
+          </div>
+
+          {tasksLoading ? (
+            <div className="grid gap-2">
+              {[1, 2].map(item => (
+                <div
+                  key={item}
+                  className="h-16 animate-pulse rounded-2xl border border-border bg-muted/40"
+                />
+              ))}
+            </div>
+          ) : projectMiniCards.length > 0 ? (
+            <div className="grid gap-2">
+              {projectMiniCards.map(project => (
+                <div
+                  key={project.id}
+                  className="rounded-2xl border border-border bg-background px-4 py-3"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold" style={{ fontFamily: FONT }}>
-                      {ann.title}
-                    </p>
-                    <span className="px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-600">
-                      {ann.target_type === 'company' ? 'Company' : 'Dept'}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-sm font-semibold text-foreground">
+                        {project.name}
+                      </p>
+
+                      {project.client_name && (
+                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                          {project.client_name}
+                        </p>
+                      )}
+                    </div>
+
+                    <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      {project.status || 'Active'}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
-                    {ann.content.length > 120 ? ann.content.slice(0, 120) + '…' : ann.content}
-                  </p>
-                  <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
-                    {formatRelativeDate(ann.created_at)}
-                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground">
+                      {project.activeCount} active task{project.activeCount !== 1 ? 's' : ''}
+                    </span>
+
+                    <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground">
+                      {project.nextDeadline ? formatTaskDueLabel(project.nextDeadline) : 'No deadline'}
+                    </span>
+                  </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-4">
+              <p className="text-sm font-medium text-foreground">
+                No assigned projects
+              </p>
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                Projects connected to your tasks will appear here.
+              </p>
             </div>
           )}
         </div>
 
-        {/* Notifications */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-slate-700" />
-            <h3 className="text-lg font-semibold" style={{ fontFamily: FONT }}>
-              Recent Notifications
-            </h3>
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Deadlines
+              </p>
+
+              <h2 className="mt-2 text-lg font-semibold text-foreground">
+                Due Soon
+              </h2>
+            </div>
+
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
 
-          {notifsLoading ? (
-            <div className="flex flex-col gap-2">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-14 rounded-lg bg-slate-50 animate-pulse" />
+          {tasksLoading ? (
+            <div className="grid gap-2">
+              {[1, 2, 3].map(item => (
+                <div
+                  key={item}
+                  className="h-14 animate-pulse rounded-2xl border border-border bg-muted/40"
+                />
               ))}
             </div>
-          ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
-              <Bell className="w-5 h-5 text-slate-400" />
-              <p className="text-sm text-slate-500" style={{ fontFamily: FONT }}>
-                No notifications yet
-              </p>
+          ) : dueSoonTasks.length > 0 ? (
+            <div className="grid gap-2">
+              {dueSoonTasks.map(task => {
+                const effective = calcEffectiveStatus(task);
+
+                return (
+                  <div
+                    key={task.id}
+                    className={`rounded-2xl border px-4 py-3 ${
+                      effective === 'Overdue'
+                        ? 'border-destructive/20 bg-destructive/10'
+                        : 'border-border bg-background'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="line-clamp-1 text-sm font-semibold text-foreground">
+                        {task.title}
+                      </p>
+
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          STATUS_BADGE[effective]
+                        }`}
+                      >
+                        {formatTaskDueLabel(task.deadline)}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Status: {effective}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {notifications.map(notif => (
+            <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-4">
+              <p className="text-sm font-medium text-foreground">
+                No urgent deadlines
+              </p>
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                Deadline-based tasks will appear here when assigned.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Updates
+              </p>
+
+              <h2 className="mt-2 text-lg font-semibold text-foreground">
+                Today
+              </h2>
+            </div>
+
+            <p className="shrink-0 text-xs text-muted-foreground">
+              {announcementsLoading || notifsLoading
+                ? 'Loading...'
+                : `${notifications.filter(notification => !notification.is_read).length} unread`}
+            </p>
+          </div>
+
+          {announcementsLoading || notifsLoading ? (
+            <div className="grid gap-2">
+              {[1, 2, 3].map(item => (
+                <div
+                  key={item}
+                  className="h-14 animate-pulse rounded-2xl border border-border bg-muted/40"
+                />
+              ))}
+            </div>
+          ) : announcements.length === 0 && notifications.length === 0 ? (
+            <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background p-6 text-center">
+              <Info className="h-5 w-5 text-muted-foreground" />
+
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  No updates for now
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  New announcements and task notifications will appear here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              {announcements.slice(0, 1).map(announcement => (
+                <div
+                  key={`announcement-${announcement.id}`}
+                  className="flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3"
+                >
+                  <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {announcement.title}
+                      </p>
+
+                      <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
+                        {announcement.target_type === 'company' ? 'Company' : 'Dept'}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {announcement.content}
+                    </p>
+                  </div>
+
+                  <p className="shrink-0 text-[11px] text-muted-foreground">
+                    {formatRelativeDate(announcement.created_at)}
+                  </p>
+                </div>
+              ))}
+
+              {notifications.slice(0, announcements.length > 0 ? 3 : 4).map(notification => (
                 <button
-                  key={notif.id}
+                  key={`notification-${notification.id}`}
                   type="button"
-                  onClick={() => !notif.is_read && markRead(notif.id)}
-                  className={`w-full text-left rounded-xl border px-4 py-3 flex items-start gap-3 transition-colors ${
-                    notif.is_read
-                      ? 'bg-slate-50 border-slate-200 opacity-60'
-                      : 'bg-blue-50 border-slate-200 hover:border-slate-300'
+                  onClick={() => !notification.is_read && markRead(notification.id)}
+                  className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                    notification.is_read
+                      ? 'border-border bg-background opacity-70'
+                      : 'border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/15'
                   }`}
                 >
-                  <div className="flex-shrink-0 mt-0.5">
-                    <Bell
-                      className={`w-4 h-4 ${notif.is_read ? 'text-slate-400' : 'text-blue-500'
-                        }`}
-                    />
+                  <Bell
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${
+                      notification.is_read ? 'text-muted-foreground' : 'text-blue-500'
+                    }`}
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {notification.title}
+                    </p>
+
+                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                      {notification.message}
+                    </p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold" style={{ fontFamily: FONT }}>
-                      {notif.title}
+
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatRelativeDate(notification.created_at)}
                     </p>
-                    <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
-                      {notif.message.length > 80 ? notif.message.slice(0, 80) + '…' : notif.message}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                    <p className="text-xs text-slate-500" style={{ fontFamily: FONT }}>
-                      {formatRelativeDate(notif.created_at)}
-                    </p>
-                    {!notif.is_read && (
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-500"
-                      />
+
+                    {!notification.is_read && (
+                      <span className="h-2 w-2 rounded-full bg-blue-500" />
                     )}
                   </div>
                 </button>
               ))}
+
+              {announcements.length === 0 && (
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3">
+                  <Megaphone className="h-4 w-4 text-muted-foreground" />
+
+                  <p className="text-xs text-muted-foreground">
+                    No announcements today.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </div>    </div>
   );
 }
-
-
-
