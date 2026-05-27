@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Task, type Subtask, type Department, type Profile } from '../../lib/supabase';
 import { Button } from '../ui/button';
-import { Pencil, User, Trash2, List } from 'lucide-react';
+import { DateInput } from '../common/DateInput';
+import { Check, ChevronDown, Pencil, User, Trash2, List } from 'lucide-react';
 import {
   calcEffectiveStatus,
   calcOverdueDays,
@@ -28,10 +29,10 @@ interface TaskDetailModalProps {
 }
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  'Not Started': 'bg-slate-100 text-slate-900',
-  Ongoing: 'bg-blue-100 text-blue-900',
-  Overdue: 'bg-red-100 text-red-900',
-  Completed: 'bg-green-100 text-green-900',
+  'Not Started': 'border-border bg-muted text-muted-foreground',
+  Ongoing: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  Overdue: 'border-destructive/20 bg-destructive/10 text-destructive',
+  Completed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 };
 
 function formatDeadline(iso: string | null): string {
@@ -72,7 +73,7 @@ function ProgressBar({ value }: { value: number }) {
         : '#f97316';
 
   return (
-    <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
       <div
         className="h-full rounded-full transition-all"
         style={{
@@ -80,6 +81,67 @@ function ProgressBar({ value }: { value: number }) {
           background: color,
         }}
       />
+    </div>
+  );
+}
+
+
+function StatusSelect({
+  value,
+  onChange,
+}: {
+  value: TaskStatus;
+  onChange: (value: TaskStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const options: TaskStatus[] = ['Not Started', 'Ongoing', 'Completed'];
+
+  return (
+    <div
+      className="relative"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span>{value}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+          {options.map(option => {
+            const isSelected = option === value;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  onChange(option);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span>{option}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -367,314 +429,338 @@ export default function TaskDetailModal({
   if (!open || !currentTask) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-3">
-          <div className="flex-1">
-            {editingTask ? (
-              <input
-                type="text"
-                value={editForm.title}
-                onChange={e =>
-                  setEditForm(f => ({
-                    ...f,
-                    title: e.target.value,
-                  }))
-                }
-                className="w-full px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-              />
-            ) : (
-              <h2 className="text-lg font-bold">
-                {currentTask.title}
-              </h2>
-            )}
-          </div>
-
-          {canManage && (
-            <>
-              <button
-                type="button"
-                onClick={() => setEditingTask(!editingTask)}
-                className="p-2 rounded hover:bg-slate-100"
-              >
-                <Pencil size={16} />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDeleteTask}
-                disabled={deleting}
-                className="p-2 rounded hover:bg-red-100"
-              >
-                <Trash2 size={16} className="text-red-600" />
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="p-6 flex flex-col gap-5">
-          {/* Meta grid */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Assigned To */}
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">
-                Assigned To
-              </p>
-
-              <div className="flex items-center gap-2">
-                <User size={14} className="text-slate-700" />
-
-                <p className="text-sm">
-                  {currentTask.assignee?.full_name ||
-                    currentTask.assignee?.email ||
-                    'Unassigned'}
-                </p>
-              </div>
-            </div>
-
-            {/* Department */}
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">
-                Department
-              </p>
-
-              <p className="text-sm">
-                {departments.find(
-                  d => d.id === currentTask.department_id
-                )?.name || '—'}
-              </p>
-            </div>
-
-            {/* Status */}
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">
-                Status
-              </p>
-
-              {editingTask ? (
-                <select
-                  value={editForm.status}
-                  onChange={e =>
-                    setEditForm(f => ({
-                      ...f,
-                      status: e.target.value as TaskStatus,
-                    }))
-                  }
-                  className="px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
-                >
-                  <option value="Not Started">Not Started</option>
-                  <option value="Ongoing">Ongoing</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              ) : (
-                <span
-                  className={`w-fit text-xs font-semibold px-3 py-1 rounded ${STATUS_COLORS[currentTask.effectiveStatus]}`}
-                >
-                  {currentTask.effectiveStatus === 'Completed' &&
-                  currentTask.overdueByDays
-                    ? `Completed (Overdue by ${currentTask.overdueByDays} days)`
-                    : currentTask.effectiveStatus}
-                </span>
-              )}
-            </div>
-
-            {/* Deadline */}
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">
-                Deadline
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Task Details
               </p>
 
               {editingTask ? (
                 <input
-                  type="date"
-                  value={editForm.deadline}
-                  onChange={e =>
-                    setEditForm(f => ({
-                      ...f,
-                      deadline: e.target.value,
+                  type="text"
+                  value={editForm.title}
+                  onChange={event =>
+                    setEditForm(form => ({
+                      ...form,
+                      title: event.target.value,
                     }))
                   }
-                  className="px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900"
+                  className="form-input h-11 text-lg font-semibold"
+                  placeholder="Task title"
                 />
               ) : (
-                <div className="flex items-center gap-1.5">
-                  <p
-                    className="text-sm"
-                    style={{
-                      color:
-                        currentTask.status !== 'Completed' &&
-                        isOverdue(
-                          currentTask.deadline,
-                          currentTask.status
-                        )
-                          ? '#dc2626'
-                          : '#1e293b',
-                    }}
-                  >
-                    {formatDeadline(currentTask.deadline)}
-                  </p>
-
-                  {currentTask.status !== 'Completed' &&
-                    isOverdue(
-                      currentTask.deadline,
-                      currentTask.status
-                    ) && (
-                      <span className="text-xs font-semibold px-2 py-1 rounded bg-red-100 text-red-900">
-                        Overdue
-                      </span>
-                    )}
-                </div>
+                <h2 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                  {currentTask.title}
+                </h2>
               )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {canManage && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTask(current => !current)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label={editingTask ? 'Cancel editing' : 'Edit task'}
+                  >
+                    <Pencil size={16} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteTask}
+                    disabled={deleting}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15 disabled:opacity-50"
+                    aria-label="Delete task"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
+
+
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-5 pb-6 sm:px-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-background/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Assigned To
+              </p>
+
+              <div className="mt-3 flex items-center gap-2 text-sm text-foreground">
+                <User size={15} className="text-muted-foreground" />
+                <span>
+                  {currentTask.assignee?.full_name ||
+                    currentTask.assignee?.email ||
+                    'Unassigned'}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Department
+              </p>
+
+              <p className="mt-3 text-sm text-foreground">
+                {departments.find(
+                  department => department.id === currentTask.department_id
+                )?.name || '-'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Status
+              </p>
+
+              <div className="mt-3">
+                {editingTask ? (
+                  <StatusSelect
+                    value={editForm.status}
+                    onChange={value =>
+                      setEditForm(form => ({
+                        ...form,
+                        status: value,
+                      }))
+                    }
+                  />
+                ) : (
+                  <span
+                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${STATUS_COLORS[currentTask.effectiveStatus]}`}
+                  >
+                    {currentTask.effectiveStatus === 'Completed' &&
+                    currentTask.overdueByDays
+                      ? `Completed - Overdue by ${currentTask.overdueByDays} days`
+                      : currentTask.effectiveStatus}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Deadline
+              </p>
+
+              <div className="mt-3">
+                {editingTask ? (
+                  <DateInput
+                    value={editForm.deadline}
+                    onChange={value =>
+                      setEditForm(form => ({
+                        ...form,
+                        deadline: value,
+                      }))
+                    }
+                    placeholder="Select deadline"
+                  />
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span
+                      className={
+                        currentTask.status !== 'Completed' &&
+                        isOverdue(currentTask.deadline, currentTask.status)
+                          ? 'font-medium text-destructive'
+                          : 'text-foreground'
+                      }
+                    >
+                      {formatDeadline(currentTask.deadline)}
+                    </span>
+
+                    {currentTask.status !== 'Completed' &&
+                      isOverdue(currentTask.deadline, currentTask.status) && (
+                        <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive">
+                          Overdue
+                        </span>
+                      )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">
+          <div className="mt-5 rounded-2xl border border-border bg-background/40 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Description
             </p>
 
-            <div className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2.5">
+            <div className="mt-3">
               {editingTask ? (
                 <textarea
                   value={editForm.description}
-                  onChange={e =>
-                    setEditForm(f => ({
-                      ...f,
-                      description: e.target.value,
+                  onChange={event =>
+                    setEditForm(form => ({
+                      ...form,
+                      description: event.target.value,
                     }))
                   }
                   rows={4}
-                  className="w-full px-3 py-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-slate-900 resize-none"
+                  className="form-textarea min-h-28 w-full resize-none"
+                  placeholder="Add task notes or context"
                 />
               ) : (
-                <p className="text-sm text-slate-800">
+                <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
                   {currentTask.description || 'No description provided'}
                 </p>
               )}
             </div>
           </div>
 
-          {/* Progress */}
           {currentTask.subtasks.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-900 uppercase tracking-wider">
+            <div className="mt-5 rounded-2xl border border-border bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Progress
                 </p>
 
-                <p className="text-xs font-semibold">
+                <p className="text-xs font-semibold text-foreground">
                   {calcProgress(currentTask.subtasks)}%
                 </p>
               </div>
 
               <ProgressBar value={calcProgress(currentTask.subtasks)} />
 
-              <p className="text-xs text-slate-600">
-                {currentTask.subtasks.filter(s => s.is_completed).length} of{' '}
+              <p className="mt-3 text-xs text-muted-foreground">
+                {currentTask.subtasks.filter(subtask => subtask.is_completed).length} of{' '}
                 {currentTask.subtasks.length} subtasks completed
               </p>
             </div>
           )}
 
-          <div className="border-t border-slate-200" />
-
-          {/* Subtasks section */}
-          <div className="flex flex-col gap-3">
-            <p className="text-sm font-semibold">Subtasks</p>
+          <div className="mt-5 rounded-2xl border border-border bg-background/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Subtasks
+              </p>
+            </div>
 
             {currentTask.subtasks.length === 0 && (
-              <div className="flex items-center gap-2 py-3">
-                <List size={14} className="text-slate-400" />
-                <p className="text-xs text-slate-400">
+              <div className="mt-4 flex items-center gap-2 rounded-xl border border-dashed border-border bg-card/60 px-4 py-5">
+                <List size={15} className="text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
                   No subtasks yet
                 </p>
               </div>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              {currentTask.subtasks.map(sub => (
-                <div
-                  key={sub.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors group"
-                >
-                  <input
-                    type="checkbox"
-                    checked={sub.is_completed}
-                    onChange={() => handleToggleSubtask(sub)}
-                    disabled={!canManage}
-                  />
-
-                  <p
-                    className={`flex-1 text-sm ${
-                      sub.is_completed
-                        ? 'line-through text-slate-600'
-                        : 'text-slate-900'
-                    }`}
+            {currentTask.subtasks.length > 0 && (
+              <div className="mt-4 flex flex-col gap-2">
+                {currentTask.subtasks.map(subtask => (
+                  <div
+                    key={subtask.id}
+                    className="group flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 transition-colors hover:border-muted-foreground/30"
                   >
-                    {sub.title}
-                  </p>
+                    <input
+                      type="checkbox"
+                      checked={subtask.is_completed}
+                      onChange={() => handleToggleSubtask(subtask)}
+                      disabled={!canManage}
+                      className="h-4 w-4 accent-primary"
+                    />
 
-                  {canManage && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSubtask(sub.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 transition-all"
-                      aria-label="Delete subtask"
+                    <p
+                      className={`flex-1 text-sm ${
+                        subtask.is_completed
+                          ? 'text-muted-foreground line-through'
+                          : 'text-foreground'
+                      }`}
                     >
-                      <Trash2 size={14} className="text-red-600" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                      {subtask.title}
+                    </p>
 
-            {/* Add subtask input */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSubtask(subtask.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-100 transition-colors hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                        aria-label="Delete subtask"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {canManage && (
-              <div className="flex gap-2 mt-1">
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={newSubtaskTitle}
-                  onChange={e => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
+                  onChange={event => setNewSubtaskTitle(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
                       handleAddSubtask();
                     }
                   }}
-                  placeholder="Add a subtask…"
-                  className="flex-1 px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
+                  placeholder="Add a subtask..."
+                  className="form-input flex-1"
                 />
 
                 <Button
                   type="button"
                   disabled={!newSubtaskTitle.trim() || addingSubtask}
                   onClick={handleAddSubtask}
+                  className="h-10 rounded-xl px-5"
                 >
                   {addingSubtask ? 'Adding...' : 'Add'}
                 </Button>
               </div>
             )}
           </div>
+        </div>
 
-          {/* Footer actions */}
-          <div className="border-t border-slate-200 pt-4 flex items-center justify-end gap-2">
-            {editingTask && (
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {editingTask ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingTask(false);
+                    setEditForm({
+                      title: currentTask.title || '',
+                      description: currentTask.description || '',
+                      deadline: currentTask.deadline
+                        ? new Date(currentTask.deadline).toISOString().slice(0, 10)
+                        : '',
+                      status: currentTask.status || 'Not Started',
+                    });
+                  }}
+                  className="h-10 rounded-xl"
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={handleSaveTask}
+                  className="h-10 rounded-xl"
+                >
+                  Save Changes
+                </Button>
+              </>
+            ) : (
               <Button
                 type="button"
-                onClick={handleSaveTask}
+                variant="outline"
+                onClick={onClose}
+                className="h-10 rounded-xl"
               >
-                Save Changes
+                Close
               </Button>
             )}
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-            >
-              Close
-            </Button>
           </div>
         </div>
       </div>
