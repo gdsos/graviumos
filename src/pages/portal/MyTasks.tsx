@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
 import { DateInput } from '../../components/common/DateInput';
 import { useAuth } from '../../contexts/AuthContext';
@@ -229,6 +230,7 @@ function TaskScopeFilter({
 
 export default function MyTasks() {
   const { profile, departments, isDeptHead, isAdmin } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'all' | 'assigned'>('all');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
@@ -471,6 +473,24 @@ export default function MyTasks() {
     setDetailTask(task);
     setShowDetailModal(true);
   };
+
+  useEffect(() => {
+    const taskId = searchParams.get('taskId');
+
+    if (!taskId || loading || tasks.length === 0) return;
+
+    const matchedTask = tasks.find(task => task.id === taskId);
+
+    if (matchedTask) {
+      setDetailTask(matchedTask);
+      setShowDetailModal(true);
+      setSearchParams(current => {
+        const next = new URLSearchParams(current);
+        next.delete('taskId');
+        return next;
+      }, { replace: true });
+    }
+  }, [loading, searchParams, setSearchParams, tasks]);
 
   const handleTaskDeleted = (taskId: string) => {
   setTasks(prev =>

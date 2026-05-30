@@ -76,10 +76,14 @@ const bentoTransition = {
 function FlipInfoCard({
   front,
   back,
+  actionLabel,
+  onAction,
   className = '',
 }: {
   front: React.ReactNode;
   back: React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
   className?: string;
 }) {
   const [flipped, setFlipped] = useState(false);
@@ -110,18 +114,38 @@ function FlipInfoCard({
         <button
           type="button"
           onClick={() => setFlipped(true)}
-          className="absolute inset-0 h-full w-full rounded-3xl border border-border bg-card p-5 text-left outline-none [backface-visibility:hidden] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="absolute inset-0 h-full w-full overflow-hidden rounded-3xl border border-border bg-card p-3 text-left outline-none [backface-visibility:hidden] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-5"
         >
           {front}
         </button>
 
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setFlipped(false)}
-          className="absolute inset-0 h-full w-full rounded-3xl border border-border bg-card p-5 text-left outline-none [backface-visibility:hidden] [transform:rotateY(180deg)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setFlipped(false);
+            }
+          }}
+          className="absolute inset-0 flex h-full w-full cursor-pointer flex-col justify-between overflow-hidden rounded-3xl border border-border bg-card p-3 text-left outline-none [backface-visibility:hidden] [transform:rotateY(180deg)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-5"
         >
-          {back}
-        </button>
+          <div>{back}</div>
+
+          {actionLabel && onAction && (
+            <button
+              type="button"
+              onClick={event => {
+                event.stopPropagation();
+                onAction();
+              }}
+              className="mt-2 inline-flex h-8 w-full items-center justify-center rounded-xl bg-primary px-3 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 sm:h-9 sm:text-xs"
+            >
+              {actionLabel}
+            </button>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );
@@ -200,7 +224,7 @@ function KpiScoreCircle({ score }: { score: number }) {
   else if (score < 7.5) ringColor = '#d97706';
 
   return (
-    <div className="relative h-32 w-32 shrink-0">
+    <div className="relative h-28 w-28 shrink-0 sm:h-32 sm:w-32">
       <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
         <circle
           cx="50"
@@ -227,7 +251,7 @@ function KpiScoreCircle({ score }: { score: number }) {
       </svg>
 
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-semibold leading-none" style={{ color: ringColor }}>
+        <span className="text-4xl font-semibold leading-none" style={{ color: ringColor }}>
           {score.toFixed(1)}
         </span>
         <span className="mt-1 text-xs text-muted-foreground">/ 10</span>
@@ -244,15 +268,15 @@ function TaskSummaryCard({
   count: number;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-background p-4">
+    <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
       <span
         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${STATUS_BADGE[status]}`}
       >
         {status}
       </span>
 
-      <div className="mt-5 flex items-end justify-between gap-3">
-        <span className="text-3xl font-semibold tracking-tight text-foreground">
+      <div className="mt-4 flex items-end justify-between gap-3 sm:mt-5">
+        <span className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
           {count}
         </span>
 
@@ -270,6 +294,95 @@ interface PortalQuickAction {
   icon: typeof Bell;
   onClick: () => void | Promise<void>;
   disabled?: boolean;
+}
+
+function MobilePagerDots({
+  count,
+  activeIndex,
+  onChange,
+}: {
+  count: number;
+  activeIndex: number;
+  onChange: (index: number) => void;
+}) {
+  if (count <= 1) return null;
+
+  return (
+    <div className="mt-2 flex items-center justify-center gap-2">
+      {Array.from({ length: count }).map((_, index) => (
+        <button
+          key={index}
+          type="button"
+          onClick={() => onChange(index)}
+          aria-label={`Go to item ${index + 1}`}
+          className={`h-1.5 rounded-full transition-all ${
+            index === activeIndex
+              ? 'w-5 bg-foreground'
+              : 'w-1.5 bg-foreground/25 hover:bg-foreground/40'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SwipeCarouselCard({
+  children,
+  activeIndex,
+  count,
+  onChange,
+  className = '',
+}: {
+  children: React.ReactNode;
+  activeIndex: number;
+  count: number;
+  onChange: (index: number) => void;
+  className?: string;
+}) {
+  const goToIndex = (direction: number) => {
+    if (count <= 1) return;
+
+    const nextIndex = activeIndex + direction;
+
+    if (nextIndex < 0) {
+      onChange(count - 1);
+      return;
+    }
+
+    if (nextIndex >= count) {
+      onChange(0);
+      return;
+    }
+
+    onChange(nextIndex);
+  };
+
+  return (
+    <motion.div
+      key={activeIndex}
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -18 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      drag={count > 1 ? 'x' : false}
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.04}
+      onDragEnd={(_, info) => {
+        const swipePower = Math.abs(info.offset.x) * info.velocity.x;
+
+        if (info.offset.x < -36 || swipePower < -900) {
+          goToIndex(1);
+        }
+
+        if (info.offset.x > 36 || swipePower > 900) {
+          goToIndex(-1);
+        }
+      }}
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl touch-pan-y select-none ${count > 1 ? 'cursor-grab active:cursor-grabbing' : ''} ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 function FloatingPortalActionDock({ actions }: { actions: PortalQuickAction[] }) {
@@ -380,6 +493,10 @@ export default function Overview() {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifsLoading, setNotifsLoading] = useState(true);
+  const [mobileProjectIndex, setMobileProjectIndex] = useState(0);
+  const [mobileDeadlineIndex, setMobileDeadlineIndex] = useState(0);
+  const [mobileProjectFlipped, setMobileProjectFlipped] = useState(false);
+  const [mobileDeadlineFlipped, setMobileDeadlineFlipped] = useState(false);
 
   const resolveLocation = useCallback((): Promise<string> => {
     return new Promise(resolve => {
@@ -679,6 +796,29 @@ export default function Overview() {
     [assignedProjects, assignedTasks]
   );
 
+  useEffect(() => {
+    setMobileProjectIndex(current =>
+      Math.min(current, Math.max(projectMiniCards.length - 1, 0))
+    );
+  }, [projectMiniCards.length]);
+
+  useEffect(() => {
+    setMobileDeadlineIndex(current =>
+      Math.min(current, Math.max(dueSoonTasks.length - 1, 0))
+    );
+  }, [dueSoonTasks.length]);
+
+  useEffect(() => {
+    setMobileProjectFlipped(false);
+  }, [mobileProjectIndex]);
+
+  useEffect(() => {
+    setMobileDeadlineFlipped(false);
+  }, [mobileDeadlineIndex]);
+
+  const activeMobileProject = projectMiniCards[mobileProjectIndex] || null;
+  const activeMobileDeadline = dueSoonTasks[mobileDeadlineIndex] || null;
+
   const isCheckedIn = !!attendance?.check_in;
   const isCheckedOut = !!attendance?.check_out;
   const attendanceComplete = isCheckedIn && isCheckedOut;
@@ -705,8 +845,8 @@ export default function Overview() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 pb-32 sm:px-6 lg:px-8 lg:pb-10">
-      <div className="mb-8 border-b border-border pb-8">
+    <div className="mx-auto w-full max-w-7xl px-3 pb-32 sm:px-6 lg:px-8 lg:pb-10">
+      <div className="mb-5 border-b border-border pb-5 sm:mb-8 sm:pb-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
@@ -746,60 +886,22 @@ export default function Overview() {
         variants={bentoContainerMotion}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 gap-4 lg:grid-cols-12"
+        className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-12"
       >
-        <FlipInfoCard
-          className="min-h-[15rem] lg:col-span-3"
-          front={
-            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-              <KpiScoreCircle score={profile?.kpi_score ?? 0} />
-
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Performance
-              </p>
-            </div>
-          }
-          back={
-            <div className="flex h-full flex-col justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  KPI Details
-                </p>
-
-                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                  {(profile?.kpi_score ?? 0).toFixed(1)} / 10
-                </h2>
-
-                <p className="mt-3 text-sm text-muted-foreground">
-                  {(profile?.kpi_score ?? 0) >= 8
-                    ? 'Excellent performance. Keep the momentum steady.'
-                    : (profile?.kpi_score ?? 0) >= 6
-                      ? 'Good work. A few more timely completions will improve this.'
-                      : 'Room for improvement. Focus on current tasks and deadlines.'}
-                </p>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Detailed KPI breakdown can be added here once the KPI engine is finalized.
-              </p>
-            </div>
-          }
-        />
-
-        <motion.div
+<motion.div
           variants={bentoCardMotion}
           transition={bentoTransition}
           whileHover={{ y: -3 }}
           whileTap={{ scale: 0.99 }}
-          className="rounded-3xl border border-border bg-card p-5 lg:col-span-9"
+          className="col-span-2 rounded-3xl border border-border bg-card p-3.5 sm:p-5 lg:col-span-12 xl:col-span-9"
         >
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Attendance
             </p>
 
-            <div className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <div className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-foreground sm:text-base">
+              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground sm:h-4 sm:w-4" />
 
               <span>
                 {new Date().toLocaleDateString('en-IN', {
@@ -832,14 +934,14 @@ export default function Overview() {
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-[1fr_12rem] sm:items-stretch">
-              <div className="rounded-2xl border border-border bg-background p-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
+                <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Checked In
                     </p>
 
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2 sm:mt-3">
                       <ArrowRight
                         className={`h-4 w-4 ${
                           isCheckedIn ? 'text-emerald-500' : 'text-muted-foreground'
@@ -861,7 +963,7 @@ export default function Overview() {
                       Checked Out
                     </p>
 
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2 sm:mt-3">
                       <ArrowLeft
                         className={`h-4 w-4 ${
                           isCheckedOut ? 'text-blue-500' : 'text-muted-foreground'
@@ -879,7 +981,7 @@ export default function Overview() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 sm:mt-4">
                   <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
 
                   <p className="truncate text-xs text-muted-foreground">
@@ -891,7 +993,7 @@ export default function Overview() {
               </div>
 
               {attendanceComplete ? (
-                <div className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-4 text-center">
+                <div className="flex min-h-20 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-center sm:min-h-24 sm:py-4">
                   <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
 
                   <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
@@ -902,7 +1004,7 @@ export default function Overview() {
                 <button
                   onClick={handleCheckIn}
                   disabled={checkingIn}
-                  className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 hover:bg-primary/90 disabled:translate-y-0 disabled:opacity-50"
+                  className="flex min-h-16 w-full flex-col items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 hover:bg-primary/90 disabled:translate-y-0 disabled:opacity-50 sm:min-h-24 sm:gap-2 sm:py-4"
                 >
                   <LogIn className="h-5 w-5" />
                   {checkingIn ? 'Checking...' : 'Check In'}
@@ -911,7 +1013,7 @@ export default function Overview() {
                 <button
                   onClick={handleCheckOut}
                   disabled={checkingOut}
-                  className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm font-semibold text-amber-700 shadow-lg shadow-amber-500/10 transition-transform hover:-translate-y-0.5 hover:bg-amber-500/15 disabled:translate-y-0 disabled:opacity-50 dark:text-amber-300"
+                  className="flex min-h-16 w-full flex-col items-center justify-center gap-1.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 shadow-lg shadow-amber-500/10 transition-transform hover:-translate-y-0.5 hover:bg-amber-500/15 disabled:translate-y-0 disabled:opacity-50 dark:text-amber-300 sm:min-h-24 sm:gap-2 sm:py-4"
                 >
                   <LogOut className="h-5 w-5" />
                   {checkingOut ? 'Checking...' : 'Check Out'}
@@ -921,66 +1023,100 @@ export default function Overview() {
           )}
         </motion.div>
 
-        <motion.div
-          variants={bentoCardMotion}
-          transition={bentoTransition}
-          whileHover={{ y: -3 }}
-          whileTap={{ scale: 0.99 }}
-          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
-        >
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            Next Action
-          </p>
+<FlipInfoCard
+          className="col-span-1 min-h-[11rem] sm:min-h-[13rem] lg:col-span-3"
+          front={
+            <div className="flex h-full items-center justify-center">
+              <KpiScoreCircle score={profile?.kpi_score ?? 0} />
+            </div>
+          }
+          back={
+            <div className="flex h-full flex-col justify-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs">
+                KPI Details
+              </p>
 
-          {tasksLoading ? (
-            <div className="mt-5 h-28 animate-pulse rounded-2xl border border-border bg-muted/40" />
-          ) : nextActionTask ? (
-            <div className="mt-5 flex min-h-40 flex-col justify-between rounded-2xl border border-border bg-background p-4">
-              <div>
-                <p className="line-clamp-2 text-lg font-semibold leading-snug text-foreground">
-                  {nextActionTask.title}
-                </p>
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                {(profile?.kpi_score ?? 0).toFixed(1)} / 10
+              </h2>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                      STATUS_BADGE[calcEffectiveStatus(nextActionTask)]
-                    }`}
-                  >
-                    {calcEffectiveStatus(nextActionTask)}
-                  </span>
+              <p className="mt-2 line-clamp-4 text-xs leading-5 text-muted-foreground sm:text-sm">
+                {(profile?.kpi_score ?? 0) >= 8
+                  ? 'Excellent performance. Keep the momentum steady.'
+                  : (profile?.kpi_score ?? 0) >= 6
+                    ? 'Good work. Timely completions will improve this further.'
+                    : 'Focus on current tasks, deadlines, and work updates.'}
+              </p>
+            </div>
+          }
+        />
 
-                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-                    {formatTaskDueLabel(nextActionTask.deadline)}
-                  </span>
+<FlipInfoCard
+          className="col-span-1 min-h-[11rem] sm:min-h-[13rem] lg:col-span-4"
+          actionLabel="Open My Tasks"
+          onAction={() => navigate('/portal/tasks')}
+          front={
+            <div className="flex h-full flex-col justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs">
+                Next Action
+              </p>
+
+              {tasksLoading ? (
+                <div className="mt-4 h-16 animate-pulse rounded-2xl border border-border bg-muted/40" />
+              ) : nextActionTask ? (
+                <div>
+                  <p className="line-clamp-2 text-base font-semibold leading-snug text-foreground">
+                    {nextActionTask.title}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                        STATUS_BADGE[calcEffectiveStatus(nextActionTask)]
+                      }`}
+                    >
+                      {calcEffectiveStatus(nextActionTask)}
+                    </span>
+
+                    <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      {formatTaskDueLabel(nextActionTask.deadline)}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <p className="text-sm font-medium text-foreground">
+                  No active task
+                </p>
+              )}
 
-              <p className="mt-5 text-xs text-muted-foreground">
-                Open My Tasks to continue or update this task.
+              <p className="text-[10px] text-muted-foreground">
+                Tap for details
               </p>
             </div>
-          ) : (
-            <div className="mt-5 flex min-h-40 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-4">
-              <p className="text-sm font-medium text-foreground">
-                No active task right now
+          }
+          back={
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs">
+                Task Details
               </p>
 
-              <p className="mt-2 text-xs text-muted-foreground">
-                New assignments will appear here when they are added.
+              <p className="mt-2 line-clamp-4 text-xs leading-5 text-muted-foreground sm:text-sm">
+                {nextActionTask
+                  ? 'Open My Tasks to update status, review deadline, or continue the task.'
+                  : 'New assignments will appear here when they are added.'}
               </p>
             </div>
-          )}
-        </motion.div>
+          }
+        />
 
         <motion.div
           variants={bentoCardMotion}
           transition={bentoTransition}
           whileHover={{ y: -3 }}
           whileTap={{ scale: 0.99 }}
-          className="rounded-3xl border border-border bg-card p-5 lg:col-span-8"
+          className="col-span-2 rounded-3xl border border-border bg-card p-4 sm:p-5 lg:col-span-8"
         >
-          <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="mb-4 flex items-center justify-between gap-4 sm:mb-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Workload
@@ -997,7 +1133,7 @@ export default function Overview() {
           </div>
 
           {tasksLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
               {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(status => (
                 <div
                   key={status}
@@ -1006,7 +1142,7 @@ export default function Overview() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
               {(['Not Started', 'Ongoing', 'Overdue', 'Completed'] as TaskStatus[]).map(status => (
                 <TaskSummaryCard key={status} status={status} count={taskCounts[status]} />
               ))}
@@ -1019,81 +1155,115 @@ export default function Overview() {
           transition={bentoTransition}
           whileHover={{ y: -3 }}
           whileTap={{ scale: 0.99 }}
-          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+          className="col-span-1 flex aspect-square flex-col self-start rounded-3xl border border-border bg-card p-3.5 sm:p-4 lg:col-span-3 xl:col-span-3"
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Projects
-              </p>
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Projects
+            </p>
 
-              <h2 className="mt-2 text-lg font-semibold text-foreground">
-                My Projects
-              </h2>
-            </div>
-
-            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
               {projectMiniCards.length}
             </span>
           </div>
 
           {tasksLoading ? (
-            <div className="grid gap-2">
-              {[1, 2].map(item => (
-                <div
-                  key={item}
-                  className="h-16 animate-pulse rounded-2xl border border-border bg-muted/40"
-                />
-              ))}
-            </div>
-          ) : projectMiniCards.length > 0 ? (
-            <div className="grid gap-2">
-              {projectMiniCards.map(project => (
-                <div
-                  key={project.id}
-                  className="rounded-2xl border border-border bg-background px-4 py-3"
+            <div className="min-h-0 flex-1 animate-pulse rounded-2xl border border-border bg-muted/40" />
+          ) : activeMobileProject ? (
+            <SwipeCarouselCard
+              activeIndex={mobileProjectIndex}
+              count={projectMiniCards.length}
+              onChange={setMobileProjectIndex}
+            >
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl [perspective:1000px]">
+                <motion.div
+                  animate={{ rotateY: mobileProjectFlipped ? 180 : 0 }}
+                  transition={{ duration: 0.36, ease: 'easeInOut' }}
+                  className="relative h-full w-full [transform-style:preserve-3d]"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="line-clamp-1 text-sm font-semibold text-foreground">
-                        {project.name}
+                  <button
+                    type="button"
+                    onClick={() => setMobileProjectFlipped(true)}
+                    className="absolute inset-0 flex h-full w-full flex-col justify-between rounded-2xl border border-border bg-background p-3 text-left outline-none [backface-visibility:hidden] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-4"
+                  >
+                    <div>
+                      <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
+                        {activeMobileProject.name}
                       </p>
 
-                      {project.client_name && (
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          {project.client_name}
+                      {activeMobileProject.client_name && (
+                        <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+                          {activeMobileProject.client_name}
                         </p>
                       )}
                     </div>
 
-                    <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      {project.status || 'Active'}
-                    </span>
-                  </div>
+                    <div className="space-y-1.5">
+                      <span className="inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {activeMobileProject.activeCount} task{activeMobileProject.activeCount !== 1 ? 's' : ''}
+                      </span>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground">
-                      {project.activeCount} active task{project.activeCount !== 1 ? 's' : ''}
-                    </span>
+                      <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                        {activeMobileProject.nextDeadline
+                          ? formatTaskDueLabel(activeMobileProject.nextDeadline)
+                          : 'No deadline'}
+                      </p>
+                    </div>
+                  </button>
 
-                    <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground">
-                      {project.nextDeadline ? formatTaskDueLabel(project.nextDeadline) : 'No deadline'}
-                    </span>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setMobileProjectFlipped(false)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setMobileProjectFlipped(false);
+                      }
+                    }}
+                    className="absolute inset-0 flex h-full w-full cursor-pointer flex-col justify-between rounded-2xl border border-border bg-background p-3 outline-none [backface-visibility:hidden] [transform:rotateY(180deg)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-4"
+                  >
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Project
+                      </p>
+
+                      <p className="mt-2 line-clamp-2 text-sm font-semibold text-foreground">
+                        {activeMobileProject.name}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation();
+                        navigate(`/portal/projects?projectId=${activeMobileProject.id}`);
+                      }}
+                      className="inline-flex h-8 w-full items-center justify-center rounded-xl bg-primary px-3 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      Open Project
+                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                </motion.div>
+              </div>
+            </SwipeCarouselCard>
           ) : (
-            <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-4">
-              <p className="text-sm font-medium text-foreground">
-                No assigned projects
+            <div className="flex min-h-0 flex-1 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-3 sm:p-4">
+              <p className="text-sm font-semibold text-foreground">
+                No projects
               </p>
 
-              <p className="mt-2 text-xs text-muted-foreground">
-                Projects connected to your tasks will appear here.
+              <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
+                Linked projects will appear here.
               </p>
             </div>
           )}
+
+          <MobilePagerDots
+            count={projectMiniCards.length}
+            activeIndex={mobileProjectIndex}
+            onChange={setMobileProjectIndex}
+          />
         </motion.div>
 
         <motion.div
@@ -1101,77 +1271,113 @@ export default function Overview() {
           transition={bentoTransition}
           whileHover={{ y: -3 }}
           whileTap={{ scale: 0.99 }}
-          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+          className="col-span-1 flex aspect-square flex-col self-start rounded-3xl border border-border bg-card p-3.5 sm:p-4 lg:col-span-3 xl:col-span-3"
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Deadlines
-              </p>
-
-              <h2 className="mt-2 text-lg font-semibold text-foreground">
-                Due Soon
-              </h2>
-            </div>
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Deadlines
+            </p>
 
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
 
           {tasksLoading ? (
-            <div className="grid gap-2">
-              {[1, 2, 3].map(item => (
-                <div
-                  key={item}
-                  className="h-14 animate-pulse rounded-2xl border border-border bg-muted/40"
-                />
-              ))}
-            </div>
-          ) : dueSoonTasks.length > 0 ? (
-            <div className="grid gap-2">
-              {dueSoonTasks.map(task => {
-                const effective = calcEffectiveStatus(task);
-
-                return (
-                  <div
-                    key={task.id}
-                    className={`rounded-2xl border px-4 py-3 ${
-                      effective === 'Overdue'
+            <div className="min-h-0 flex-1 animate-pulse rounded-2xl border border-border bg-muted/40" />
+          ) : activeMobileDeadline ? (
+            <SwipeCarouselCard
+              activeIndex={mobileDeadlineIndex}
+              count={dueSoonTasks.length}
+              onChange={setMobileDeadlineIndex}
+            >
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl [perspective:1000px]">
+                <motion.div
+                  animate={{ rotateY: mobileDeadlineFlipped ? 180 : 0 }}
+                  transition={{ duration: 0.36, ease: 'easeInOut' }}
+                  className="relative h-full w-full [transform-style:preserve-3d]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setMobileDeadlineFlipped(true)}
+                    className={`absolute inset-0 flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border p-3 text-left outline-none [backface-visibility:hidden] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-4 ${
+                      calcEffectiveStatus(activeMobileDeadline) === 'Overdue'
                         ? 'border-destructive/20 bg-destructive/10'
                         : 'border-border bg-background'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="line-clamp-1 text-sm font-semibold text-foreground">
-                        {task.title}
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-semibold leading-tight text-foreground sm:text-base">
+                        {activeMobileDeadline.title}
                       </p>
 
-                      <span
-                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                          STATUS_BADGE[effective]
-                        }`}
-                      >
-                        {formatTaskDueLabel(task.deadline)}
-                      </span>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {calcEffectiveStatus(activeMobileDeadline)}
+                      </p>
                     </div>
 
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Status: {effective}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          STATUS_BADGE[calcEffectiveStatus(activeMobileDeadline)]
+                        }`}
+                      >
+                        {formatTaskDueLabel(activeMobileDeadline.deadline)}
+                      </span>
+                    </div>
+                  </button>
+
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setMobileDeadlineFlipped(false)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setMobileDeadlineFlipped(false);
+                      }
+                    }}
+                    className="absolute inset-0 flex h-full w-full cursor-pointer flex-col justify-between rounded-2xl border border-border bg-background p-3 outline-none [backface-visibility:hidden] [transform:rotateY(180deg)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-4"
+                  >
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Task
+                      </p>
+
+                      <p className="mt-2 line-clamp-2 text-sm font-semibold text-foreground">
+                        {activeMobileDeadline.title}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation();
+                        navigate(`/portal/tasks?taskId=${activeMobileDeadline.id}`);
+                      }}
+                      className="inline-flex h-8 w-full items-center justify-center rounded-xl bg-primary px-3 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      Open Task
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                </motion.div>
+              </div>
+            </SwipeCarouselCard>
           ) : (
-            <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-4">
-              <p className="text-sm font-medium text-foreground">
-                No urgent deadlines
+            <div className="flex min-h-0 flex-1 flex-col justify-center rounded-2xl border border-dashed border-border bg-background p-3 sm:p-4">
+              <p className="text-sm font-semibold text-foreground">
+                No deadlines
               </p>
 
-              <p className="mt-2 text-xs text-muted-foreground">
-                Deadline-based tasks will appear here when assigned.
+              <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
+                Pending deadlines will appear here.
               </p>
             </div>
           )}
+
+          <MobilePagerDots
+            count={dueSoonTasks.length}
+            activeIndex={mobileDeadlineIndex}
+            onChange={setMobileDeadlineIndex}
+          />
         </motion.div>
 
         <motion.div
@@ -1179,9 +1385,9 @@ export default function Overview() {
           transition={bentoTransition}
           whileHover={{ y: -3 }}
           whileTap={{ scale: 0.99 }}
-          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+          className="col-span-2 rounded-3xl border border-border bg-card p-4 sm:p-5 lg:col-span-4"
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="mb-4 flex items-start justify-between gap-4 sm:mb-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Updates
@@ -1209,7 +1415,7 @@ export default function Overview() {
               ))}
             </div>
           ) : announcements.length === 0 && notifications.length === 0 ? (
-            <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background p-6 text-center">
+            <div className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background p-6 text-center">
               <Info className="h-5 w-5 text-muted-foreground" />
 
               <div>

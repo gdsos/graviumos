@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { supabase, type Project, type ProjectExpense, type ProjectCashReceived, formatINR } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
@@ -197,6 +197,7 @@ interface ProjectWorkspaceProps {
 
 export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
   profile,
   departments,
@@ -771,6 +772,24 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     setDetailTab(defaultDetailTab);
     await fetchProjectDetail(proj.id);
   };
+
+  useEffect(() => {
+    const projectId = searchParams.get('projectId');
+
+    if (!projectId || loading || projects.length === 0) return;
+
+    const matchedProject = projects.find(project => project.id === projectId);
+
+    if (matchedProject) {
+      void openDetail(matchedProject);
+
+      setSearchParams(current => {
+        const next = new URLSearchParams(current);
+        next.delete('projectId');
+        return next;
+      }, { replace: true });
+    }
+  }, [defaultDetailTab, fetchProjectDetail, loading, projects, searchParams, setSearchParams]);
 
   const closeDetail = () => {
     setSelectedProject(null);
