@@ -241,7 +241,6 @@ function FlipCommandCard({
  flippedCard,
  setFlippedCard,
  title,
- eyebrow,
  routeLabel,
  onOpen,
  children,
@@ -251,13 +250,23 @@ function FlipCommandCard({
  flippedCard: string | null;
  setFlippedCard: (cardKey: string | null) => void;
  title: string;
- eyebrow: string;
  routeLabel: string;
  onOpen: () => void;
  children: React.ReactNode;
  className?: string;
 }) {
  const isFlipped = flippedCard === cardKey;
+
+ const flipDescription =
+ title === 'Financials'
+ ? 'Review cash received, project value, and payment movement.'
+ : title === 'Converted Leads'
+ ? 'Review converted enquiries and sales movement.'
+ : title === 'Active Projects'
+ ? 'Review active work and operational progress.'
+ : title === 'Total Leads'
+ ? 'Review the full lead pipeline and current stages.'
+ : `Open ${routeLabel} to view details.`;
 
  return (
  <motion.div
@@ -294,12 +303,12 @@ function FlipCommandCard({
  >
  <div>
  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs sm:tracking-[0.22em]">
- {eyebrow}
+ {title}
  </p>
 
- <h3 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
- {title}
- </h3>
+ <p className="mt-3 hidden max-w-sm text-sm leading-6 text-muted-foreground sm:block">
+ {flipDescription}
+ </p>
  </div>
 
  <button
@@ -308,7 +317,7 @@ function FlipCommandCard({
  event.stopPropagation();
  onOpen();
  }}
- className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+ className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 lg:h-14 lg:rounded-2xl lg:text-base"
  >
  <ArrowRight size={16} />
  Open {routeLabel}
@@ -619,7 +628,7 @@ export default function Dashboard() {
  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 sm:h-2 sm:w-2" />
  </span>
- <span className="truncate">Updated live</span>
+ <span className="truncate">Live</span>
  </div>
  </div>
 
@@ -653,10 +662,9 @@ export default function Dashboard() {
  flippedCard={flippedCard}
  setFlippedCard={setFlippedCard}
  title="Financials"
- eyebrow="Command"
  routeLabel="Financials"
  onOpen={() => navigate('/admin/financials')}
- className="hidden min-h-[18rem] lg:col-span-5 lg:block"
+ className="hidden lg:block lg:col-span-4 lg:h-[172px]"
  >
  <div className="flex items-start justify-between gap-4">
  <div>
@@ -664,7 +672,7 @@ export default function Dashboard() {
  Recognized Revenue
  </p>
 
- <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:mt-4 sm:text-4xl">
+ <h2 className="mt-1.5 text-2xl font-semibold leading-none tracking-tight text-foreground">
  {loading ? (
  '...'
  ) : (
@@ -681,13 +689,13 @@ export default function Dashboard() {
  </div>
  </div>
 
- <div className="mt-4 hidden gap-2 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
- <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
- <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+ <div className="mt-3 hidden gap-2 sm:grid sm:grid-cols-2 sm:gap-2">
+ <div className="rounded-xl border border-border bg-background px-3 py-2">
+ <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
  Cash This Month
  </p>
 
- <p className="mt-2 text-xl font-semibold text-foreground">
+ <p className="mt-2 text-lg font-semibold text-foreground">
  {loading ? (
  '...'
  ) : (
@@ -699,12 +707,12 @@ export default function Dashboard() {
  </p>
  </div>
 
- <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
- <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+ <div className="rounded-xl border border-border bg-background px-3 py-2">
+ <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
  Project Value
  </p>
 
- <p className="mt-2 text-xl font-semibold text-foreground">
+ <p className="mt-2 text-lg font-semibold text-foreground">
  {loading ? (
  '...'
  ) : (
@@ -718,7 +726,7 @@ export default function Dashboard() {
  </div>
  </FlipCommandCard>
 
- <div className="order-2 col-span-2 lg:order-none grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-7 lg:grid-cols-3">
+ <div className="order-2 col-span-2 grid grid-cols-2 gap-3 sm:gap-4 lg:order-none lg:col-span-8 lg:grid-cols-3">
  {adminSignals.map(signal => {
  const Icon = signal.icon;
 
@@ -729,22 +737,25 @@ export default function Dashboard() {
  flippedCard={flippedCard}
  setFlippedCard={setFlippedCard}
  title={signal.label}
- eyebrow="Command"
  routeLabel={signal.label === 'Active Projects' ? 'Projects' : 'Leads'}
  onOpen={() => navigate(signal.route)}
- className="min-h-[17rem]"
+ className="aspect-square min-h-0 lg:aspect-auto lg:h-[172px]"
  >
+ <div className="flex h-full flex-col justify-between">
+ <div className="flex items-start justify-between gap-3">
+ <h2 className="max-w-[7.5rem] text-lg font-semibold leading-tight text-foreground sm:text-xl">
+ {signal.label}
+ </h2>
+
  <div
- className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${signal.tone}`}
+ className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${signal.tone}`}
  >
- <Icon size={18} />
+ <Icon size={17} />
+ </div>
  </div>
 
- <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
- {signal.label}
- </p>
-
- <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
+ <div>
+ <p className="text-4xl font-semibold tracking-tight text-foreground">
  {loading ? (
  '...'
  ) : (
@@ -755,9 +766,11 @@ export default function Dashboard() {
  )}
  </p>
 
- <p className="mt-2 text-xs text-muted-foreground">
+ <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
  {signal.helper}
  </p>
+ </div>
+ </div>
  </FlipCommandCard>
  );
  })}
@@ -770,7 +783,7 @@ export default function Dashboard() {
  Cash Movement
  </p>
 
- <h2 className="mt-2 text-xl font-semibold text-foreground">
+ <h2 className="mt-1 text-sm font-semibold text-foreground">
  Cash Received Trend
  </h2>
  </div>
@@ -838,7 +851,7 @@ export default function Dashboard() {
  Sales
  </p>
 
- <h2 className="mt-2 text-xl font-semibold text-foreground">
+ <h2 className="mt-1 text-sm font-semibold text-foreground">
  Lead Funnel
  </h2>
  </div>
@@ -848,7 +861,7 @@ export default function Dashboard() {
 
  {loading ? (
  <div className="flex h-36 items-center justify-center rounded-2xl border border-dashed border-border bg-background sm:h-52">
- <span className="text-sm text-muted-foreground">Loading...</span>
+ <span className="text-xs leading-5 text-muted-foreground sm:text-sm">Loading...</span>
  </div>
  ) : (
  <div className="flex flex-col gap-3">
@@ -882,7 +895,7 @@ export default function Dashboard() {
  )}
  </BentoCard>
 
- <BentoCard className="order-7 col-span-2 lg:order-none rounded-3xl border border-border bg-card p-4 sm:p-6 lg:col-span-4">
+ <BentoCard className="order-7 col-span-2 lg:order-none rounded-3xl border border-border bg-card p-3.5 sm:p-6 lg:col-span-4 lg:row-span-3">
  <div className="mb-4 flex items-start justify-between gap-3 sm:mb-5 sm:gap-4">
  <div>
  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs sm:tracking-[0.22em]">
@@ -901,9 +914,9 @@ export default function Dashboard() {
  {adminInsights.map(insight => (
  <div
  key={insight.message}
- className="rounded-2xl border border-border bg-background px-4 py-3"
+ className="rounded-2xl border border-border bg-background px-3 py-3 sm:px-4"
  >
- <p className="text-sm text-muted-foreground">
+ <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
  {insight.message}
  </p>
 
@@ -920,79 +933,105 @@ export default function Dashboard() {
  </div>
  </BentoCard>
 
- <BentoCard className="order-4 col-span-1 lg:order-none min-h-[10rem] rounded-3xl border border-border bg-card p-4 sm:p-6 lg:col-span-4">
- <div className="flex items-start gap-3 sm:gap-4">
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground sm:h-11 sm:w-11 sm:rounded-2xl">
- <BriefcaseBusiness size={20} />
- </div>
+         <BentoCard className="order-4 col-span-1 aspect-square rounded-3xl border border-border bg-card p-3.5 sm:p-6 lg:order-none lg:col-span-8 lg:aspect-auto lg:min-h-[7.5rem] lg:p-5">
+          <div className="flex h-full flex-col justify-between lg:gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs lg:tracking-[0.22em]">
+              Operations
+            </p>
 
- <div>
- <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs sm:tracking-[0.22em]">
- Operations
- </p>
+            <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 lg:flex-row lg:items-center lg:gap-5">
+              <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground sm:h-11 sm:w-11 sm:rounded-2xl">
+                  <BriefcaseBusiness size={18} />
+                </div>
 
- <h2 className="mt-2 text-lg font-semibold text-foreground">
- Project Load
- </h2>
+                <div>
+                  <h2 className="text-base font-semibold leading-tight text-foreground sm:text-lg lg:text-xl">
+                    Project Load
+                  </h2>
 
- <p className="mt-2 line-clamp-3 text-xs text-muted-foreground sm:text-sm">
- {loading
- ? 'Loading project load...'
- : `${kpi.activeProjects} active project${kpi.activeProjects !== 1 ? 's' : ''} currently need tracking.`}
- </p>
- </div>
- </div>
- </BentoCard>
+                  <p className="mt-1 hidden max-w-md text-sm leading-6 text-muted-foreground lg:block">
+                    Active projects that need operational tracking.
+                  </p>
+                </div>
+              </div>
 
- <BentoCard className="order-5 col-span-1 lg:order-none min-h-[10rem] rounded-3xl border border-border bg-card p-4 sm:p-6 lg:col-span-4">
- <div className="flex items-start gap-3 sm:gap-4">
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300 sm:h-11 sm:w-11 sm:rounded-2xl">
- <ArrowRight size={20} />
- </div>
+              <span className="inline-flex w-fit rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-foreground lg:ml-auto">
+                {loading ? '...' : `${kpi.activeProjects} Active`}
+              </span>
+            </div>
+          </div>
+        </BentoCard>
 
- <div>
- <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs sm:tracking-[0.22em]">
- Pipeline
- </p>
+         <BentoCard className="order-5 col-span-1 aspect-square rounded-3xl border border-border bg-card p-3.5 sm:p-6 lg:order-none lg:col-span-8 lg:aspect-auto lg:min-h-[7.5rem] lg:p-5">
+          <div className="flex h-full flex-col justify-between lg:gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs lg:tracking-[0.22em]">
+              Pipeline
+            </p>
 
- <h2 className="mt-2 text-lg font-semibold text-foreground">
- Lead Volume
- </h2>
+            <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 lg:flex-row lg:items-center lg:gap-5">
+              <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300 sm:h-11 sm:w-11 sm:rounded-2xl">
+                  <ArrowRight size={18} />
+                </div>
 
- <p className="mt-2 line-clamp-3 text-xs text-muted-foreground sm:text-sm">
- {loading
- ? 'Loading lead volume...'
- : `${kpi.totalLeads} total lead${kpi.totalLeads !== 1 ? 's' : ''} recorded in the CRM.`}
- </p>
- </div>
- </div>
- </BentoCard>
+                <div>
+                  <h2 className="text-base font-semibold leading-tight text-foreground sm:text-lg lg:text-xl">
+                    Lead Volume
+                  </h2>
 
- <BentoCard className="order-6 col-span-1 lg:order-none min-h-[10rem] rounded-3xl border border-border bg-card p-4 sm:p-6 lg:col-span-4">
- <div className="flex items-start gap-3 sm:gap-4">
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 sm:h-11 sm:w-11 sm:rounded-2xl">
- <TrendingUp size={20} />
- </div>
+                  <p className="mt-1 hidden max-w-md text-sm leading-6 text-muted-foreground lg:block">
+                    Total enquiries currently recorded in the CRM.
+                  </p>
+                </div>
+              </div>
 
- <div>
- <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:text-xs sm:tracking-[0.22em]">
- Conversion
- </p>
+              <span className="inline-flex w-fit rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 lg:ml-auto">
+                {loading ? '...' : `${kpi.totalLeads} Total`}
+              </span>
+            </div>
+          </div>
+        </BentoCard>
 
- <h2 className="mt-2 text-lg font-semibold text-foreground">
- Sales Health
- </h2>
+         <BentoCard className="order-6 col-span-1 aspect-square rounded-3xl border border-border bg-card p-3.5 sm:p-6 lg:order-none lg:col-span-8 lg:aspect-auto lg:min-h-[7.5rem] lg:p-5">
+          <div className="flex h-full flex-col justify-between lg:gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs lg:tracking-[0.22em]">
+              Conversion
+            </p>
 
- <p className="mt-2 line-clamp-3 text-xs text-muted-foreground sm:text-sm">
- {loading
- ? 'Loading conversion health...'
- : conversionRate >= 25
- ? 'Healthy conversion trend.'
- : 'Conversion needs attention. Review qualified leads and follow-ups.'}
- </p>
- </div>
- </div>
- </BentoCard>
+            <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 lg:flex-row lg:items-center lg:gap-5">
+              <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 sm:h-11 sm:w-11 sm:rounded-2xl">
+                  <TrendingUp size={18} />
+                </div>
+
+                <div>
+                  <h2 className="text-base font-semibold leading-tight text-foreground sm:text-lg lg:text-xl">
+                    Sales Health
+                  </h2>
+
+                  <p className="mt-1 hidden max-w-md text-sm leading-6 text-muted-foreground lg:block">
+                    Conversion trend based on current lead movement.
+                  </p>
+                </div>
+              </div>
+
+              <span
+                className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold lg:ml-auto ${
+                  conversionRate >= 25
+                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                }`}
+              >
+                {loading
+                  ? '...'
+                  : conversionRate >= 25
+                    ? 'Healthy'
+                    : 'Needs Review'}
+              </span>
+            </div>
+          </div>
+        </BentoCard>
  </motion.div>
 
  <FloatingCommandDock
@@ -1036,7 +1075,7 @@ export default function Dashboard() {
 
  <div className="px-5 py-5 sm:px-6">
  <div className="mb-5 grid gap-3 sm:grid-cols-3">
- <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
+ <div className="rounded-2xl border border-border bg-background p-3">
  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
  Recognized Revenue
  </p>
@@ -1046,7 +1085,7 @@ export default function Dashboard() {
  </p>
  </div>
 
- <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
+ <div className="rounded-2xl border border-border bg-background p-3">
  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
  Cash Received
  </p>
