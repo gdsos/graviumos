@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   ArrowRight,
   Bell,
@@ -328,6 +329,7 @@ function FlipCommandCard({
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { userDepartments, isAdmin } = useAuth();
 
   const [kpi, setKpi] = useState<KPIData>({
     totalLeads: 0,
@@ -524,44 +526,83 @@ export default function Dashboard() {
     return insights.slice(0, 3);
   }, [conversionRate, kpi.activeProjects, kpi.cashReceived, kpi.projectValue]);
 
-  const commandActions: AdminCommandAction[] = [
-    {
-      label: 'Create Lead',
-      helper: 'Add a new enquiry',
-      route: '/admin/leads?action=create',
-      icon: Plus,
-    },
-    {
-      label: 'Create Project',
-      helper: 'Start a new project record',
-      route: '/admin/projects?action=create',
-      icon: BriefcaseBusiness,
-    },
-    {
+  const commandActions = useMemo<AdminCommandAction[]>(() => {
+    const departmentTokens = userDepartments.map(department =>
+      `${department.code} ${department.name}`.toLowerCase()
+    );
+
+    const hasDepartmentMatch = (...tokens: string[]) => {
+      if (isAdmin()) return true;
+
+      return departmentTokens.some(department =>
+        tokens.some(token => department.includes(token.toLowerCase()))
+      );
+    };
+
+    const actions: AdminCommandAction[] = [];
+
+    const addAction = (action: AdminCommandAction) => {
+      if (!actions.some(existing => existing.label === action.label)) {
+        actions.push(action);
+      }
+    };
+
+    const canCreateLeads = hasDepartmentMatch('MS', 'marketing', 'sales');
+    const canCreateProjects = hasDepartmentMatch('operations', 'execution', 'site', 'project');
+    const canManageProcurement = hasDepartmentMatch('procurement', 'purchase', 'vendor', 'item');
+
+    if (canCreateLeads) {
+      addAction({
+        label: 'Create Lead',
+        helper: 'Add a new enquiry',
+        route: '/admin/leads?action=create',
+        icon: Plus,
+      });
+    }
+
+    if (canCreateProjects) {
+      addAction({
+        label: 'Create Project',
+        helper: 'Start a new project record',
+        route: '/admin/projects?action=create',
+        icon: BriefcaseBusiness,
+      });
+    }
+
+    addAction({
       label: 'Add Task',
       helper: 'Assign a new task',
       route: '/admin/tasks?action=create',
       icon: CheckSquare,
-    },
-    {
-      label: 'Add Item',
-      helper: 'Create item master data',
-      route: '/admin/items?action=create',
-      icon: Package,
-    },
-    {
-      label: 'Add Vendor',
-      helper: 'Create vendor record',
-      route: '/admin/vendors?action=create',
-      icon: Store,
-    },
-    {
-      label: 'Add Announcement',
-      helper: 'Publish an update',
-      route: '/admin/announcements?action=create',
-      icon: Bell,
-    },
-  ];
+    });
+
+    if (canManageProcurement) {
+      addAction({
+        label: 'Add Item',
+        helper: 'Create item master data',
+        route: '/admin/items?action=create',
+        icon: Package,
+      });
+
+      addAction({
+        label: 'Add Vendor',
+        helper: 'Create vendor record',
+        route: '/admin/vendors?action=create',
+        icon: Store,
+      });
+    }
+
+    if (isAdmin()) {
+      addAction({
+        label: 'Add Announcement',
+        helper: 'Publish an update',
+        route: '/admin/announcements?action=create',
+        icon: Bell,
+      });
+    }
+
+    return actions;
+  }, [isAdmin, userDepartments]);
 
   useEffect(() => {
     if (!flippedCard) return;
