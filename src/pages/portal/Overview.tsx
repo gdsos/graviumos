@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   supabase,
   type Announcement,
@@ -19,6 +21,10 @@ import {
   LogIn,
   LogOut,
   CalendarDays,
+  BriefcaseBusiness,
+  CheckSquare,
+  Plus,
+  Sparkles,
 } from 'lucide-react';
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
@@ -38,6 +44,88 @@ const STATUS_BADGE: Record<TaskStatus, string> = {
   Overdue: 'border-destructive/20 bg-destructive/10 text-destructive',
   Completed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 };
+
+const bentoContainerMotion = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.055,
+      delayChildren: 0.04,
+    },
+  },
+};
+
+const bentoCardMotion = {
+  hidden: {
+    opacity: 0,
+    y: 14,
+    scale: 0.985,
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+  },
+};
+
+const bentoTransition = {
+  duration: 0.32,
+  ease: 'easeOut' as const,
+};
+
+function FlipInfoCard({
+  front,
+  back,
+  className = '',
+}: {
+  front: React.ReactNode;
+  back: React.ReactNode;
+  className?: string;
+}) {
+  const [flipped, setFlipped] = useState(false);
+
+  useEffect(() => {
+    if (!flipped) return;
+
+    const timeout = window.setTimeout(() => {
+      setFlipped(false);
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [flipped]);
+
+  return (
+    <motion.div
+      variants={bentoCardMotion}
+      transition={bentoTransition}
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.99 }}
+      className={`relative [perspective:1200px] ${className}`}
+    >
+      <motion.div
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.42, ease: 'easeInOut' }}
+        className="relative h-full min-h-inherit w-full [transform-style:preserve-3d]"
+      >
+        <button
+          type="button"
+          onClick={() => setFlipped(true)}
+          className="absolute inset-0 h-full w-full rounded-3xl border border-border bg-card p-5 text-left outline-none [backface-visibility:hidden] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          {front}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFlipped(false)}
+          className="absolute inset-0 h-full w-full rounded-3xl border border-border bg-card p-5 text-left outline-none [backface-visibility:hidden] [transform:rotateY(180deg)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          {back}
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 function todayDateString(): string {
   return new Date().toLocaleDateString('en-CA');
@@ -112,53 +200,37 @@ function KpiScoreCircle({ score }: { score: number }) {
   else if (score < 7.5) ringColor = '#d97706';
 
   return (
-    <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-      <div className="relative h-28 w-28 shrink-0">
-        <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="8"
-            className="text-muted"
-          />
+    <div className="relative h-32 w-32 shrink-0">
+      <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="8"
+          className="text-muted"
+        />
 
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            fill="none"
-            stroke={ringColor}
-            strokeWidth="8"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-          />
-        </svg>
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke={ringColor}
+          strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+        />
+      </svg>
 
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-semibold leading-none" style={{ color: ringColor }}>
-            {score.toFixed(1)}
-          </span>
-          <span className="mt-1 text-xs text-muted-foreground">/ 10</span>
-        </div>
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-          Performance Score
-        </p>
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          {score >= 8
-            ? 'Excellent performance. Keep the momentum steady.'
-            : score >= 6
-              ? 'Good work. A few more timely completions will improve this.'
-              : 'Room for improvement. Focus on current tasks and deadlines.'}
-        </p>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-3xl font-semibold leading-none" style={{ color: ringColor }}>
+          {score.toFixed(1)}
+        </span>
+        <span className="mt-1 text-xs text-muted-foreground">/ 10</span>
       </div>
     </div>
   );
@@ -188,11 +260,101 @@ function TaskSummaryCard({
           task{count !== 1 ? 's' : ''}
         </span>
       </div>
+
+    </div>
+  );
+}
+
+interface PortalQuickAction {
+  label: string;
+  icon: typeof Bell;
+  onClick: () => void | Promise<void>;
+  disabled?: boolean;
+}
+
+function FloatingPortalActionDock({ actions }: { actions: PortalQuickAction[] }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const timeout = window.setTimeout(() => {
+      setOpen(false);
+    }, 7000);
+
+    return () => window.clearTimeout(timeout);
+  }, [open]);
+
+  return (
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+6.25rem)] right-6 z-[80] md:bottom-8 md:right-8">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="mb-3 max-h-[70vh] w-[14.5rem] overflow-y-auto rounded-3xl border border-white/18 bg-[#4F4E4D]/58 p-2 shadow-2xl shadow-black/22 backdrop-blur-sm dark:border-white/10 dark:bg-black/60"
+          >
+            <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/14 via-white/4 to-transparent dark:from-white/24 dark:via-white/6" />
+
+            <div className="relative z-10 space-y-1.5">
+              <div className="px-2 pb-1 pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-black/55 dark:text-white/50">
+                  Quick Actions
+                </p>
+              </div>
+
+              {actions.map(action => {
+                const Icon = action.icon;
+
+                return (
+                  <button
+                    key={action.label}
+                    type="button"
+                    disabled={action.disabled}
+                    onClick={async () => {
+                      if (action.disabled) return;
+
+                      setOpen(false);
+                      await action.onClick();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-2xl border border-black/10 bg-black/6 px-3 py-2.5 text-left text-black transition-colors hover:bg-black/12 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/14 dark:bg-white/9 dark:text-white dark:hover:bg-white/16"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-black/8 dark:bg-white/12">
+                      <Icon size={15} />
+                    </span>
+
+                    <span className="truncate text-sm font-semibold">
+                      {action.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        whileTap={{ scale: 0.94 }}
+        animate={open ? { rotate: 45 } : { rotate: 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        className="relative ml-auto flex h-13 w-13 items-center justify-center overflow-hidden rounded-full border border-white/18 bg-[#4F4E4D]/54 text-black shadow-2xl shadow-black/22 backdrop-blur-sm transition-colors hover:bg-[#4F4E4D]/62 supports-[backdrop-filter]:bg-[#4F4E4D]/48 dark:border-white/10 dark:bg-black/60 dark:text-white dark:hover:bg-black/70"
+        aria-expanded={open}
+        aria-label="Toggle portal quick actions"
+      >
+        <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/14 via-white/4 to-transparent dark:from-white/24 dark:via-white/6" />
+        <Sparkles size={19} className="relative z-10" />
+      </motion.button>
     </div>
   );
 }
 
 export default function Overview() {
+  const navigate = useNavigate();
   const { profile, userDepartments } = useAuth();
 
   const [attendance, setAttendance] = useState<Attendance | null>(null);
@@ -521,6 +683,27 @@ export default function Overview() {
   const isCheckedOut = !!attendance?.check_out;
   const attendanceComplete = isCheckedIn && isCheckedOut;
 
+  const portalQuickActions = useMemo<PortalQuickAction[]>(
+    () => [
+      {
+        label: 'Add Task',
+        icon: Plus,
+        onClick: () => navigate('/portal/tasks?action=create'),
+      },
+      {
+        label: 'My Tasks',
+        icon: CheckSquare,
+        onClick: () => navigate('/portal/tasks'),
+      },
+      {
+        label: 'My Projects',
+        icon: BriefcaseBusiness,
+        onClick: () => navigate('/portal/projects'),
+      },
+    ],
+    [navigate]
+  );
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 pb-32 sm:px-6 lg:px-8 lg:pb-10">
       <div className="mb-8 border-b border-border pb-8">
@@ -559,12 +742,57 @@ export default function Overview() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
-          <KpiScoreCircle score={profile?.kpi_score ?? 0} />
-        </div>
+      <motion.div
+        variants={bentoContainerMotion}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 gap-4 lg:grid-cols-12"
+      >
+        <FlipInfoCard
+          className="min-h-[15rem] lg:col-span-3"
+          front={
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <KpiScoreCircle score={profile?.kpi_score ?? 0} />
 
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Performance
+              </p>
+            </div>
+          }
+          back={
+            <div className="flex h-full flex-col justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  KPI Details
+                </p>
+
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                  {(profile?.kpi_score ?? 0).toFixed(1)} / 10
+                </h2>
+
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {(profile?.kpi_score ?? 0) >= 8
+                    ? 'Excellent performance. Keep the momentum steady.'
+                    : (profile?.kpi_score ?? 0) >= 6
+                      ? 'Good work. A few more timely completions will improve this.'
+                      : 'Room for improvement. Focus on current tasks and deadlines.'}
+                </p>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Detailed KPI breakdown can be added here once the KPI engine is finalized.
+              </p>
+            </div>
+          }
+        />
+
+        <motion.div
+          variants={bentoCardMotion}
+          transition={bentoTransition}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.99 }}
+          className="rounded-3xl border border-border bg-card p-5 lg:col-span-9"
+        >
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Attendance
@@ -691,9 +919,15 @@ export default function Overview() {
               )}
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+        <motion.div
+          variants={bentoCardMotion}
+          transition={bentoTransition}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.99 }}
+          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
             Next Action
           </p>
@@ -737,9 +971,15 @@ export default function Overview() {
               </p>
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-8">
+        <motion.div
+          variants={bentoCardMotion}
+          transition={bentoTransition}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.99 }}
+          className="rounded-3xl border border-border bg-card p-5 lg:col-span-8"
+        >
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -772,9 +1012,15 @@ export default function Overview() {
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+        <motion.div
+          variants={bentoCardMotion}
+          transition={bentoTransition}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.99 }}
+          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+        >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -848,9 +1094,15 @@ export default function Overview() {
               </p>
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+        <motion.div
+          variants={bentoCardMotion}
+          transition={bentoTransition}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.99 }}
+          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+        >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -920,9 +1172,15 @@ export default function Overview() {
               </p>
             </div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="rounded-3xl border border-border bg-card p-5 lg:col-span-4">
+        <motion.div
+          variants={bentoCardMotion}
+          transition={bentoTransition}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.99 }}
+          className="rounded-3xl border border-border bg-card p-5 lg:col-span-4"
+        >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -1045,7 +1303,10 @@ export default function Overview() {
               )}
             </div>
           )}
-        </div>
-      </div>    </div>
+        </motion.div>
+      </motion.div>
+
+      <FloatingPortalActionDock actions={portalQuickActions} />
+    </div>
   );
 }
