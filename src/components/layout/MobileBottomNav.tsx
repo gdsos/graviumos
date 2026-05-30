@@ -139,15 +139,15 @@ function ActiveSelector() {
         width="100%"
         height="100%"
         borderRadius={24}
-        backgroundOpacity={0.18}
+        backgroundOpacity={0.10}
         saturation={1.05}
         distortionScale={-28}
         redOffset={0}
         greenOffset={1}
         blueOffset={2}
-        opacity={0.24}
-        blur={4}
-        brightness={32}
+        opacity={0.16}
+        blur={1.5}
+        brightness={30}
         mixBlendMode="screen"
         className="h-full w-full"
       >
@@ -173,7 +173,7 @@ function PrimaryNavButton({
       to={item.path}
       onClick={onClick}
       className={`relative z-30 flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 overflow-visible rounded-2xl px-2 text-[11px] font-medium transition-colors ${
-        isActive ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+        isActive ? 'text-white dark:text-white' : 'text-black/62 hover:text-black dark:text-white/62 dark:hover:text-white'
       }`}
     >
       {isActive && <ActiveSelector />}
@@ -203,7 +203,7 @@ function MenuButton({
       type="button"
       onClick={onClick}
       className={`relative z-30 flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 overflow-visible rounded-2xl px-2 text-[11px] font-medium transition-colors ${
-        isActive ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+        isActive ? 'text-white dark:text-white' : 'text-black/62 hover:text-black dark:text-white/62 dark:hover:text-white'
       }`}
       aria-label="Open menu navigation"
       aria-expanded={isActive}
@@ -245,14 +245,14 @@ function MenuDrawer({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 12, scale: 0.98 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="relative z-[60] mx-auto mb-3 max-w-[22rem] overflow-hidden rounded-[1.75rem] border border-border/80 bg-background/95 p-2.5 shadow-2xl shadow-black/25 backdrop-blur-2xl dark:border-white/12 dark:bg-[#101010]/92"
+      className="relative z-[60] mx-auto mb-3 max-w-[22rem] overflow-hidden rounded-[1.75rem] border border-white/18 bg-[#4F4E4D]/56 p-2.5 text-black shadow-2xl shadow-black/22 backdrop-blur-sm dark:border-white/10 dark:bg-black/60 dark:text-white"
     >
-      <div className="pointer-events-none absolute inset-0 rounded-[1.75rem] bg-gradient-to-b from-white/10 to-transparent dark:from-white/8" />
+      <div className="pointer-events-none absolute inset-0 rounded-[1.75rem] bg-gradient-to-b from-white/14 via-white/4 to-transparent dark:from-white/24 dark:via-white/6" />
 
       <div className="relative z-10 w-full space-y-3">
         {Object.entries(groupedItems).map(([group, groupItems]) => (
           <div key={group} className="space-y-1.5">
-            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/45 dark:text-white/45">
               {group}
             </p>
 
@@ -268,12 +268,12 @@ function MenuDrawer({
                     onClick={onClose}
                     className={`relative overflow-hidden rounded-2xl border px-3 py-3 transition-colors ${
                       isActive
-                        ? 'border-border bg-foreground/10 text-foreground dark:bg-white/12'
-                        : 'border-border/70 bg-background/75 text-muted-foreground hover:bg-muted hover:text-foreground dark:bg-black/35 dark:hover:bg-white/8'
+                        ? 'border-white/24 bg-white/18 text-white dark:border-white/18 dark:bg-white/14 dark:text-white'
+                        : 'border-black/10 bg-black/6 text-black/64 hover:bg-black/12 hover:text-black dark:border-white/14 dark:bg-white/9 dark:text-white/72 dark:hover:bg-white/16 dark:hover:text-white'
                     }`}
                   >
                     <div className="relative z-10 flex items-start gap-2.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground dark:bg-white/10">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/8 text-black dark:bg-white/12 dark:text-white">
                         <Icon className="h-4 w-4" />
                       </span>
 
@@ -283,7 +283,7 @@ function MenuDrawer({
                         </span>
 
                         {item.helper && (
-                          <span className="block truncate text-[11px] text-muted-foreground">
+                          <span className="block truncate text-[11px] text-black/45 dark:text-white/45">
                             {item.helper}
                           </span>
                         )}
@@ -293,7 +293,7 @@ function MenuDrawer({
                     {isActive && (
                       <motion.span
                         layoutId="mobile-drawer-active"
-                        className="absolute inset-0 rounded-2xl border border-border bg-foreground/5"
+                        className="absolute inset-0 rounded-2xl border border-white/14 bg-white/8 dark:border-white/14 dark:bg-white/8"
                         transition={selectorTransition}
                       />
                     )}
@@ -357,9 +357,9 @@ export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
 
       <motion.nav
         initial={false}
-        className="relative mx-auto grid h-[64px] max-w-[28rem] grid-cols-5 items-center gap-1 overflow-visible rounded-[2rem] border border-border/70 bg-background/85 px-2 shadow-2xl shadow-black/15 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/70 dark:border-white/10 dark:bg-black/55"
+        className="relative mx-auto grid h-[64px] max-w-[28rem] grid-cols-5 items-center gap-1 overflow-visible rounded-[2rem] border border-white/18 bg-[#4F4E4D]/52 px-2 text-black shadow-2xl shadow-black/22 backdrop-blur-sm supports-[backdrop-filter]:bg-[#4F4E4D]/46 dark:border-white/10 dark:bg-black/55 dark:text-white dark:shadow-black/20"
       >
-        <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/12 to-transparent dark:from-white/8" />
+        <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/14 via-white/4 to-transparent dark:from-white/24 dark:via-white/6" />
 
         {primaryItems.map(item => (
           <PrimaryNavButton
