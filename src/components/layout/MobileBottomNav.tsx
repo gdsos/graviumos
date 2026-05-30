@@ -132,24 +132,24 @@ function ActiveSelector() {
   return (
     <motion.div
       layoutId="mobile-nav-active-selector"
-      className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-[4.45rem] w-[calc(100%+0.35rem)] -translate-x-1/2 -translate-y-1/2"
+      className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-[4.25rem] w-[calc(100%+0.35rem)] -translate-x-1/2 -translate-y-1/2"
       transition={selectorTransition}
     >
       <GlassSurface
         width="100%"
         height="100%"
         borderRadius={24}
-        backgroundOpacity={0.34}
-        saturation={1.16}
-        distortionScale={-64}
+        backgroundOpacity={0.18}
+        saturation={1.05}
+        distortionScale={-28}
         redOffset={0}
-        greenOffset={4}
-        blueOffset={8}
-        opacity={0.58}
-        blur={8}
-        brightness={34}
+        greenOffset={1}
+        blueOffset={2}
+        opacity={0.24}
+        blur={4}
+        brightness={32}
         mixBlendMode="screen"
-        className="mobile-nav-selector-surface h-full w-full"
+        className="h-full w-full"
       >
         <span />
       </GlassSurface>
@@ -173,15 +173,16 @@ function PrimaryNavButton({
       to={item.path}
       onClick={onClick}
       className={`relative z-30 flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 overflow-visible rounded-2xl px-2 text-[11px] font-medium transition-colors ${
-        isActive ? 'text-white' : 'text-white/52 hover:text-white'
+        isActive ? 'text-white' : 'text-muted-foreground hover:text-foreground'
       }`}
     >
       {isActive && <ActiveSelector />}
 
       <motion.span
-        animate={isActive ? { scale: 1.1 } : { scale: 1 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="relative z-40 flex min-w-0 flex-col items-center justify-center gap-0.5"
+        whileTap={{ scale: 0.94 }}
+        animate={isActive ? { y: -1, scale: 1.04 } : { y: 0, scale: 1 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        className="relative z-20 flex min-w-0 flex-col items-center justify-center gap-0.5"
       >
         <Icon className="h-4 w-4 shrink-0" />
         <span className="max-w-full truncate">{item.label}</span>
@@ -202,7 +203,7 @@ function MenuButton({
       type="button"
       onClick={onClick}
       className={`relative z-30 flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 overflow-visible rounded-2xl px-2 text-[11px] font-medium transition-colors ${
-        isActive ? 'text-white' : 'text-white/52 hover:text-white'
+        isActive ? 'text-white' : 'text-muted-foreground hover:text-foreground'
       }`}
       aria-label="Open menu navigation"
       aria-expanded={isActive}
@@ -210,9 +211,10 @@ function MenuButton({
       {isActive && <ActiveSelector />}
 
       <motion.span
-        animate={isActive ? { scale: 1.1 } : { scale: 1 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        className="relative z-40 flex min-w-0 flex-col items-center justify-center gap-0.5"
+        whileTap={{ scale: 0.94 }}
+        animate={isActive ? { y: -1, scale: 1.04 } : { y: 0, scale: 1 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        className="relative z-20 flex min-w-0 flex-col items-center justify-center gap-0.5"
       >
         <Menu className="h-4 w-4 shrink-0" />
         <span>Menu</span>
@@ -239,83 +241,69 @@ function MenuDrawer({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+      initial={{ opacity: 0, y: 18, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 12, scale: 0.98 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
-      className="relative z-[60] mx-auto mb-3 max-w-[22rem]"
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className="relative z-[60] mx-auto mb-3 max-w-[22rem] overflow-hidden rounded-[1.75rem] border border-border/80 bg-background/95 p-2.5 shadow-2xl shadow-black/25 backdrop-blur-2xl dark:border-white/12 dark:bg-[#101010]/92"
     >
-      <GlassSurface
-        width="100%"
-        height="auto"
-        borderRadius={30}
-        backgroundOpacity={0.44}
-        saturation={1.06}
-        distortionScale={-20}
-        redOffset={0}
-        greenOffset={1}
-        blueOffset={2}
-        opacity={0.36}
-        blur={3}
-        brightness={24}
-        mixBlendMode="screen"
-        className="glass-menu-drawer-surface text-foreground dark:text-white"
-      >
-        <div className="relative z-10 w-full space-y-3 p-2.5 pt-3">
-          {Object.entries(groupedItems).map(([group, groupItems]) => (
-            <div key={group} className="space-y-1.5">
-              <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground/42 dark:text-white/38">
-                {group}
-              </p>
+      <div className="pointer-events-none absolute inset-0 rounded-[1.75rem] bg-gradient-to-b from-white/10 to-transparent dark:from-white/8" />
 
-              <div className="grid grid-cols-2 gap-2">
-                {groupItems.map(item => {
-                  const Icon = item.icon;
-                  const isActive = currentPath === item.path;
+      <div className="relative z-10 w-full space-y-3">
+        {Object.entries(groupedItems).map(([group, groupItems]) => (
+          <div key={group} className="space-y-1.5">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              {group}
+            </p>
 
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={onClose}
-                      className={`relative overflow-hidden rounded-2xl border px-3 py-3 transition ${
-                        isActive
-                          ? 'border-foreground/12 bg-black/8 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.42)] dark:border-white/24 dark:bg-white/16 dark:text-white dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
-                          : 'border-foreground/8 bg-white/36 text-foreground/62 hover:border-foreground/14 hover:bg-white/54 hover:text-foreground dark:border-white/10 dark:bg-black/22 dark:text-white/62 dark:hover:border-white/18 dark:hover:bg-white/8 dark:hover:text-white'
-                      }`}
-                    >
-                      <div className="relative z-10 flex items-start gap-2.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/6 dark:bg-white/8">
-                          <Icon className="h-4 w-4" />
+            <div className="grid grid-cols-2 gap-2">
+              {groupItems.map(item => {
+                const Icon = item.icon;
+                const isActive = currentPath === item.path;
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onClose}
+                    className={`relative overflow-hidden rounded-2xl border px-3 py-3 transition-colors ${
+                      isActive
+                        ? 'border-border bg-foreground/10 text-foreground dark:bg-white/12'
+                        : 'border-border/70 bg-background/75 text-muted-foreground hover:bg-muted hover:text-foreground dark:bg-black/35 dark:hover:bg-white/8'
+                    }`}
+                  >
+                    <div className="relative z-10 flex items-start gap-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground dark:bg-white/10">
+                        <Icon className="h-4 w-4" />
+                      </span>
+
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {item.label}
                         </span>
 
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">
-                            {item.label}
+                        {item.helper && (
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {item.helper}
                           </span>
-                          {item.helper && (
-                            <span className="block truncate text-[11px] text-foreground/45 dark:text-white/42">
-                              {item.helper}
-                            </span>
-                          )}
-                        </span>
-                      </div>
+                        )}
+                      </span>
+                    </div>
 
-                      {isActive && (
-                        <motion.span
-                          layoutId="mobile-drawer-active"
-                          className="absolute inset-0 rounded-2xl border border-foreground/10 bg-black/5 dark:border-white/18 dark:bg-white/10"
-                          transition={selectorTransition}
-                        />
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
+                    {isActive && (
+                      <motion.span
+                        layoutId="mobile-drawer-active"
+                        className="absolute inset-0 rounded-2xl border border-border bg-foreground/5"
+                        transition={selectorTransition}
+                      />
+                    )}
+                  </Link>
+                );
+              })}
             </div>
-          ))}
-        </div>
-      </GlassSurface>
+          </div>
+        ))}
+      </div>
     </motion.div>
   );
 }
@@ -328,8 +316,7 @@ export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
 
   const primaryItems = getPrimaryNavItems(isAdmin);
   const menuItems = getMenuNavItems(isAdmin, isFinance(), isMS());
-  const isMenuPageActive = menuItems.some(item => location.pathname === item.path);
-  const isMenuActive = isMenuOpen || isMenuPageActive;
+  const activePrimaryPath = isMenuOpen ? '' : location.pathname;
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -360,48 +347,33 @@ export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
     >
       <AnimatePresence>
         {isMenuOpen && (
-          <>
-            <MenuDrawer
-              items={menuItems}
-              currentPath={location.pathname}
-              onClose={() => setIsMenuOpen(false)}
-            />
-          </>
+          <MenuDrawer
+            items={menuItems}
+            currentPath={location.pathname}
+            onClose={() => setIsMenuOpen(false)}
+          />
         )}
       </AnimatePresence>
 
-      <GlassSurface
-        width="100%"
-        height={62}
-        borderRadius={999}
-        backgroundOpacity={0.36}
-        saturation={1.18}
-        distortionScale={-76}
-        redOffset={0}
-        greenOffset={4}
-        blueOffset={8}
-        opacity={0.62}
-        blur={8}
-        brightness={34}
-        mixBlendMode="screen"
-        className="mobile-bottom-nav-surface mx-auto max-w-[22rem] overflow-visible text-white"
+      <motion.nav
+        initial={false}
+        className="relative mx-auto grid h-[64px] max-w-[28rem] grid-cols-5 items-center gap-1 overflow-visible rounded-[2rem] border border-border/70 bg-background/85 px-2 shadow-2xl shadow-black/15 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/70 dark:border-white/10 dark:bg-black/55"
       >
-        <nav className="relative z-30 grid h-full w-full grid-cols-5 items-center gap-1 overflow-visible px-1.5">
-          {primaryItems.map(item => (
-            <PrimaryNavButton
-              key={item.path}
-              item={item}
-              isActive={!isMenuOpen && location.pathname === item.path}
-              onClick={() => setIsMenuOpen(false)}
-            />
-          ))}
+        <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/12 to-transparent dark:from-white/8" />
 
-          <MenuButton
-            isActive={isMenuActive}
-            onClick={() => setIsMenuOpen(current => !current)}
+        {primaryItems.map(item => (
+          <PrimaryNavButton
+            key={item.path}
+            item={item}
+            isActive={activePrimaryPath === item.path}
           />
-        </nav>
-      </GlassSurface>
+        ))}
+
+        <MenuButton
+          isActive={isMenuOpen}
+          onClick={() => setIsMenuOpen(current => !current)}
+        />
+      </motion.nav>
     </div>
   );
 }
