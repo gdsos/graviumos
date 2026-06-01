@@ -727,7 +727,7 @@ export default function Tasks() {
             notifTitle,
             notifMessage,
             'task',
-            `/portal/tasks?task=${editingTask.id}`
+            `/portal/tasks?taskId=${editingTask.id}`
           );
         }
       }
@@ -794,7 +794,7 @@ export default function Tasks() {
             'New Task Assigned',
             `You were assigned: ${form.title}`,
             'task',
-            `/portal/tasks?task=${data.id}`
+            `/portal/tasks?taskId=${data.id}`
           );
         }
       }

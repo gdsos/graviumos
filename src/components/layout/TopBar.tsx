@@ -28,6 +28,7 @@ export default function TopBar({}: TopBarProps) {
   const { profile, signOut } = useAuth();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [lastSeenAnnouncement, setLastSeenAnnouncement] =
   useState<string | null>(
     localStorage.getItem("lastSeenAnnouncement")
@@ -51,6 +52,35 @@ export default function TopBar({}: TopBarProps) {
     : "Account Settings";
     
   const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  useEffect(() => {
+    const handleTaskNotificationsDeleted = (event: Event) => {
+      const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
+
+      if (!taskId) return;
+
+      setNotifications(prev =>
+        prev.filter(notification => {
+          if (notification.type !== 'task') return true;
+          if (typeof notification.link !== 'string') return true;
+
+          return !notification.link.includes(taskId);
+        })
+      );
+    };
+
+    window.addEventListener(
+      'gravium:task-notifications-deleted',
+      handleTaskNotificationsDeleted
+    );
+
+    return () => {
+      window.removeEventListener(
+        'gravium:task-notifications-deleted',
+        handleTaskNotificationsDeleted
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -261,7 +291,7 @@ export default function TopBar({}: TopBarProps) {
         </DropdownMenu>
 
         {/* Notifications */}
-        <DropdownMenu>
+        <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative rounded-full">
               <Bell size={18} />
@@ -306,9 +336,14 @@ export default function TopBar({}: TopBarProps) {
                         );
                       }
 
+                      // close dropdown before navigating so it cannot sit above the task modal
+                      setNotificationsOpen(false);
+
                       // navigate to linked page
                       if (n.link) {
-                        navigate(n.link, { replace: false });
+                        window.setTimeout(() => {
+                          navigate(n.link, { replace: false });
+                        }, 0);
                       }
                     }}
                     className={`p-2 rounded-md text-sm cursor-pointer hover:bg-muted/80 transition-colors ${n.is_read ? "opacity-60" : "bg-muted"

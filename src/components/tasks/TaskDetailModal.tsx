@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Task, type Subtask, type Department, type Profile } from '../../lib/supabase';
+import { deleteTaskNotifications } from '../../lib/notifications';
 import { Button } from '../ui/button';
 import { DateInput } from '../common/DateInput';
 import { Check, ChevronDown, Pencil, User, Trash2, List } from 'lucide-react';
@@ -343,7 +344,7 @@ export default function TaskDetailModal({
                 ? `Task "${editForm.title}" was marked completed`
                 : `Task "${editForm.title}" was updated`,
             type: 'task',
-            link: `/portal/tasks?task=${currentTask.id}`,
+            link: `/portal/tasks?taskId=${currentTask.id}`,
           });
       }
 
@@ -388,14 +389,7 @@ export default function TaskDetailModal({
       }
 
       // delete notifications linked to task
-      const { error: notifDeleteError } = await supabase
-        .from('notifications')
-        .delete()
-        .ilike('link', `%${taskId}%`);
-
-      if (notifDeleteError) {
-        console.error(notifDeleteError);
-      }
+      await deleteTaskNotifications(taskId);
 
       // delete task
       const { error: taskError } = await supabase
