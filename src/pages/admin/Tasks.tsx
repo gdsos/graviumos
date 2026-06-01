@@ -48,7 +48,6 @@ const DEPT_NAMES = [
 const STATUSES: TaskStatus[] = [
   'Not Started',
   'Ongoing',
-  'Completed',
 ];
 
 // ─── Components ───────────────────────────────────────────────────────────────

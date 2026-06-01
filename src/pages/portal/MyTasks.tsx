@@ -53,7 +53,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 // ——— Constants ————————————————————————————————————————————————————————————————
 
-const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing', 'Overdue', 'Completed'];
+const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing'];
 
 // ——— Helpers ——————————————————————————————————————————————————————————————————
 

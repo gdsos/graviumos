@@ -3,7 +3,7 @@ import { supabase, type Task, type Subtask, type Department, type Profile } from
 import { deleteTaskNotifications } from '../../lib/notifications';
 import { Button } from '../ui/button';
 import { DateInput } from '../common/DateInput';
-import { Check, ChevronDown, Pencil, User, Trash2, List } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Pencil, RotateCcw, User, Trash2, List } from 'lucide-react';
 import {
   calcEffectiveStatus,
   calcOverdueDays,
@@ -95,7 +95,7 @@ function StatusSelect({
   onChange: (value: TaskStatus) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const options: TaskStatus[] = ['Not Started', 'Ongoing', 'Completed'];
+  const options: TaskStatus[] = ['Not Started', 'Ongoing'];
 
   return (
     <div
@@ -370,6 +370,63 @@ export default function TaskDetailModal({
     }
   };
 
+  const handleToggleTaskCompletion = async () => {
+    if (!currentTask) return;
+
+    const nextIsCompleted = currentTask.status !== 'Completed';
+    const nextStatus: TaskStatus = nextIsCompleted ? 'Completed' : 'Ongoing';
+    const nextCompletedAt = nextIsCompleted ? new Date().toISOString() : null;
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        status: nextStatus,
+        completed_at: nextCompletedAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', currentTask.id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    if (currentTask.assigned_to) {
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: currentTask.assigned_to,
+          title: nextIsCompleted ? 'Task Completed' : 'Task Reopened',
+          message: nextIsCompleted
+            ? `Task "${currentTask.title}" was marked completed`
+            : `Task "${currentTask.title}" was reopened`,
+          type: 'task',
+          link: `/portal/tasks?taskId=${currentTask.id}`,
+        });
+    }
+
+    const updatedTask: TaskWithDetails = {
+      ...currentTask,
+      status: nextStatus,
+      completed_at: nextCompletedAt,
+      updated_at: new Date().toISOString(),
+    };
+
+    const enrichedUpdatedTask: TaskWithDetails = {
+      ...updatedTask,
+      effectiveStatus: calcEffectiveStatus(updatedTask),
+      overdueByDays: calcOverdueDays(updatedTask),
+    };
+
+    setCurrentTask(enrichedUpdatedTask);
+    setEditForm(form => ({
+      ...form,
+      status: nextStatus,
+    }));
+    onTaskUpdated?.(enrichedUpdatedTask);
+    onRefresh();
+  };
+
   const handleDeleteTask = async () => {
     if (!currentTask?.id) return;
 
@@ -419,6 +476,8 @@ export default function TaskDetailModal({
       setDeleting(false);
     }
   };
+
+  const canToggleCompletion = Boolean(currentTask?.id) && (canManage || Boolean(currentTask?.assigned_to));
 
   if (!open || !currentTask) return null;
 
@@ -746,14 +805,37 @@ export default function TaskDetailModal({
                 </Button>
               </>
             ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                className="h-10 rounded-xl"
-              >
-                Close
-              </Button>
+              <>
+                {canToggleCompletion && (
+                  <Button
+                    type="button"
+                    onClick={handleToggleTaskCompletion}
+                    className="h-10 rounded-xl"
+                    variant={currentTask.status === 'Completed' ? 'outline' : 'default'}
+                  >
+                    {currentTask.status === 'Completed' ? (
+                      <>
+                        <RotateCcw size={16} />
+                        Unmark Completed
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} />
+                        Mark Completed
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  className="h-10 rounded-xl"
+                >
+                  Close
+                </Button>
+              </>
             )}
           </div>
         </div>
