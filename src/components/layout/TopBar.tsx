@@ -1,5 +1,6 @@
-
-import { useState, useEffect } from "react";
+import { GraviumLogo } from '@/components/common/GraviumLogo';
+import { ThemeModeToggle } from '@/components/common/ThemeModeToggle';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
@@ -15,20 +16,19 @@ import {
 } from "../../components/ui/avatar";
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "@/auth/permissions";
-import { useTheme } from "../../contexts/ThemeContext";
 import { supabase } from "../../lib/supabase";
-import { Bell, Sun, Moon, Megaphone, LogOut, User, Settings } from "lucide-react";
+import { Bell, Megaphone, LogOut, User, Settings } from "lucide-react";
 
 interface TopBarProps {
   onMenuToggle: () => void;
 }
 
-export default function TopBar({ onMenuToggle }: TopBarProps) {
+export default function TopBar({}: TopBarProps) {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [lastSeenAnnouncement, setLastSeenAnnouncement] =
   useState<string | null>(
     localStorage.getItem("lastSeenAnnouncement")
@@ -53,19 +53,50 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
     
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  useEffect(() => {
+  const fetchNotifications = useCallback(async () => {
     if (!profile) return;
 
-    const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", profile.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-      setNotifications(data || []);
+    setNotifications(data || []);
+  }, [profile?.id]);
+
+  useEffect(() => {
+    const handleTaskNotificationsDeleted = (event: Event) => {
+      const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
+
+      if (!taskId) return;
+
+      setNotifications(prev =>
+        prev.filter(notification => {
+          if (notification.type !== 'task') return true;
+          if (typeof notification.link !== 'string') return true;
+
+          return !notification.link.includes(taskId);
+        })
+      );
     };
+
+    window.addEventListener(
+      'gravium:task-notifications-deleted',
+      handleTaskNotificationsDeleted
+    );
+
+    return () => {
+      window.removeEventListener(
+        'gravium:task-notifications-deleted',
+        handleTaskNotificationsDeleted
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!profile) return;
 
     const fetchAnnouncements = async () => {
       let query = supabase
@@ -196,7 +227,44 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(announcementsChannel);
     };
-  }, [profile]);
+  }, [profile, fetchNotifications]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (notificationsOpen) {
+      fetchNotifications();
+    }
+  }, [fetchNotifications, notificationsOpen, profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    };
+
+    const handleFocus = () => {
+      refreshIfVisible();
+    };
+
+    const handleVisibilityChange = () => {
+      refreshIfVisible();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const interval = window.setInterval(refreshIfVisible, 20000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [fetchNotifications, profile]);
 
   const markAllRead = async () => {
     if (!profile) return;
@@ -208,22 +276,20 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
   };
 
   return (
-    <header className="h-15 border-b bg-background flex items-center px-4 sm:px-6">
-      <div className="lg:hidden">
-        <button onClick={onMenuToggle}>
-          <img src="/Logo-Icon.png" className="h-6" />
-        </button>
+    <header className="flex h-15 items-center bg-background px-4 sm:px-6">
+      <div className="flex min-w-0 translate-y-1 items-center gap-2 md:hidden">
+        <GraviumLogo variant="wordmark" className="h-6 w-auto object-contain" />
+        <span className="text-sm font-semibold leading-none tracking-tight text-foreground">OS</span>
       </div>
 
-      {/* RIGHT: everything pushed */}
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="ml-auto flex translate-y-1 items-center gap-2">
         {/* Announcement */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="relative"
+              className="relative rounded-full"
               onClick={() => {
                 const now = new Date().toISOString();
 
@@ -264,9 +330,9 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         </DropdownMenu>
 
         {/* Notifications */}
-        <DropdownMenu>
+        <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative rounded-full">
               <Bell size={18} />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] flex items-center justify-center rounded-full">
@@ -309,9 +375,14 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
                         );
                       }
 
+                      // close dropdown before navigating so it cannot sit above the task modal
+                      setNotificationsOpen(false);
+
                       // navigate to linked page
                       if (n.link) {
-                        navigate(n.link, { replace: false });
+                        window.setTimeout(() => {
+                          navigate(n.link, { replace: false });
+                        }, 0);
                       }
                     }}
                     className={`p-2 rounded-md text-sm cursor-pointer hover:bg-muted/80 transition-colors ${n.is_read ? "opacity-60" : "bg-muted"
@@ -329,14 +400,12 @@ export default function TopBar({ onMenuToggle }: TopBarProps) {
         </DropdownMenu>
 
         {/* Theme */}
-        <Button variant="ghost" size="icon" onClick={toggleTheme}>
-          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        </Button>
+        <ThemeModeToggle />
 
         {/* Avatar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="focus:outline-none">
+            <button className="rounded-full border border-border bg-card p-0.5 shadow-sm transition hover:bg-muted focus:outline-none">
               <Avatar className="w-8 h-8 cursor-pointer">
                 <AvatarImage src={profile?.profile_picture_url || ""} />
                 <AvatarFallback>

@@ -1,14 +1,24 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  AlertTriangle,
+  Calculator,
+  Printer,
+  Edit3,
+  FileText,
+  Pencil,
+  Share2,
+  User,
+  X,
+} from 'lucide-react';
 import {
   supabase,
   formatINR,
   type Profile,
   type Payroll,
   type Attendance,
-  type Department,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
+import { PageHeader } from '../../components/common/PageHeader';
 
 // ——— Types ————————————————————————————————————————————————————————————————————
 
@@ -61,10 +71,10 @@ const ATTENDANCE_STATUSES: AttendanceStatus[] = [
   'On Approved-Leave',
 ];
 
-const STATUS_COLORS: Record<Payroll['status'], Parameters<typeof PTag>[0]['color']> = {
-  Draft: 'notification-warning-soft',
-  Processed: 'notification-info-soft',
-  Paid: 'notification-success-soft',
+const STATUS_TONES: Record<Payroll['status'], 'warning' | 'info' | 'success'> = {
+  Draft: 'warning',
+  Processed: 'info',
+  Paid: 'success',
 };
 
 // ——— Calculation helper ———————————————————————————————————————————————————————
@@ -86,10 +96,7 @@ function calculatePayroll(emp: Profile) {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label
-        className="block text-xs font-medium text-contrast-high mb-1.5"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
-      >
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </label>
       {children}
@@ -97,15 +104,78 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
+function Badge({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'info' | 'danger';
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      : tone === 'warning'
+        ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        : tone === 'info'
+          ? 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+          : tone === 'danger'
+            ? 'border-destructive/20 bg-destructive/10 text-destructive'
+            : 'border-border bg-background text-muted-foreground';
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function InlineNotice({
+  tone,
+  title,
+  description,
+  onDismiss,
+}: {
+  tone: 'error' | 'warning' | 'success' | 'info';
+  title: string;
+  description: string;
+  onDismiss?: () => void;
+}) {
+  const toneClass =
+    tone === 'error'
+      ? 'border-destructive/20 bg-destructive/10 text-destructive'
+      : tone === 'warning'
+        ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        : tone === 'success'
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+          : 'border-border bg-card text-card-foreground';
+
+  return (
+    <div className={`flex gap-3 rounded-2xl border p-4 text-sm ${toneClass}`}>
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{title}</p>
+        <p className="mt-0.5 text-xs leading-5">{description}</p>
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-xs font-semibold underline-offset-4 hover:underline"
+        >
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TableHead({ cols }: { cols: string[] }) {
   return (
     <thead>
-      <tr className="border-b border-contrast-low">
-        {cols.map(h => (
-          <th key={h} className="px-4 py-3 text-left whitespace-nowrap">
-            <PText size="xx-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide">
-              {h}
-            </PText>
+      <tr className="border-b border-border">
+        {cols.map(header => (
+          <th key={header} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {header}
           </th>
         ))}
       </tr>
@@ -113,7 +183,11 @@ function TableHead({ cols }: { cols: string[] }) {
   );
 }
 
-// ——— Payslip Print Modal ——————————————————————————————————————————————————————
+function Spinner() {
+  return (
+    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/40 border-t-current" />
+  );
+}
 
 interface PayslipProps {
   open: boolean;
@@ -144,58 +218,54 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
 
   const generatePayslipHtml = () => {
     const empName = employee?.full_name || 'Employee';
-    const empCode = employee?.employee_code || '—';
-    const empDept = employee?.departmentNames?.join(', ') || '—';
-    const empEmail = employee?.email || '—';
+    const empCode = employee?.employee_code || '-';
+    const empDept = employee?.departmentNames?.join(', ') || '-';
+    const empEmail = employee?.email || '-';
     const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
     return `
-      <div style="font-family: 'Neue Montreal', sans-serif; color: #010205; max-width: 700px; margin: 0 auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 2px solid #010205; margin-bottom: 20px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 48px; height: 48px; border-radius: 12px; border: 1px solid #D8D8DB; display: flex; align-items: center; justify-content: center; font-weight: 600;">G</div>
-            <div>
-              <div style="font-size: 20px; font-weight: 600;">GRAVIUM</div>
-              <div style="font-size: 12px; color: #6B6D70;">Payslip</div>
-            </div>
+      <div style="font-family: 'Neue Montreal', Arial, sans-serif; color: #000000; width: 760px; background: #ffffff; padding: 40px; box-sizing: border-box;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 1px solid #E5E5E5; margin-bottom: 24px;">
+          <div>
+            <img src="/brand/gravium-wordmark-light.png" alt="GRAVIUM" style="width: 155px; height: auto; display: block;" />
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 16px; font-weight: 600;">${MONTH_NAMES[month - 1]} ${year}</div>
-            <div style="font-size: 12px; color: #6B6D70;">Pay Period</div>
+            <div style="font-size: 28px; line-height: 1; font-weight: 800; letter-spacing: -0.03em;">Payslip</div>
+            <div style="font-size: 12px; color: #6B6A69; margin-top: 8px;">Pay Period - <span style="font-weight: 700; color: #000000;">${MONTH_NAMES[month - 1]} ${year}</span></div>
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #EEEFF2; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-          <div><div style="font-size: 10px; color: #6B6D70; text-transform: uppercase; letter-spacing: 0.5px;">Employee Name</div><div style="font-weight: 600;">${empName}</div></div>
-          <div><div style="font-size: 10px; color: #6B6D70; text-transform: uppercase; letter-spacing: 0.5px;">Employee Code</div><div style="font-weight: 600; font-family: monospace;">${empCode}</div></div>
-          <div><div style="font-size: 10px; color: #6B6D70; text-transform: uppercase; letter-spacing: 0.5px;">Department</div><div>${empDept}</div></div>
-          <div><div style="font-size: 10px; color: #6B6D70; text-transform: uppercase; letter-spacing: 0.5px;">Email</div><div>${empEmail}</div></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; background: #F5F5F5; padding: 18px; border: 1px solid #E5E5E5; border-radius: 14px; margin-bottom: 28px;">
+          <div><div style="font-size: 10px; color: #6B6A69; text-transform: uppercase; letter-spacing: 0.8px;">Employee Name</div><div style="font-weight: 700; margin-top: 4px;">${empName}</div></div>
+          <div><div style="font-size: 10px; color: #6B6A69; text-transform: uppercase; letter-spacing: 0.8px;">Employee Code</div><div style="font-weight: 700; margin-top: 4px;">${empCode}</div></div>
+          <div><div style="font-size: 10px; color: #6B6A69; text-transform: uppercase; letter-spacing: 0.8px;">Department</div><div style="margin-top: 4px;">${empDept}</div></div>
+          <div><div style="font-size: 10px; color: #6B6A69; text-transform: uppercase; letter-spacing: 0.8px;">Email</div><div style="margin-top: 4px;">${empEmail}</div></div>
           ${record ? `
-          <div><div style="font-size: 10px; color: #6B6D70; text-transform: uppercase; letter-spacing: 0.5px;">Days Present</div><div>${record.days_present}</div></div>
-          <div><div style="font-size: 10px; color: #6B6D70; text-transform: uppercase; letter-spacing: 0.5px;">Days Absent</div><div>${record.days_absent}</div></div>
+          <div><div style="font-size: 10px; color: #6B6A69; text-transform: uppercase; letter-spacing: 0.8px;">Days Present</div><div style="margin-top: 4px;">${record.days_present}</div></div>
+          <div><div style="font-size: 10px; color: #6B6A69; text-transform: uppercase; letter-spacing: 0.8px;">Days Absent</div><div style="margin-top: 4px;">${record.days_absent}</div></div>
           ` : ''}
         </div>
 
-        <div style="font-weight: 600; text-transform: uppercase; font-size: 12px; color: #6B6D70; margin: 16px 0 8px; letter-spacing: 0.5px;">Earnings</div>
-        <div style="border: 1px solid #D8D8DB; border-radius: 8px; overflow: hidden; margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>Base Salary</span><span style="font-weight: 600;">${fmt(calc.base)}</span></div>
-          <div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>KPI Incentive</span><span style="font-weight: 600;">${fmt(calc.kpiIncentive)}</span></div>
-          <div style="display: flex; justify-content: space-between; padding: 10px 16px; background: #EEEFF2; font-weight: 600;"><span>Total Earnings</span><span>${fmt(totalEarnings)}</span></div>
+        <div style="font-weight: 700; text-transform: uppercase; font-size: 12px; color: #6B6A69; margin-bottom: 10px; letter-spacing: 1px;">Earnings</div>
+        <div style="border: 1px solid #E5E5E5; border-radius: 14px; overflow: hidden; margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span>Base Salary</span><span style="font-weight: 700;">${fmt(calc.base)}</span></div>
+          <div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span>KPI Incentive</span><span style="font-weight: 700;">${fmt(calc.kpiIncentive)}</span></div>
+          <div style="display: flex; justify-content: space-between; padding: 14px 16px; background: #F5F5F5; font-weight: 700;"><span>Total Earnings</span><span>${fmt(totalEarnings)}</span></div>
         </div>
 
-        <div style="font-weight: 600; text-transform: uppercase; font-size: 12px; color: #6B6D70; margin: 16px 0 8px; letter-spacing: 0.5px;">Deductions</div>
-        <div style="border: 1px solid #D8D8DB; border-radius: 8px; overflow: hidden; margin-bottom: 16px;">
-          ${calc.tds > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>TDS (10%)</span><span>- ${fmt(calc.tds)}</span></div>` : ''}
-          ${calc.pf > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>PF (12%)</span><span>- ${fmt(calc.pf)}</span></div>` : ''}
-          ${calc.esi > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>ESI (0.75%)</span><span>- ${fmt(calc.esi)}</span></div>` : ''}
-          ${calc.profTax > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span>Professional Tax</span><span>- ${fmt(calc.profTax)}</span></div>` : ''}
-          ${totalDeductions === 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #D8D8DB;"><span style="color: #6B6D70;">No deductions applicable</span><span>—</span></div>` : ''}
-          <div style="display: flex; justify-content: space-between; padding: 10px 16px; background: #EEEFF2; font-weight: 600;"><span>Total Deductions</span><span>- ${fmt(totalDeductions)}</span></div>
+        <div style="font-weight: 700; text-transform: uppercase; font-size: 12px; color: #6B6A69; margin-bottom: 10px; letter-spacing: 1px;">Deductions</div>
+        <div style="border: 1px solid #E5E5E5; border-radius: 14px; overflow: hidden; margin-bottom: 28px;">
+          ${calc.tds > 0 ? `<div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span>TDS (10%)</span><span>- ${fmt(calc.tds)}</span></div>` : ''}
+          ${calc.pf > 0 ? `<div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span>PF (12%)</span><span>- ${fmt(calc.pf)}</span></div>` : ''}
+          ${calc.esi > 0 ? `<div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span>ESI (0.75%)</span><span>- ${fmt(calc.esi)}</span></div>` : ''}
+          ${calc.profTax > 0 ? `<div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span>Professional Tax</span><span>- ${fmt(calc.profTax)}</span></div>` : ''}
+          ${totalDeductions === 0 ? `<div style="display: flex; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #E5E5E5;"><span style="color: #6B6A69;">No deductions applicable</span><span>-</span></div>` : ''}
+          <div style="display: flex; justify-content: space-between; padding: 14px 16px; background: #F5F5F5; font-weight: 700;"><span>Total Deductions</span><span>- ${fmt(totalDeductions)}</span></div>
         </div>
 
-        <div style="border: 2px solid #010205; padding: 16px; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-radius: 8px;">
-          <span style="font-size: 18px; font-weight: 600;">Net Salary</span>
-          <span style="font-size: 22px; font-weight: 700;">${fmt(calc.net)}</span>
+        <div style="border: 2px solid #000000; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 16px;">
+          <span style="font-size: 18px; font-weight: 700;">Net Salary</span>
+          <span style="font-size: 28px; font-weight: 800;">${fmt(calc.net)}</span>
         </div>
       </div>
     `;
@@ -205,18 +275,17 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
     const htmlContent = generatePayslipHtml();
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
     printWindow.document.write(`
       <html>
       <head>
         <title>Payslip - ${employee?.full_name || 'Employee'}</title>
         <style>
-          body { font-family: 'Neue Montreal', sans-serif; padding: 40px; color: #010205; }
+          body { margin: 0; padding: 32px; background: #ffffff; }
           @media print { body { padding: 0; } }
         </style>
       </head>
-      <body>
-        ${htmlContent}
-      </body>
+      <body>${htmlContent}</body>
       </html>
     `);
     printWindow.document.close();
@@ -226,20 +295,7 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
 
   const handleSharePayslip = async () => {
     const htmlContent = generatePayslipHtml();
-    const fullHtml = `
-      <html>
-      <head>
-        <title>Payslip - ${employee?.full_name || 'Employee'}</title>
-        <style>
-          body { font-family: 'Neue Montreal', sans-serif; padding: 40px; color: #010205; }
-        </style>
-      </head>
-      <body>
-        ${htmlContent}
-      </body>
-      </html>
-    `;
-
+    const fullHtml = `<html><body>${htmlContent}</body></html>`;
     const blob = new Blob([fullHtml], { type: 'text/html' });
     const fileName = `payslip-${employee?.full_name?.replace(/\s+/g, '-').toLowerCase() || 'employee'}-${MONTH_NAMES[month - 1]}-${year}.html`;
     const file = new File([blob], fileName, { type: 'text/html' });
@@ -251,173 +307,190 @@ function PayslipModal({ open, onDismiss, employee, record, month, year }: Paysli
           text: `Payslip for ${MONTH_NAMES[month - 1]} ${year}`,
           files: [file],
         });
+        return;
       } catch {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        a.click();
-        URL.revokeObjectURL(url);
+        // Fall back to download.
       }
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.name;
-      a.click();
-      URL.revokeObjectURL(url);
     }
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = file.name;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <PModal
-      open={open}
-      onDismiss={onDismiss}
-      heading="Payslip"
-      aria={{ 'aria-label': 'Employee payslip' }}
-    >
-      <div id="payslip-print-area" className="flex flex-col gap-5">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-contrast-low pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-canvas border border-contrast-low flex items-center justify-center flex-shrink-0">
-              <PText size="small" weight="semi-bold">G</PText>
-            </div>
-            <div>
-              <PHeading tag="h2" size="medium">GRAVIUM</PHeading>
-              <PText size="x-small" color="contrast-medium">Payslip</PText>
-            </div>
+    <div className={open ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm' : 'hidden'}>
+      <div className="flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Payslip</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {employee.full_name || 'Employee'} - {MONTH_NAMES[month - 1]} {year}
+            </p>
           </div>
-          <div className="text-right">
-            <PText size="small" weight="semi-bold">{MONTH_NAMES[month - 1]} {year}</PText>
-            <PText size="x-small" color="contrast-medium">Pay Period</PText>
-          </div>
+
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Close payslip"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Employee Info */}
-        <div className="grid grid-cols-2 gap-4 bg-surface rounded-lg border border-contrast-low p-4">
-          <div>
-            <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Employee Name</PText>
-            <PText size="small" weight="semi-bold">{employee.full_name || '—'}</PText>
-          </div>
-          <div>
-            <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Employee Code</PText>
-            <PText size="small" weight="semi-bold" className="font-mono">{employee.employee_code || '—'}</PText>
-          </div>
-          <div>
-            <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Department</PText>
-            <PText size="small">{employee.departmentNames.join(', ') || '—'}</PText>
-          </div>
-          <div>
-            <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Email</PText>
-            <PText size="small">{employee.email}</PText>
-          </div>
-          {record && (
-            <>
+        <div className="flex-1 overflow-y-auto bg-background p-4 sm:p-5">
+          <div id="payslip-print-area" className="mx-auto w-full max-w-2xl rounded-2xl border border-border bg-white p-6 text-[#111827] shadow-sm">
+            <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] pb-5">
               <div>
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Days Present</PText>
-                <PText size="small">{record.days_present}</PText>
+                <img
+                  src="/brand/gravium-wordmark-light.png"
+                  alt="GRAVIUM"
+                  className="h-auto w-36 object-contain"
+                />
+              </div>
+
+              <div className="text-right">
+                <p className="text-2xl font-black leading-none tracking-[-0.03em] text-[#111827]">
+                  Payslip
+                </p>
+                <p className="mt-2 text-xs text-[#6B7280]">
+                  Pay Period - <span className="font-bold text-[#111827]">{MONTH_NAMES[month - 1]} {year}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4 sm:grid-cols-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Employee Name</p>
+                <p className="mt-1 text-sm font-bold text-[#111827]">{employee.full_name || '-'}</p>
               </div>
               <div>
-                <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wide">Days Absent</PText>
-                <PText size="small">{record.days_absent}</PText>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Employee Code</p>
+                <p className="mt-1 text-sm font-bold text-[#111827]">{employee.employee_code || '-'}</p>
               </div>
-            </>
-          )}
-        </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Department</p>
+                <p className="mt-1 text-sm text-[#111827]">{employee.departmentNames.join(', ') || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Email</p>
+                <p className="mt-1 break-all text-sm text-[#111827]">{employee.email}</p>
+              </div>
+              {record && (
+                <>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Days Present</p>
+                    <p className="mt-1 text-sm text-[#111827]">{record.days_present}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Days Absent</p>
+                    <p className="mt-1 text-sm text-[#111827]">{record.days_absent}</p>
+                  </div>
+                </>
+              )}
+            </div>
 
-        {/* Earnings */}
-        <div>
-          <PText size="x-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide mb-2">
-            Earnings
-          </PText>
-          <div className="bg-surface rounded-lg border border-contrast-low overflow-hidden">
-            <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-              <PText size="small">Base Salary</PText>
-              <PText size="small" weight="semi-bold">{formatINR(calc.base)}</PText>
+            <div className="mt-6">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#4B5563]">Earnings</p>
+              <div className="overflow-hidden rounded-xl border border-[#E5E7EB]">
+                <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm">
+                  <span>Base Salary</span>
+                  <span className="font-bold">{formatINR(calc.base)}</span>
+                </div>
+                <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm">
+                  <span>KPI Incentive</span>
+                  <span className="font-bold">{formatINR(calc.kpiIncentive)}</span>
+                </div>
+                <div className="flex justify-between bg-[#F3F4F6] px-4 py-3 text-sm font-bold">
+                  <span>Total Earnings</span>
+                  <span>{formatINR(totalEarnings)}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-              <PText size="small">KPI Incentive</PText>
-              <PText size="small" weight="semi-bold">{formatINR(calc.kpiIncentive)}</PText>
+
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#4B5563]">Deductions</p>
+              <div className="overflow-hidden rounded-xl border border-[#E5E7EB]">
+                {calc.tds > 0 && (
+                  <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm">
+                    <span>TDS (10%)</span>
+                    <span>- {formatINR(calc.tds)}</span>
+                  </div>
+                )}
+                {calc.pf > 0 && (
+                  <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm">
+                    <span>PF (12%)</span>
+                    <span>- {formatINR(calc.pf)}</span>
+                  </div>
+                )}
+                {calc.esi > 0 && (
+                  <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm">
+                    <span>ESI (0.75%)</span>
+                    <span>- {formatINR(calc.esi)}</span>
+                  </div>
+                )}
+                {calc.profTax > 0 && (
+                  <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm">
+                    <span>Professional Tax</span>
+                    <span>- {formatINR(calc.profTax)}</span>
+                  </div>
+                )}
+                {totalDeductions === 0 && (
+                  <div className="flex justify-between border-b border-[#E5E7EB] px-4 py-3 text-sm text-[#6B7280]">
+                    <span>No deductions applicable</span>
+                    <span>-</span>
+                  </div>
+                )}
+                <div className="flex justify-between bg-[#F3F4F6] px-4 py-3 text-sm font-bold">
+                  <span>Total Deductions</span>
+                  <span>- {formatINR(totalDeductions)}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between px-4 py-2.5 bg-canvas">
-              <PText size="small" weight="semi-bold">Total Earnings</PText>
-              <PText size="small" weight="semi-bold">{formatINR(totalEarnings)}</PText>
+
+            <div className="mt-6 flex items-center justify-between rounded-xl border-2 border-[#111827] px-5 py-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6B7280]">Net Salary</p>
+                <p className="mt-1 text-xs text-[#6B7280]">Amount payable for {MONTH_NAMES[month - 1]} {year}</p>
+              </div>
+              <p className="text-xl font-black tracking-tight text-[#111827]">{formatINR(calc.net)}</p>
             </div>
           </div>
         </div>
 
-        {/* Deductions */}
-        <div>
-          <PText size="x-small" color="contrast-medium" weight="semi-bold" className="uppercase tracking-wide mb-2">
-            Deductions
-          </PText>
-          <div className="bg-surface rounded-lg border border-contrast-low overflow-hidden">
-            {calc.tds > 0 && (
-              <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-                <PText size="small">TDS (10%)</PText>
-                <PText size="small">- {formatINR(calc.tds)}</PText>
-              </div>
-            )}
-            {calc.pf > 0 && (
-              <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-                <PText size="small">PF (12%)</PText>
-                <PText size="small">- {formatINR(calc.pf)}</PText>
-              </div>
-            )}
-            {calc.esi > 0 && (
-              <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-                <PText size="small">ESI (0.75%)</PText>
-                <PText size="small">- {formatINR(calc.esi)}</PText>
-              </div>
-            )}
-            {calc.profTax > 0 && (
-              <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-                <PText size="small">Professional Tax</PText>
-                <PText size="small">- {formatINR(calc.profTax)}</PText>
-              </div>
-            )}
-            {totalDeductions === 0 && (
-              <div className="flex justify-between px-4 py-2.5 border-b border-contrast-low">
-                <PText size="small" color="contrast-medium">No deductions applicable</PText>
-                <PText size="small">—</PText>
-              </div>
-            )}
-            <div className="flex justify-between px-4 py-2.5 bg-canvas">
-              <PText size="small" weight="semi-bold">Total Deductions</PText>
-              <PText size="small" weight="semi-bold">- {formatINR(totalDeductions)}</PText>
-            </div>
-          </div>
-        </div>
-
-        {/* Net Salary */}
-        <div className="flex items-center justify-between bg-canvas rounded-xl border-2 border-contrast-high px-5 py-4">
-          <PHeading tag="h3" size="medium">Net Salary</PHeading>
-          <PHeading tag="h3" size="large">{formatINR(calc.net)}</PHeading>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 justify-end pt-1">
-          <PButton variant="secondary" onClick={onDismiss}>Close</PButton>
-          <PButton
-            icon="download"
+        <div className="flex shrink-0 flex-col justify-end gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            Close
+          </button>
+          <button
+            type="button"
             onClick={handlePrintPayslip}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Download PDF
-          </PButton>
-          <PButton
-            icon="share"
+            <Printer className="h-4 w-4" />
+            Print
+          </button>
+          <button
+            type="button"
             onClick={handleSharePayslip}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
           >
+            <Share2 className="h-4 w-4" />
             Share
-          </PButton>
+          </button>
         </div>
       </div>
-    </PModal>
+    </div>
   );
 }
-
-// ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function PayrollPage() {
   const { profile: currentProfile, departments, isAdmin, isFinance } = useAuth();
@@ -761,191 +834,157 @@ export default function PayrollPage() {
 
   if (!currentProfile) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <PText color="contrast-medium">Loading…</PText>
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     );
   }
 
   if (!hasAccess) {
     return (
-      <div className="max-w-xl mx-auto mt-20">
-        <PInlineNotification
-          heading="Access Denied"
+      <div className="mx-auto mt-20 max-w-xl px-4">
+        <InlineNotice
+          tone="error"
+          title="Access Denied"
           description="You do not have permission to view this page. Only Finance department members or Super Admins can access Payroll."
-          state="error"
-          dismissButton={false}
         />
       </div>
     );
   }
 
-  // ——— Render ———————————————————————————————————————————————————————————————————
-
   const isLoading = loadingEmployees || loadingPayroll || loadingAttendance;
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* —— Header —— */}
-      <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
-        <div>
-          <PHeading tag="h1" size="x-large" className="mb-1">Payroll</PHeading>
-          <PText size="x-small" color="contrast-medium">Manage employee salaries and payslips</PText>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Month select */}
-          <select
-            value={selectedMonth}
-            onChange={e => setSelectedMonth(Number(e.target.value))}
-            className="form-input text-sm"
-          >
-            {MONTH_NAMES.map((name, i) => (
-              <option key={name} value={i + 1}>{name}</option>
-            ))}
-          </select>
-          {/* Year input */}
-          <input
-            type="number"
-            value={selectedYear}
-            min={2020}
-            max={2099}
-            onChange={e => setSelectedYear(Number(e.target.value))}
-            className="form-input text-sm w-24"
-          />
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
+      <PageHeader
+        eyebrow="Finance"
+        title="Payroll"
+        description="Manage employee salaries, attendance summaries, payroll processing, and payslips."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedMonth}
+              onChange={event => setSelectedMonth(Number(event.target.value))}
+              className="form-input h-10 text-sm"
+            >
+              {MONTH_NAMES.map((name, index) => (
+                <option key={name} value={index + 1}>{name}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              value={selectedYear}
+              min={2020}
+              max={2099}
+              onChange={event => setSelectedYear(Number(event.target.value))}
+              className="form-input h-10 w-24 text-sm"
+            />
+          </div>
+        }
+      />
 
-      {/* —— Department filter tabs —— */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="mb-6 flex flex-wrap gap-2">
         <button
+          type="button"
           onClick={() => setFilterDeptId('all')}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
             filterDeptId === 'all'
-              ? 'bg-canvas border-contrast-high text-primary'
-              : 'bg-surface border-contrast-low text-contrast-medium hover:border-contrast-medium'
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
           }`}
         >
           All Departments
         </button>
-        {departments.map((dept: Department) => (
+
+        {departments.map(department => (
           <button
-            key={dept.id}
-            onClick={() => setFilterDeptId(dept.id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-              filterDeptId === dept.id
-                ? 'bg-canvas border-contrast-high text-primary'
-                : 'bg-surface border-contrast-low text-contrast-medium hover:border-contrast-medium'
+            key={department.id}
+            type="button"
+            onClick={() => setFilterDeptId(department.id)}
+            className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+              filterDeptId === department.id
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
-            {dept.code}
+            {department.code}
           </button>
         ))}
       </div>
 
-      {/* —— Global notifications —— */}
       {error && (
         <div className="mb-4">
-          <PInlineNotification
-            heading="Error"
-            description={error}
-            state="error"
-            dismissButton
-            onDismiss={() => setError('')}
-          />
+          <InlineNotice tone="error" title="Error" description={error} onDismiss={() => setError('')} />
         </div>
       )}
+
       {successMsg && (
         <div className="mb-4">
-          <PInlineNotification
-            heading="Success"
-            description={successMsg}
-            state="success"
-            dismissButton
-            onDismiss={() => setSuccessMsg('')}
-          />
+          <InlineNotice tone="success" title="Success" description={successMsg} onDismiss={() => setSuccessMsg('')} />
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <PText color="contrast-medium">Loading payroll data…</PText>
+        <div className="flex h-48 items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading payroll data...</p>
         </div>
       ) : (
         <>
-          {/* —— Attendance Overview ——————————————————————————————————————————— */}
-          <section className="mb-10">
-            <PHeading tag="h2" size="medium" className="mb-4">
-              Attendance Overview — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-            </PHeading>
+          <section className="mb-8">
+            <h2 className="mb-4 text-lg font-semibold text-foreground">
+              Attendance Summary - {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+            </h2>
 
             {attendanceSummaries.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 bg-surface rounded-xl border border-contrast-low">
-                <PIcon name="user" size="large" color="contrast-low" />
-                <PText color="contrast-medium" className="mt-2">No employees found.</PText>
+              <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+                <User className="h-7 w-7 text-muted-foreground" />
+                <p className="mt-2 text-sm text-muted-foreground">No employees found.</p>
               </div>
             ) : (
-              <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <TableHead
-                      cols={['Employee', 'Department', 'Present', 'Absent', 'Leave', 'Weekend/Holiday', 'Override']}
-                    />
+                  <table className="min-w-full text-sm">
+                    <TableHead cols={['Employee', 'Departments', 'Present', 'Absent', 'Leave', 'Weekend/Holiday', 'Actions']} />
                     <tbody>
                       {attendanceSummaries.map(summary => (
-                        <tr
-                          key={summary.employee.id}
-                          className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors"
-                        >
+                        <tr key={summary.employee.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-contrast-low flex items-center justify-center flex-shrink-0">
-                                <PText size="xx-small" weight="semi-bold">
-                                  {(summary.employee.full_name || summary.employee.email || '?')[0].toUpperCase()}
-                                </PText>
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-foreground">
+                                {(summary.employee.full_name || summary.employee.email || '?')[0].toUpperCase()}
                               </div>
                               <div>
-                                <PText size="small" weight="semi-bold">{summary.employee.full_name || '—'}</PText>
-                                <PText size="xx-small" color="contrast-medium" className="font-mono">
-                                  {summary.employee.employee_code || '—'}
-                                </PText>
+                                <p className="font-semibold text-foreground">{summary.employee.full_name || '-'}</p>
+                                <p className="text-xs text-muted-foreground">{summary.employee.employee_code || '-'}</p>
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-1">
-                              {summary.employee.departmentNames.length > 0
-                                ? summary.employee.departmentNames.map(n => (
-                                    <span key={n} className="text-xs px-2 py-0.5 rounded-full bg-contrast-low text-contrast-high">
-                                      {n}
-                                    </span>
-                                  ))
-                                : <PText size="x-small" color="contrast-low">—</PText>}
+                              {summary.employee.departmentNames.length > 0 ? (
+                                summary.employee.departmentNames.map(name => (
+                                  <span key={name} className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                                    {name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
                             </div>
                           </td>
+                          <td className="px-4 py-3"><Badge tone="success">{summary.daysPresent}</Badge></td>
+                          <td className="px-4 py-3"><Badge tone={summary.daysAbsent > 0 ? 'danger' : 'default'}>{summary.daysAbsent}</Badge></td>
+                          <td className="px-4 py-3"><Badge tone={summary.daysLeave > 0 ? 'warning' : 'default'}>{summary.daysLeave}</Badge></td>
+                          <td className="px-4 py-3"><Badge tone="info">{summary.daysWeekendHoliday}</Badge></td>
                           <td className="px-4 py-3">
-                            <PTag color="notification-success-soft">{summary.daysPresent}</PTag>
-                          </td>
-                          <td className="px-4 py-3">
-                            <PTag color={summary.daysAbsent > 0 ? 'notification-error-soft' : 'background-surface'}>
-                              {summary.daysAbsent}
-                            </PTag>
-                          </td>
-                          <td className="px-4 py-3">
-                            <PTag color={summary.daysLeave > 0 ? 'notification-warning-soft' : 'background-surface'}>
-                              {summary.daysLeave}
-                            </PTag>
-                          </td>
-                          <td className="px-4 py-3">
-                            <PTag color="notification-info-soft">{summary.daysWeekendHoliday}</PTag>
-                          </td>
-                          <td className="px-4 py-3">
-                            <PButton
-                              variant="secondary"
-                              icon="edit"
+                            <button
+                              type="button"
                               onClick={() => openOverride(summary.employee)}
+                              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                             >
+                              <Pencil className="h-3.5 w-3.5" />
                               Override
-                            </PButton>
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -956,21 +995,20 @@ export default function PayrollPage() {
             )}
           </section>
 
-          {/* —— Salary Table —————————————————————————————————————————————————— */}
           <section>
-            <PHeading tag="h2" size="medium" className="mb-4">
-              Salary Table — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-            </PHeading>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">
+              Salary Table - {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+            </h2>
 
             {payrollRows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 bg-surface rounded-xl border border-contrast-low">
-                <PIcon name="calculator" size="large" color="contrast-low" />
-                <PText color="contrast-medium" className="mt-2">No employees found.</PText>
+              <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+                <Calculator className="h-7 w-7 text-muted-foreground" />
+                <p className="mt-2 text-sm text-muted-foreground">No employees found.</p>
               </div>
             ) : (
-              <div className="bg-surface rounded-xl border border-contrast-low overflow-hidden">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="min-w-full text-sm">
                     <TableHead
                       cols={[
                         'Employee',
@@ -1002,126 +1040,86 @@ export default function PayrollPage() {
                         const isProcessing = processing[employee.id] ?? false;
 
                         return (
-                          <tr
-                            key={employee.id}
-                            className="border-b border-contrast-low last:border-0 hover:bg-canvas transition-colors"
-                          >
-                            {/* Employee */}
+                          <tr key={employee.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full bg-contrast-low flex items-center justify-center flex-shrink-0">
-                                  <PText size="xx-small" weight="semi-bold">
-                                    {(employee.full_name || employee.email || '?')[0].toUpperCase()}
-                                  </PText>
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-foreground">
+                                  {(employee.full_name || employee.email || '?')[0].toUpperCase()}
                                 </div>
                                 <div>
-                                  <PText size="small" weight="semi-bold">{employee.full_name || '—'}</PText>
-                                  <PText size="xx-small" color="contrast-medium" className="font-mono">
-                                    {employee.employee_code || '—'}
-                                  </PText>
+                                  <p className="font-semibold text-foreground">{employee.full_name || '-'}</p>
+                                  <p className="text-xs text-muted-foreground">{employee.employee_code || '-'}</p>
                                 </div>
                               </div>
                             </td>
-
-                            {/* Base Salary */}
-                            <td className="px-4 py-3">
-                              <PText size="small">{formatINR(displayCalc.base)}</PText>
+                            <td className="px-4 py-3 text-foreground">{formatINR(displayCalc.base)}</td>
+                            <td className={`px-4 py-3 ${displayCalc.kpiIncentive > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground'}`}>
+                              {formatINR(displayCalc.kpiIncentive)}
                             </td>
-
-                            {/* KPI Incentive */}
-                            <td className="px-4 py-3">
-                              <PText size="small" color={displayCalc.kpiIncentive > 0 ? 'notification-success' : 'contrast-medium'}>
-                                {formatINR(displayCalc.kpiIncentive)}
-                              </PText>
+                            <td className={`px-4 py-3 ${displayCalc.tds > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {displayCalc.tds > 0 ? `- ${formatINR(displayCalc.tds)}` : '-'}
                             </td>
-
-                            {/* TDS */}
-                            <td className="px-4 py-3">
-                              <PText size="small" color={displayCalc.tds > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.tds > 0 ? `- ${formatINR(displayCalc.tds)}` : '—'}
-                              </PText>
+                            <td className={`px-4 py-3 ${displayCalc.pf > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {displayCalc.pf > 0 ? `- ${formatINR(displayCalc.pf)}` : '-'}
                             </td>
-
-                            {/* PF */}
-                            <td className="px-4 py-3">
-                              <PText size="small" color={displayCalc.pf > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.pf > 0 ? `- ${formatINR(displayCalc.pf)}` : '—'}
-                              </PText>
+                            <td className={`px-4 py-3 ${displayCalc.esi > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {displayCalc.esi > 0 ? `- ${formatINR(displayCalc.esi)}` : '-'}
                             </td>
-
-                            {/* ESI */}
-                            <td className="px-4 py-3">
-                              <PText size="small" color={displayCalc.esi > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.esi > 0 ? `- ${formatINR(displayCalc.esi)}` : '—'}
-                              </PText>
+                            <td className={`px-4 py-3 ${displayCalc.profTax > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {displayCalc.profTax > 0 ? `- ${formatINR(displayCalc.profTax)}` : '-'}
                             </td>
-
-                            {/* Prof Tax */}
-                            <td className="px-4 py-3">
-                              <PText size="small" color={displayCalc.profTax > 0 ? 'notification-error' : 'contrast-low'}>
-                                {displayCalc.profTax > 0 ? `- ${formatINR(displayCalc.profTax)}` : '—'}
-                              </PText>
-                            </td>
-
-                            {/* Net Salary */}
-                            <td className="px-4 py-3">
-                              <PText size="small" weight="semi-bold">{formatINR(displayCalc.net)}</PText>
-                            </td>
-
-                            {/* Status */}
+                            <td className="px-4 py-3 font-semibold text-foreground">{formatINR(displayCalc.net)}</td>
                             <td className="px-4 py-3">
                               {record ? (
-                                <PTag color={STATUS_COLORS[record.status]}>{record.status}</PTag>
+                                <Badge tone={STATUS_TONES[record.status]}>{record.status}</Badge>
                               ) : (
-                                <PTag color="background-surface">—</PTag>
+                                <Badge>-</Badge>
                               )}
                             </td>
-
-                            {/* Actions */}
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-1 flex-nowrap">
-                                {/* Process button */}
+                              <div className="flex flex-nowrap items-center gap-1">
                                 {(!record || record.status === 'Draft') && (
-                                  <PButton
-                                    variant="primary"
-                                    loading={isProcessing}
+                                  <button
+                                    type="button"
                                     disabled={isProcessing}
                                     onClick={() => handleProcess(employee)}
+                                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
+                                    {isProcessing && <Spinner />}
                                     {record ? 'Re-Process' : 'Process'}
-                                  </PButton>
-                                )}
-
-                                {/* Mark as Paid button — only if record exists and is Processed */}
-                                {record && record.status === 'Processed' && (
-                                  <PButton
-                                    variant="primary"
-                                    loading={isProcessing}
-                                    disabled={isProcessing}
-                                    onClick={() => handleMarkPaid(record)}
-                                  >
-                                    Mark Paid
-                                  </PButton>
-                                )}
-
-                                {/* Edit button — only if record exists */}
-                                {record && (
-                                  <button
-                                    onClick={() => openEdit(record)}
-                                    className="p-1.5 rounded hover:bg-contrast-low transition-colors"
-                                    title="Edit payroll"
-                                  >
-                                    <PIcon name="edit" size="x-small" />
                                   </button>
                                 )}
 
-                                {/* Generate payslip */}
+                                {record && record.status === 'Processed' && (
+                                  <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => handleMarkPaid(record)}
+                                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isProcessing && <Spinner />}
+                                    Mark Paid
+                                  </button>
+                                )}
+
+                                {record && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openEdit(record)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    title="Edit payroll"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </button>
+                                )}
+
                                 <button
+                                  type="button"
                                   onClick={() => handleGeneratePayslip(employee, record)}
-                                  className="p-1.5 rounded hover:bg-contrast-low transition-colors"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                   title="Generate payslip"
                                 >
-                                  <PIcon name="document" size="x-small" color={record?.payslip_generated ? 'notification-success' : 'inherit'} />
+                                  <FileText className={`h-4 w-4 ${record?.payslip_generated ? 'text-emerald-600 dark:text-emerald-300' : ''}`} />
                                 </button>
                               </div>
                             </td>
@@ -1137,207 +1135,191 @@ export default function PayrollPage() {
         </>
       )}
 
-      {/* —— Edit Payroll Modal —— */}
-      <PModal
-        open={!!editRecord}
-        onDismiss={() => setEditRecord(null)}
-        heading="Edit Payroll Entry"
-        aria={{ 'aria-label': 'Edit payroll entry' }}
-      >
-        <form onSubmit={handleEditSave} className="flex flex-col gap-5">
-          <button type="submit" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', clip: 'rect(0,0,0,0)' }} aria-hidden="true" tabIndex={-1} />
-          {editError && (
-            <PInlineNotification
-              heading="Error"
-              description={editError}
-              state="error"
-              dismissButton={false}
-            />
-          )}
+      {editRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Edit Payroll Entry</h2>
+              <button
+                type="button"
+                onClick={() => setEditRecord(null)}
+                disabled={editSaving}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Base Salary (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={editForm.base_salary}
-                onChange={e => setEditForm(f => ({ ...f, base_salary: e.target.value }))}
-                className="form-input"
-              />
-            </FormField>
-            <FormField label="KPI Incentive (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={editForm.kpi_incentive}
-                onChange={e => setEditForm(f => ({ ...f, kpi_incentive: e.target.value }))}
-                className="form-input"
-              />
-            </FormField>
-            <FormField label="TDS Deduction (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={editForm.tds_deduction}
-                onChange={e => setEditForm(f => ({ ...f, tds_deduction: e.target.value }))}
-                className="form-input"
-              />
-            </FormField>
-            <FormField label="PF Deduction (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={editForm.pf_deduction}
-                onChange={e => setEditForm(f => ({ ...f, pf_deduction: e.target.value }))}
-                className="form-input"
-              />
-            </FormField>
-            <FormField label="ESI Deduction (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={editForm.esi_deduction}
-                onChange={e => setEditForm(f => ({ ...f, esi_deduction: e.target.value }))}
-                className="form-input"
-              />
-            </FormField>
-            <FormField label="Professional Tax (₹)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={editForm.professional_tax_deduction}
-                onChange={e => setEditForm(f => ({ ...f, professional_tax_deduction: e.target.value }))}
-                className="form-input"
-              />
-            </FormField>
+            <form onSubmit={handleEditSave} className="flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5">
+                <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true">Submit</button>
+
+                {editError && (
+                  <div className="mb-4">
+                    <InlineNotice tone="error" title="Error" description={editError} />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField label="Base Salary (?)">
+                    <input type="number" min="0" step="1" value={editForm.base_salary} onChange={event => setEditForm(form => ({ ...form, base_salary: event.target.value }))} className="form-input" />
+                  </FormField>
+                  <FormField label="KPI Incentive (?)">
+                    <input type="number" min="0" step="1" value={editForm.kpi_incentive} onChange={event => setEditForm(form => ({ ...form, kpi_incentive: event.target.value }))} className="form-input" />
+                  </FormField>
+                  <FormField label="TDS Deduction (?)">
+                    <input type="number" min="0" step="1" value={editForm.tds_deduction} onChange={event => setEditForm(form => ({ ...form, tds_deduction: event.target.value }))} className="form-input" />
+                  </FormField>
+                  <FormField label="PF Deduction (?)">
+                    <input type="number" min="0" step="1" value={editForm.pf_deduction} onChange={event => setEditForm(form => ({ ...form, pf_deduction: event.target.value }))} className="form-input" />
+                  </FormField>
+                  <FormField label="ESI Deduction (?)">
+                    <input type="number" min="0" step="1" value={editForm.esi_deduction} onChange={event => setEditForm(form => ({ ...form, esi_deduction: event.target.value }))} className="form-input" />
+                  </FormField>
+                  <FormField label="Professional Tax (?)">
+                    <input type="number" min="0" step="1" value={editForm.professional_tax_deduction} onChange={event => setEditForm(form => ({ ...form, professional_tax_deduction: event.target.value }))} className="form-input" />
+                  </FormField>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
+                  <span className="text-sm text-muted-foreground">Computed Net Salary</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {formatINR(
+                      (parseFloat(editForm.base_salary) || 0) +
+                        (parseFloat(editForm.kpi_incentive) || 0) -
+                        (parseFloat(editForm.tds_deduction) || 0) -
+                        (parseFloat(editForm.pf_deduction) || 0) -
+                        (parseFloat(editForm.esi_deduction) || 0) -
+                        (parseFloat(editForm.professional_tax_deduction) || 0)
+                    )}
+                  </span>
+                </div>
+
+                <div className="mt-4">
+                  <FormField label="Status">
+                    <select
+                      value={editForm.status}
+                      onChange={event => setEditForm(form => ({ ...form, status: event.target.value as Payroll['status'] }))}
+                      className="form-input"
+                    >
+                      <option value="Draft">Draft</option>
+                      <option value="Processed">Processed</option>
+                      <option value="Paid">Paid</option>
+                    </select>
+                  </FormField>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-col justify-end gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setEditRecord(null)}
+                  disabled={editSaving}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {editSaving && <Spinner />}
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
+        </div>
+      )}
 
-          {/* Computed net salary preview */}
-          <div className="flex items-center justify-between bg-canvas rounded-lg border border-contrast-low px-4 py-3">
-            <PText size="small" color="contrast-medium">Computed Net Salary</PText>
-            <PText size="small" weight="semi-bold">
-              {formatINR(
-                (parseFloat(editForm.base_salary) || 0) +
-                  (parseFloat(editForm.kpi_incentive) || 0) -
-                  (parseFloat(editForm.tds_deduction) || 0) -
-                  (parseFloat(editForm.pf_deduction) || 0) -
-                  (parseFloat(editForm.esi_deduction) || 0) -
-                  (parseFloat(editForm.professional_tax_deduction) || 0)
-              )}
-            </PText>
+      {showOverride && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Override Attendance</h2>
+              <button
+                type="button"
+                onClick={() => setShowOverride(false)}
+                disabled={overrideSaving}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOverrideSave} className="flex flex-col gap-4 p-5">
+              <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true">Submit</button>
+
+              {overrideError && <InlineNotice tone="error" title="Error" description={overrideError} />}
+
+              <FormField label="Employee">
+                <select
+                  value={overrideForm.employeeId}
+                  onChange={event => setOverrideForm(form => ({ ...form, employeeId: event.target.value }))}
+                  className="form-input"
+                  required
+                >
+                  <option value="">Select employee...</option>
+                  {employees.map(employee => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.full_name || employee.email} ({employee.employee_code || '-'})
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Date">
+                <input
+                  type="date"
+                  value={overrideForm.date}
+                  min={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`}
+                  max={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(
+                    new Date(selectedYear, selectedMonth, 0).getDate()
+                  ).padStart(2, '0')}`}
+                  onChange={event => setOverrideForm(form => ({ ...form, date: event.target.value }))}
+                  className="form-input"
+                  required
+                />
+              </FormField>
+
+              <FormField label="Attendance Status">
+                <select
+                  value={overrideForm.status}
+                  onChange={event => setOverrideForm(form => ({ ...form, status: event.target.value as AttendanceStatus }))}
+                  className="form-input"
+                >
+                  {ATTENDANCE_STATUSES.map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <div className="flex flex-col justify-end gap-2 pt-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setShowOverride(false)}
+                  disabled={overrideSaving}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={overrideSaving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {overrideSaving && <Spinner />}
+                  Save Override
+                </button>
+              </div>
+            </form>
           </div>
+        </div>
+      )}
 
-          <FormField label="Status">
-            <select
-              value={editForm.status}
-              onChange={e => setEditForm(f => ({ ...f, status: e.target.value as Payroll['status'] }))}
-              className="form-input"
-            >
-              <option value="Draft">Draft</option>
-              <option value="Processed">Processed</option>
-              <option value="Paid">Paid</option>
-            </select>
-          </FormField>
-
-          <div className="flex gap-3 justify-end pt-1">
-            <PButton
-              type="button"
-              variant="secondary"
-              onClick={() => setEditRecord(null)}
-              disabled={editSaving}
-            >
-              Cancel
-            </PButton>
-            <PButton type="submit" loading={editSaving} disabled={editSaving}>
-              Save Changes
-            </PButton>
-          </div>
-        </form>
-      </PModal>
-
-      {/* —— Attendance Override Modal —— */}
-      <PModal
-        open={showOverride}
-        onDismiss={() => setShowOverride(false)}
-        heading="Override Attendance"
-        aria={{ 'aria-label': 'Override attendance' }}
-      >
-        <form onSubmit={handleOverrideSave} className="flex flex-col gap-5">
-          <button type="submit" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', clip: 'rect(0,0,0,0)' }} aria-hidden="true" tabIndex={-1} />
-          {overrideError && (
-            <PInlineNotification
-              heading="Error"
-              description={overrideError}
-              state="error"
-              dismissButton={false}
-            />
-          )}
-
-          <FormField label="Employee">
-            <select
-              value={overrideForm.employeeId}
-              onChange={e => setOverrideForm(f => ({ ...f, employeeId: e.target.value }))}
-              className="form-input"
-              required
-            >
-              <option value="">Select employee…</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.full_name || emp.email} ({emp.employee_code || '—'})
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Date">
-            <input
-              type="date"
-              value={overrideForm.date}
-              min={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`}
-              max={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(
-                new Date(selectedYear, selectedMonth, 0).getDate()
-              ).padStart(2, '0')}`}
-              onChange={e => setOverrideForm(f => ({ ...f, date: e.target.value }))}
-              className="form-input"
-              required
-            />
-          </FormField>
-
-          <FormField label="Attendance Status">
-            <select
-              value={overrideForm.status}
-              onChange={e => setOverrideForm(f => ({ ...f, status: e.target.value as AttendanceStatus }))}
-              className="form-input"
-            >
-              {ATTENDANCE_STATUSES.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <div className="flex gap-3 justify-end pt-1">
-            <PButton
-              type="button"
-              variant="secondary"
-              onClick={() => setShowOverride(false)}
-              disabled={overrideSaving}
-            >
-              Cancel
-            </PButton>
-            <PButton type="submit" loading={overrideSaving} disabled={overrideSaving}>
-              Save Override
-            </PButton>
-          </div>
-        </form>
-      </PModal>
-
-      {/* —— Payslip Modal —— */}
       <PayslipModal
         open={!!payslipEmployee}
         onDismiss={() => { setPayslipEmployee(null); setPayslipRecord(null); }}
@@ -1349,6 +1331,3 @@ export default function PayrollPage() {
     </div>
   );
 }
-
-
-

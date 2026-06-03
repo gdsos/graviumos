@@ -1,25 +1,42 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
+  Camera,
+  Check,
+  CheckCircle,
+  Clock,
+  Edit3,
+  ExternalLink,
+  Link,
+  X,
+  AlertTriangle,
+  Bell,
+  BellOff,
+} from 'lucide-react';
+import {
   supabase,
   type ApprovalRequest,
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PIcon } from '@/components/ui/porsche';
-
-// ——— Constants ————————————————————————————————————————————————————————————————
-
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
+import { PageHeader } from '../../components/common/PageHeader';
+import { PhoneNumberInput } from '../../components/common/PhoneNumberInput';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getExistingPushSubscription,
+  getPushSupportStatus,
+  type PushSupportStatus,
+} from '../../lib/pushNotifications';
 
 interface ProfileFormState {
   profile_picture_url: string;
   phone: string;
   address: string;
-  github: string;
+  instagram: string;
   linkedin: string;
   twitter: string;
 }
 
-// ——— Helpers ——————————————————————————————————————————————————————————————————
+// ??? Helpers ??????????????????????????????????????????????????????????????????
 
 function FormField({
   label,
@@ -31,18 +48,15 @@ function FormField({
   hint?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label
-        className="block text-xs font-medium text-contrast-high"
-        style={{ fontFamily: FONT }}
-      >
+    <div className="flex flex-col gap-1.5">
+      <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </label>
       {children}
       {hint && (
-        <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
+        <p className="text-xs leading-5 text-muted-foreground">
           {hint}
-        </PText>
+        </p>
       )}
     </div>
   );
@@ -51,51 +65,160 @@ function FormField({
 function ReadonlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <PText size="xx-small" color="contrast-medium" className="uppercase tracking-wider" style={{ fontFamily: FONT }}>
+      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
-      </PText>
-      <PText size="small" style={{ fontFamily: FONT }}>
-        {value || '—'}
-      </PText>
+      </span>
+      <span className="text-sm font-medium text-foreground">
+        {value || '?'}
+      </span>
     </div>
   );
 }
 
-// ——— KPI Progress Bar —————————————————————————————————————————————————————————
-
-function KpiBar({ score }: { score: number }) {
-  const pct = Math.min(Math.max((score / 10) * 100, 0), 100);
-  let color = '#2e7d32';
-  if (score === 0) color = '#c62828';
-  else if (score < 7.5) color = '#ed6c02';
-  else if (score < 10) color = '#0288d1';
+function Badge({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode;
+  tone?: 'default' | 'info' | 'danger' | 'warning';
+}) {
+  const toneClass =
+    tone === 'info'
+      ? 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+      : tone === 'danger'
+        ? 'border-destructive/20 bg-destructive/10 text-destructive'
+        : tone === 'warning'
+          ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+          : 'border-border bg-background text-muted-foreground';
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-          KPI Score
-        </PText>
-        <PText size="x-small" weight="semi-bold" style={{ fontFamily: FONT, color }}>
-          {score.toFixed(1)} / 10
-        </PText>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function InlineNotice({
+  tone,
+  title,
+  description,
+  className = '',
+}: {
+  tone: 'success' | 'error' | 'info' | 'warning';
+  title: string;
+  description: string;
+  className?: string;
+}) {
+  const isSuccess = tone === 'success';
+  const isError = tone === 'error';
+  const isWarning = tone === 'warning';
+
+  return (
+    <div
+      className={`flex gap-3 rounded-2xl border p-4 text-sm ${
+        isSuccess
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+          : isError
+            ? 'border-destructive/20 bg-destructive/10 text-destructive'
+            : isWarning
+              ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              : 'border-border bg-card text-card-foreground'
+      } ${className}`}
+    >
+      {isSuccess ? (
+        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      ) : isError || isWarning ? (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      ) : (
+        <Link className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      )}
+
+      <div className="min-w-0">
+        <p className="font-semibold">{title}</p>
+        <p className="mt-0.5 text-xs leading-5">{description}</p>
       </div>
-      <div className="w-full bg-contrast-low/30 rounded-full h-2 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-        {score >= 8 ? 'Excellent' : score >= 6 ? 'Good' : score >= 4 ? 'Average' : 'Needs improvement'}
-      </PText>
     </div>
   );
 }
 
-// ——— Avatar component —————————————————————————————————————————————————————————
+// ??? KPI Progress Bar ?????????????????????????????????????????????????????????
 
-function Avatar({ url, name }: { url: string; name: string }) {
+function PerformanceOverview({
+  taskCount,
+  isActive,
+}: {
+  taskCount: number | null;
+  isActive: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Performance Overview
+          </p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">
+            A practical snapshot of measurable work activity. Deeper KPI scoring will be added after attendance, task completion, and deadline tracking are fully connected.
+          </p>
+        </div>
+
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+          isActive
+            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            : 'border-destructive/20 bg-destructive/10 text-destructive'
+        }`}>
+          {isActive ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Attendance
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">Not Tracked Yet</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-0 rounded-full bg-primary" />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Task Completion
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {taskCount ?? 0} Assigned
+          </p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Completion rate pending task status logic.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            On-Time Rate
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">Not Tracked Yet</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Deadline tracking will power this later.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ??? Avatar component ?????????????????????????????????????????????????????????
+
+function Avatar({
+  url,
+  name,
+  onUpload,
+}: {
+  url: string;
+  name: string;
+  onUpload?: () => void;
+}) {
   const initials = name
     .split(' ')
     .map(n => n[0])
@@ -104,32 +227,36 @@ function Avatar({ url, name }: { url: string; name: string }) {
     .toUpperCase();
 
   return (
-    <div className="relative w-24 h-24 flex-shrink-0">
+    <button
+      type="button"
+      onClick={onUpload}
+      className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-border bg-card"
+      aria-label="Upload profile photo"
+      title="Upload profile photo"
+    >
       {url ? (
         <img
           src={url}
           alt={name}
-          className="w-24 h-24 rounded-full object-cover border-4 border-contrast-low"
-          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          className="h-full w-full object-cover"
+          onError={event => { (event.target as HTMLImageElement).style.display = 'none'; }}
         />
       ) : (
-        <div
-          className="w-24 h-24 rounded-full flex items-center justify-center border-4 border-contrast-low bg-surface"
-          style={{ background: 'var(--p-color-contrast-low)' }}
-        >
-          <span
-            className="text-2xl font-bold text-background-base"
-            style={{ fontFamily: FONT }}
-          >
+        <div className="flex h-full w-full items-center justify-center">
+          <span className="text-2xl font-semibold text-foreground">
             {initials || '?'}
           </span>
         </div>
       )}
-    </div>
+
+      <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+        <Camera className="h-5 w-5 text-white" />
+      </span>
+    </button>
   );
 }
 
-// ——— Main Component ———————————————————————————————————————————————————————————
+// ??? Main Component ???????????????????????????????????????????????????????????
 
 export default function ProfilePage() {
   const { profile, userDepartments, refreshProfile } = useAuth();
@@ -139,7 +266,7 @@ export default function ProfilePage() {
     profile_picture_url: '',
     phone: '',
     address: '',
-    github: '',
+    instagram: '',
     linkedin: '',
     twitter: '',
   });
@@ -154,10 +281,13 @@ export default function ProfilePage() {
   // Name change request
   const [nameRequest, setNameRequest] = useState<ApprovalRequest | null>(null);
   const [showNameModal, setShowNameModal] = useState(false);
+  const [pushStatus, setPushStatus] = useState<PushSupportStatus>('unsupported');
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushSaving, setPushSaving] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
   const [newName, setNewName] = useState('');
   const [nameRequestLoading, setNameRequestLoading] = useState(false);
   const [nameRequestError, setNameRequestError] = useState('');
-  const [nameRequestSuccess, setNameRequestSuccess] = useState(false);
 
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,7 +315,7 @@ export default function ProfilePage() {
       profile_picture_url: profile.profile_picture_url || '',
       phone: profile.phone || '',
       address: profile.address || '',
-      github: profile.social_links?.github || '',
+      instagram: profile.social_links?.instagram || '',
       linkedin: profile.social_links?.linkedin || '',
       twitter: profile.social_links?.twitter || '',
     });
@@ -241,7 +371,7 @@ export default function ProfilePage() {
         phone: form.phone.trim(),
         address: form.address.trim(),
         social_links: {
-          github: form.github.trim(),
+          instagram: form.instagram.trim(),
           linkedin: form.linkedin.trim(),
           twitter: form.twitter.trim(),
         },
@@ -305,7 +435,6 @@ export default function ProfilePage() {
     if (error) {
       setNameRequestError(error.message);
     } else {
-      setNameRequestSuccess(true);
       setShowNameModal(false);
       setNewName('');
       fetchNameRequest();
@@ -319,12 +448,68 @@ export default function ProfilePage() {
 
   // ——— Render ———————————————————————————————————————————————————————————————
 
+  useEffect(() => {
+    let mounted = true;
+
+    const checkPushStatus = async () => {
+      const status = getPushSupportStatus();
+      const subscription = await getExistingPushSubscription();
+
+      if (!mounted) return;
+
+      setPushStatus(status);
+      setPushEnabled(Boolean(subscription));
+    };
+
+    checkPushStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleTogglePushNotifications = async () => {
+    if (!profile) return;
+
+    setPushSaving(true);
+    setPushMessage('');
+
+    try {
+      if (pushEnabled) {
+        await disablePushNotifications(profile.id);
+        setPushEnabled(false);
+        setPushMessage('Push notifications disabled for this device.');
+      } else {
+        const result = await enablePushNotifications(profile.id);
+
+        if (!result.ok) {
+          setPushStatus(result.status);
+          setPushMessage(
+            result.status === 'not-configured'
+              ? 'Push notifications are not configured yet.'
+              : result.status === 'blocked'
+                ? 'Notifications are blocked in this browser.'
+                : 'Push notifications are not supported on this device.'
+          );
+          return;
+        }
+
+        setPushStatus('supported');
+        setPushEnabled(true);
+        setPushMessage('Push notifications enabled for this device.');
+      }
+    } catch (error) {
+      console.error(error);
+      setPushMessage('Could not update push notifications.');
+    } finally {
+      setPushSaving(false);
+    }
+  };
+
   if (!profile) {
     return (
-      <div className="flex items-center justify-center h-48">
-        <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-          Loading profile…
-        </PText>
+      <div className="flex h-48 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading profile...</p>
       </div>
     );
   }
@@ -335,7 +520,7 @@ export default function ProfilePage() {
       month: 'long',
       year: 'numeric',
     })
-    : '—';
+    : '?';
 
   const roleLabel: Record<string, string> = {
     super_admin: 'Super Admin',
@@ -344,69 +529,87 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto" style={{ fontFamily: FONT }}>
-      {/* Header */}
-      <div className="mb-8">
-        <PHeading tag="h1" size="x-large" className="mb-1">
-          Account
-        </PHeading>
-        <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-          Manage your personal information and preferences
-        </PText>
-
-        <PText color="contrast-medium" style={{ fontFamily: FONT }}>
-          Manage your account settings and personal information
-        </PText>
-      </div>
+    <div className="mx-auto w-full max-w-4xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
+      <PageHeader
+        eyebrow="Account Settings"
+        title="Account"
+        description="Manage your account settings and personal information."
+      />
 
       <div className="flex flex-col gap-5">
-        {/* —— Identity Card ———————————————————————————————————————————————— */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6">
-          <div className="flex flex-col sm:flex-row gap-5 items-start">
-            {/* Avatar */}
-            <Avatar url={form.profile_picture_url} name={profile.full_name} />
+        <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
+          <div className="flex flex-col items-start gap-5 sm:flex-row">
+            <Avatar
+              url={form.profile_picture_url}
+              name={profile.full_name}
+              onUpload={() => fileInputRef.current?.click()}
+            />
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+            />
 
-            {/* Identity info */}
-            <div className="flex-1 flex flex-col gap-3">
+            <div className="flex flex-1 flex-col gap-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <PHeading tag="h2" size="large" style={{ fontFamily: FONT }}>
-                    {profile.full_name}
-                  </PHeading>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-semibold text-foreground">{profile.full_name}</h2>
+
+                    {nameRequest ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        <Clock className="h-3.5 w-3.5" />
+                        Name Change Pending
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewName(profile.full_name);
+                          setNameRequestError('');
+                          setShowNameModal(true);
+                        }}
+                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Request Name Change
+                      </button>
+                    )}
+                  </div>
+
                   {profile.employee_code && (
-                    <PText size="x-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                      {profile.employee_code}
-                    </PText>
+                    <p className="mt-1 text-xs text-muted-foreground">{profile.employee_code}</p>
+                  )}
+
+                  {nameRequest && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Requested: {String((nameRequest.payload as Record<string, string>)?.new_name || '?')}
+                    </p>
                   )}
                 </div>
+
                 <div className="flex flex-wrap gap-2">
-                  <PTag color="background-surface">
-                    {roleLabel[profile.role] || profile.role}
-                  </PTag>
-                  {!profile.is_active && (
-                    <PTag color="notification-error-soft">Inactive</PTag>
-                  )}
+                  <Badge>{roleLabel[profile.role] || profile.role}</Badge>
+                  {!profile.is_active && <Badge tone="danger">Inactive</Badge>}
                 </div>
               </div>
 
-              {/* Department badges */}
               <div className="flex flex-wrap gap-2">
                 {userDepartments.length > 0 ? (
                   userDepartments.map(dept => (
-                    <PTag key={dept.id} color="notification-info-soft">
-                      {dept.code} · {dept.name}
-                    </PTag>
+                    <Badge key={dept.id} tone="info">
+                      {dept.code} - {dept.name}
+                    </Badge>
                   ))
                 ) : (
-                  <PText size="x-small" color="contrast-low" style={{ fontFamily: FONT }}>
-                    No departments assigned
-                  </PText>
+                  <p className="text-xs text-muted-foreground">No departments assigned</p>
                 )}
               </div>
 
-              {/* Key info row */}
-              <div className="flex flex-wrap gap-6">
-                <ReadonlyField label="Employee Code" value={profile.employee_code || '—'} />
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <ReadonlyField label="Employee Code" value={profile.employee_code || '?'} />
                 <ReadonlyField label="Joined" value={joinDate} />
                 <ReadonlyField label="Email" value={profile.email} />
                 {taskCount !== null && (
@@ -416,124 +619,90 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* KPI bar */}
-          <div className="mt-5 pt-4 border-t border-contrast-low">
-            <KpiBar score={profile.kpi_score ?? 0} />
-          </div>
-        </div>
-
-        {/* —— Name Change Section ———————————————————————————————————————————— */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <PHeading tag="h3" size="small" style={{ fontFamily: FONT }}>
-                Full Name
-              </PHeading>
-              <PText size="small" color="contrast-medium" className="mt-1" style={{ fontFamily: FONT }}>
-                {profile.full_name}
-              </PText>
-            </div>
-
-            {nameRequest ? (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-warning-soft border border-contrast-low">
-                <PIcon name="clock" size="x-small" color="notification-warning" />
-                <div>
-                  <PText size="x-small" weight="semi-bold" color="notification-warning" style={{ fontFamily: FONT }}>
-                    Name Change Pending
-                  </PText>
-                  <PText size="xx-small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                    Requested: {String((nameRequest.payload as Record<string, string>)?.new_name || '—')}
-                  </PText>
-                </div>
-              </div>
-            ) : (
-              <PButton
-                type="button"
-                variant="secondary"
-                icon="edit"
-                onClick={() => {
-                  setNewName(profile.full_name);
-                  setNameRequestError('');
-                  setShowNameModal(true);
-                }}
-              >
-                Request Name Change
-              </PButton>
-            )}
-          </div>
-
-          {nameRequestSuccess && (
-            <div className="mt-3">
-              <PInlineNotification
-                heading="Name change requested"
-                description="Your request is pending admin approval. You'll be notified when it's reviewed."
-                state="success"
-                dismissButton={false}
-              />
-            </div>
-          )}
-
-          <div className="mt-3">
-            <PInlineNotification
-              heading="Why approval is needed"
-              description="Full name changes require admin review to ensure HR records remain accurate."
-              state="info"
-              dismissButton={false}
+          <div className="mt-5 border-t border-border pt-4">
+            <PerformanceOverview
+              taskCount={taskCount}
+              isActive={profile.is_active}
             />
           </div>
-        </div>
+        </section>
 
-        {/* —— Editable Profile Fields ———————————————————————————————————————— */}
-        <form onSubmit={handleSave} className="bg-surface rounded-2xl border border-contrast-low p-6">
-          <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
-            Personal Details
-          </PHeading>
+        <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Notification Preferences</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Enable push notifications for task updates and important Gravium OS alerts on this device.
+              </p>
+
+              {pushMessage && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {pushMessage}
+                </p>
+              )}
+
+              {pushStatus === 'not-configured' && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                  VAPID public key is not configured yet. We will enable this after server setup.
+                </p>
+              )}
+
+              {pushStatus === 'blocked' && (
+                <p className="mt-2 text-xs text-destructive">
+                  Notifications are blocked in this browser. Enable them from browser site settings.
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTogglePushNotifications}
+              disabled={pushSaving || pushStatus === 'unsupported' || pushStatus === 'not-configured'}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pushEnabled ? (
+                <>
+                  <BellOff className="h-4 w-4" />
+                  Disable Notifications
+                </>
+              ) : (
+                <>
+                  <Bell className="h-4 w-4" />
+                  Enable Notifications
+                </>
+              )}
+            </button>
+          </div>
+        </section>
+
+
+        <form onSubmit={handleSave} className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
+          <h3 className="mb-4 text-sm font-semibold text-foreground">Personal Details</h3>
 
           {saveError && (
-            <PInlineNotification
-              heading="Save failed"
+            <InlineNotice
+              tone="error"
+              title="Save Failed"
               description={saveError}
-              state="error"
-              dismissButton={false}
               className="mb-4"
             />
           )}
+
           {saveSuccess && (
-            <PInlineNotification
-              heading="Profile saved"
+            <InlineNotice
+              tone="success"
+              title="Profile Saved"
               description="Your changes have been saved successfully."
-              state="success"
-              dismissButton={false}
               className="mb-4"
             />
           )}
 
           <div className="flex flex-col gap-4">
-            <FormField
-              label="Profile Picture URL"
-              hint="Enter a direct link to your photo (e.g. from Gravatar or a hosted image)"
-            >
-              <input
-                type="url"
-                value={form.profile_picture_url}
-                onChange={e => updateForm('profile_picture_url', e.target.value)}
-                className="form-input"
-                placeholder="https://example.com/photo.jpg"
-              />
-              <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
-              <div className="mt-2">
-                <PButton type="button" variant="secondary" icon="image" onClick={() => fileInputRef.current?.click()}>Upload Photo</PButton>
-              </div>
-            </FormField>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField label="Phone Number">
-                <input
-                  type="tel"
+                <PhoneNumberInput
                   value={form.phone}
-                  onChange={e => updateForm('phone', e.target.value)}
-                  className="form-input"
-                  placeholder="+91 98765 43210"
+                  onChange={value => updateForm('phone', value)}
                 />
               </FormField>
             </div>
@@ -541,43 +710,36 @@ export default function ProfilePage() {
             <FormField label="Address">
               <textarea
                 value={form.address}
-                onChange={e => updateForm('address', e.target.value)}
+                onChange={event => updateForm('address', event.target.value)}
                 rows={2}
                 className="form-input resize-none"
                 placeholder="Street, City, State, PIN"
               />
             </FormField>
 
-            {/* Social links */}
             <div className="pt-2">
-              <PText size="x-small" weight="semi-bold" className="mb-3" style={{ fontFamily: FONT }}>
-                Social Links
-              </PText>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <FormField label="GitHub">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Social Links</h4>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <FormField label="Instagram">
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      <PIcon name="external" size="x-small" color="contrast-medium" />
-                    </div>
+                    <ExternalLink className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="url"
-                      value={form.github}
-                      onChange={e => updateForm('github', e.target.value)}
+                      value={form.instagram}
+                      onChange={event => updateForm('instagram', event.target.value)}
                       className="form-input pl-9"
-                      placeholder="https://github.com/username"
+                      placeholder="https://instagram.com/username"
                     />
                   </div>
                 </FormField>
 
                 <FormField label="LinkedIn">
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      <PIcon name="logo-linkedin" size="x-small" color="contrast-medium" />
-                    </div>
+                    <ExternalLink className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="url"
                       value={form.linkedin}
-                      onChange={e => updateForm('linkedin', e.target.value)}
+                      onChange={event => updateForm('linkedin', event.target.value)}
                       className="form-input pl-9"
                       placeholder="https://linkedin.com/in/username"
                     />
@@ -586,13 +748,11 @@ export default function ProfilePage() {
 
                 <FormField label="Twitter / X">
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                      <PIcon name="logo-x" size="x-small" color="contrast-medium" />
-                    </div>
+                    <X className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="url"
                       value={form.twitter}
-                      onChange={e => updateForm('twitter', e.target.value)}
+                      onChange={event => updateForm('twitter', event.target.value)}
                       className="form-input pl-9"
                       placeholder="https://x.com/username"
                     />
@@ -601,42 +761,40 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Social links display (read-only chips if filled) */}
-            {(form.github || form.linkedin || form.twitter) && (
+            {(form.instagram || form.linkedin || form.twitter) && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {form.github && (
+                {form.instagram && (
                   <a
-                    href={form.github}
+                    href={form.instagram}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-contrast-low bg-canvas text-contrast-medium hover:text-primary hover:border-primary transition-colors text-xs"
-                    style={{ fontFamily: FONT }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                   >
-                    <PIcon name="external" size="x-small" color="inherit" />
-                    GitHub
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Instagram
                   </a>
                 )}
+
                 {form.linkedin && (
                   <a
                     href={form.linkedin}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-contrast-low bg-canvas text-contrast-medium hover:text-primary hover:border-primary transition-colors text-xs"
-                    style={{ fontFamily: FONT }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                   >
-                    <PIcon name="logo-linkedin" size="x-small" color="inherit" />
+                    <ExternalLink className="h-3.5 w-3.5" />
                     LinkedIn
                   </a>
                 )}
+
                 {form.twitter && (
                   <a
                     href={form.twitter}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-contrast-low bg-canvas text-contrast-medium hover:text-primary hover:border-primary transition-colors text-xs"
-                    style={{ fontFamily: FONT }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                   >
-                    <PIcon name="logo-x" size="x-small" color="inherit" />
+                    <X className="h-3.5 w-3.5" />
                     Twitter / X
                   </a>
                 )}
@@ -644,139 +802,123 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Save button */}
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-contrast-low">
+          <div className="mt-6 flex flex-col justify-end gap-2 border-t border-border pt-4 sm:flex-row">
             {formDirty && (
-              <PButton
+              <button
                 type="button"
-                variant="secondary"
                 onClick={() => {
                   if (profile) {
                     setForm({
                       profile_picture_url: profile.profile_picture_url || '',
                       phone: profile.phone || '',
                       address: profile.address || '',
-                      github: profile.social_links?.github || '',
+                      instagram: profile.social_links?.instagram || '',
                       linkedin: profile.social_links?.linkedin || '',
                       twitter: profile.social_links?.twitter || '',
                     });
                     setFormDirty(false);
                   }
                 }}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
               >
                 Discard Changes
-              </PButton>
+              </button>
             )}
-            <PButton
+
+            <button
               type="submit"
-              loading={saving}
-              disabled={!formDirty}
-              icon="check"
+              disabled={!formDirty || saving}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              {saving ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/60 border-t-transparent" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
               Save Profile
-            </PButton>
+            </button>
           </div>
         </form>
 
-        {/* —— Account info (readonly) ———————————————————————————————————————— */}
-        <div className="bg-surface rounded-2xl border border-contrast-low p-6">
-          <PHeading tag="h3" size="small" className="mb-4" style={{ fontFamily: FONT }}>
-            Account Information
-          </PHeading>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
-            <ReadonlyField label="Email" value={profile.email} />
-            <ReadonlyField label="Employee Code" value={profile.employee_code || '—'} />
-            <ReadonlyField label="Role" value={roleLabel[profile.role] || profile.role} />
-            <ReadonlyField label="Joined" value={joinDate} />
-            <ReadonlyField
-              label="Departments"
-              value={userDepartments.map(d => d.code).join(', ') || '—'}
-            />
-            <ReadonlyField
-              label="Account Status"
-              value={profile.is_active ? 'Active' : 'Inactive'}
-            />
-          </div>
-        </div>
       </div>
 
-      {/* —— Name Change Modal ———————————————————————————————————————————————— */}
-      <PModal
-        open={showNameModal}
-        onDismiss={() => !nameRequestLoading && setShowNameModal(false)}
-        aria={{ 'aria-label': 'Request name change' }}
-        style={{ '--p-modal-width': 'clamp(320px, 40vw, 520px)' } as React.CSSProperties}
-      >
-        <PHeading slot="header" size="large" tag="h2">
-          Request Name Change
-        </PHeading>
-
-        <form onSubmit={handleRequestNameChange} className="flex flex-col gap-4">
-          <PInlineNotification
-            heading="This requires admin approval"
-            description="Your request will be reviewed by an administrator before the change takes effect."
-            state="info"
-            dismissButton={false}
-          />
-
-          {nameRequestError && (
-            <PInlineNotification
-              heading="Error"
-              description={nameRequestError}
-              state="error"
-              dismissButton={false}
-            />
-          )}
-
-          <div className="flex flex-col gap-1">
-            <label
-              className="block text-xs font-medium text-contrast-high"
-              style={{ fontFamily: FONT }}
-            >
-              Current Name
-            </label>
-            <div className="px-3 py-2 rounded-lg border border-contrast-low bg-canvas/50">
-              <PText size="small" color="contrast-medium" style={{ fontFamily: FONT }}>
-                {profile.full_name}
-              </PText>
+      {showNameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Request Name Change</h2>
+              <button
+                type="button"
+                onClick={() => !nameRequestLoading && setShowNameModal(false)}
+                disabled={nameRequestLoading}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-          </div>
 
-          <FormField label="New Full Name *">
-            <input
-              type="text"
-              required
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              className="form-input"
-              placeholder="Enter your desired full name"
-              autoFocus
-            />
-          </FormField>
+            <form onSubmit={handleRequestNameChange} className="flex flex-col gap-4 p-5">
+              <InlineNotice
+                tone="info"
+                title="This Requires Admin Approval"
+                description="Your request will be reviewed by an administrator before the change takes effect."
+              />
 
-          <div slot="footer" className="flex gap-3 justify-end pt-2">
-            <PButton
-              type="button"
-              variant="secondary"
-              onClick={() => setShowNameModal(false)}
-              disabled={nameRequestLoading}
-            >
-              Cancel
-            </PButton>
-            <PButton
-              type="submit"
-              loading={nameRequestLoading}
-              icon="check"
-              disabled={!newName.trim() || newName.trim() === profile.full_name}
-            >
-              Submit Request
-            </PButton>
+              {nameRequestError && (
+                <InlineNotice
+                  tone="error"
+                  title="Error"
+                  description={nameRequestError}
+                />
+              )}
+
+              <FormField label="Current Name">
+                <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                  {profile.full_name}
+                </div>
+              </FormField>
+
+              <FormField label="New Full Name *">
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={event => setNewName(event.target.value)}
+                  className="form-input"
+                  placeholder="Enter your desired full name"
+                  autoFocus
+                />
+              </FormField>
+
+              <div className="flex flex-col justify-end gap-2 pt-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setShowNameModal(false)}
+                  disabled={nameRequestLoading}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={!newName.trim() || newName.trim() === profile.full_name || nameRequestLoading}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {nameRequestLoading ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/60 border-t-transparent" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Submit Request
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </PModal>
+        </div>
+      )}
     </div>
   );
+
 }
-
-
-

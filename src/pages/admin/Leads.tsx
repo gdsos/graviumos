@@ -2,22 +2,35 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Lead, type Profile, LEAD_SOURCES } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, ArrowRight, Settings } from 'lucide-react';
+import { Plus, Edit2, Trash2, ArrowRight, Settings, Mail, Phone, ChevronDown, Check } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { EmptyState } from '../../components/common/EmptyState';
+import { PageHeader } from '../../components/common/PageHeader';
+import { SectionCard } from '../../components/common/SectionCard';
+import { StatusBadge } from '../../components/common/StatusBadge';
+import { PhoneNumberInput } from '../../components/common/PhoneNumberInput';
 
-const STATUS_COLORS: Record<string, string> = {
-  Open: 'bg-blue-200 text-blue-900',
-  Qualified: 'bg-slate-300 text-slate-900',
-  Converted: 'bg-green-200 text-green-900',
-  Rejected: 'bg-red-200 text-red-900',
-  Ghosted: 'bg-amber-200 text-amber-900',
+const STATUS_VARIANTS: Record<string, 'info' | 'outline' | 'success' | 'danger' | 'warning' | 'muted'> = {
+  Open: 'info',
+  Qualified: 'outline',
+  Converted: 'success',
+  Rejected: 'danger',
+  Ghosted: 'warning',
 };
 
 interface LeadWithProfile extends Lead {
   assignee?: Profile;
 }
 
-export default function Leads() {
+interface LeadsProps {
+  eyebrow?: string;
+  portalMode?: boolean;
+}
+
+export default function Leads({
+  eyebrow = 'Marketing & Sales',
+  portalMode = false,
+}: LeadsProps = {}) {
   const { profile, departments, isAdmin, isDeptHead, isMS } = useAuth();
   const [leads, setLeads] = useState<LeadWithProfile[]>([]);
   const [msMembers, setMsMembers] = useState<Profile[]>([]);
@@ -135,31 +148,102 @@ export default function Leads() {
   };
 
   const canDelete = isAdmin() || (isDeptHead() && isMS());
+  const openLeadCount = leads.filter(lead => lead.status === 'Open').length;
+  const convertedLeadCount = leads.filter(lead => lead.status === 'Converted').length;
+  const headerAction = (
+    <Button onClick={openCreate} className="h-10 justify-center gap-2">
+      <Plus size={16} />
+      Add Lead
+    </Button>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">Leads</h1>
-          <span className="text-xs text-slate-600">Manage your CRM pipeline</span>
+    <div
+      className={
+        portalMode
+          ? 'mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10'
+          : 'mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8'
+      }
+    >
+      {portalMode ? (
+        <div className="mb-8 border-b border-border pb-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+                {eyebrow}
+              </p>
+
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                Leads
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+                Manage client enquiries, assignments, and CRM pipeline status.
+              </p>
+            </div>
+
+            {headerAction}
+          </div>
         </div>
-        <Button onClick={openCreate} className="flex items-center gap-2">
-          <Plus size={16} />
-          Add Lead
-        </Button>
+      ) : (
+        <PageHeader
+          eyebrow={eyebrow}
+          title="Leads"
+          description="Manage client enquiries, assignments, and CRM pipeline status."
+          actions={headerAction}
+        />
+      )}
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+        <SectionCard className="shadow-none">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Leads</p>
+            <p className="mt-1 text-3xl font-semibold text-foreground">
+              {leads.length}
+            </p>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="shadow-none">
+          <div>
+            <p className="text-sm text-muted-foreground">Open Leads</p>
+            <p className="mt-1 text-3xl font-semibold text-foreground">
+              {openLeadCount}
+            </p>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="col-span-2 shadow-none md:col-span-1">
+          <div>
+            <p className="text-sm text-muted-foreground">Converted Leads</p>
+            <p className="mt-1 text-3xl font-semibold text-foreground">
+              {convertedLeadCount}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ready for project conversion
+            </p>
+          </div>
+        </SectionCard>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <span className="text-sm text-slate-600">Loading...</span>
-        </div>
+        <SectionCard className="shadow-none">
+          <div className="flex min-h-48 items-center justify-center">
+            <span className="text-sm text-muted-foreground">Loading leads...</span>
+          </div>
+        </SectionCard>
       ) : leads.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-white rounded-xl border border-slate-200">
-          <ArrowRight size={40} className="text-slate-300" />
-          <span className="text-sm text-slate-600 mt-3">
-            No leads yet. Add your first lead.
-          </span>
-        </div>
+        <EmptyState
+          icon={ArrowRight}
+          title="No leads yet"
+          description="Add your first lead to start tracking enquiries and follow-ups."
+          action={
+            <Button onClick={openCreate} className="flex items-center gap-2">
+              <Plus size={16} />
+              Add Lead
+            </Button>
+          }
+        />
       ) : (
         <>
           {/* ✅ MOBILE CARDS */}
@@ -167,7 +251,7 @@ export default function Leads() {
                 {leads.map(lead => (
                   <div
                     key={lead.id}
-                    className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+                    className="rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm"
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between">
@@ -175,39 +259,44 @@ export default function Leads() {
                         <p className="text-sm font-semibold truncate">
                           {lead.name}
                         </p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-muted-foreground">
                           {new Date(lead.created_at).toLocaleDateString('en-IN')}
                         </p>
                       </div>
 
-                      <span
-                        className={`ml-2 shrink-0 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${STATUS_COLORS[lead.status] || 'bg-slate-200 text-slate-800'
-                          }`}
+                      <StatusBadge
+                        variant={STATUS_VARIANTS[lead.status] || 'muted'}
+                        className="ml-2 shrink-0"
                       >
                         {lead.status}
-                      </span>
+                      </StatusBadge>
                     </div>
 
-                    {/* Contact (compact row instead of stacked) */}
+                    {/* Contact */}
                     {(lead.contact_phone || lead.contact_email) && (
-                      <div className="mt-3 flex flex-col text-xs text-slate-600"> 
+                      <div className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
                         {lead.contact_phone && (
-                          <span>☎ {lead.contact_phone}</span>
+                          <span className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 shrink-0" />
+                            {lead.contact_phone}
+                          </span>
                         )}
                         {lead.contact_email && (
-                          <span className="truncate">
-                            ✉ {lead.contact_email}</span>
+                          <span className="flex items-center gap-1.5 truncate">
+                            <Mail className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{lead.contact_email}</span>
+                          </span>
                         )}
                       </div>
                     )}
 
-                    {/* Meta + Actions (balanced row) */}
+                    {/* Meta and actions */}
                     <div className="mt-4 flex items-end justify-between">
                       {/* Meta */}
                       <div className="text-xs space-y-1">
                         <div>
-                          <span className="text-slate-400">Source: </span>
-                          <span className="font-medium text-slate-700">
+                          <span className="text-muted-foreground">Source: </span>
+                          <span className="font-medium text-foreground">
                             {lead.lead_source === 'Other' && lead.lead_source_custom
                               ? lead.lead_source_custom
                               : lead.lead_source}
@@ -215,8 +304,8 @@ export default function Leads() {
                         </div>
 
                         <div>
-                          <span className="text-slate-400">Assigned: </span>
-                          <span className="font-medium text-slate-700">
+                          <span className="text-muted-foreground">Assigned: </span>
+                          <span className="font-medium text-foreground">
                             {lead.assignee?.full_name || '—'}
                           </span>
                         </div>
@@ -226,15 +315,15 @@ export default function Leads() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => openEdit(lead)}
-                          className="p-2 rounded-md hover:bg-slate-100 transition"
+                          className="p-2 rounded-md hover:bg-muted transition"
                         >
-                          <Edit2 size={16} className="text-slate-600" />
+                          <Edit2 size={16} className="text-muted-foreground" />
                         </button>
 
                         {canDelete && (
                           <button
                             onClick={() => handleDelete(lead.id)}
-                            className="p-2 rounded-md hover:bg-red-50 text-red-600 transition"
+                            className="p-2 rounded-md hover:bg-destructive/10 text-red-600 transition"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -246,14 +335,14 @@ export default function Leads() {
               </div>
 
           {/* ✅ DESKTOP TABLE (UNCHANGED STRUCTURE) */}
-          <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="hidden overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm md:block">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200">
+                  <tr className="border-b border-border">
                     {['Name', 'Contact', 'Source', 'Status', 'Assigned To', 'Date', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left">
-                        <span className="text-xs text-slate-600 font-semibold uppercase tracking-wide">
+                        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
                           {h}
                         </span>
                       </th>
@@ -265,22 +354,26 @@ export default function Leads() {
                   {leads.map(lead => (
                     <tr
                       key={lead.id}
-                      className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors"
+                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
                     >
                       <td className="px-4 py-3">
-                        <span className="text-sm font-semibold">{lead.name}</span>
+                        <span className="text-sm font-semibold text-foreground">
+                          {lead.name}
+                        </span>
                       </td>
 
                       <td className="px-4 py-3">
-                        <div>
+                        <div className="space-y-1">
                           {lead.contact_email && (
-                            <span className="text-xs text-slate-600 block">
-                              ✉  {lead.contact_email}
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{lead.contact_email}</span>
                             </span>
                           )}
                           {lead.contact_phone && (
-                            <span className="text-xs text-slate-600 block">
-                              ☎  {lead.contact_phone}
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Phone className="h-3.5 w-3.5 shrink-0" />
+                              {lead.contact_phone}
                             </span>
                           )}
                         </div>
@@ -295,9 +388,9 @@ export default function Leads() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wider ${STATUS_COLORS[lead.status] || 'bg-slate-50 text-slate-700'}`}>
+                        <StatusBadge variant={STATUS_VARIANTS[lead.status] || 'muted'}>
                           {lead.status}
-                        </span>
+                        </StatusBadge>
                       </td>
 
                       <td className="px-4 py-3">
@@ -307,7 +400,7 @@ export default function Leads() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className="text-xs text-slate-600">
+                        <span className="text-xs text-muted-foreground">
                           {new Date(lead.created_at).toLocaleDateString('en-IN')}
                         </span>
                       </td>
@@ -316,15 +409,15 @@ export default function Leads() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openEdit(lead)}
-                            className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                            className="p-1.5 rounded hover:bg-muted transition-colors"
                           >
-                            <Edit2 size={16} className="text-slate-600" />
+                            <Edit2 size={16} className="text-muted-foreground" />
                           </button>
 
                           {canDelete && (
                             <button
                               onClick={() => handleDelete(lead.id)}
-                              className="p-1.5 rounded hover:bg-red-50 transition-colors text-red-600"
+                              className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-red-600"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -342,39 +435,44 @@ export default function Leads() {
 
       {/* Lead Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-bold">{editingLead ? 'Edit Lead' : 'Add Lead'}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 px-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] pt-4 backdrop-blur-sm sm:p-4">
+          <div className="flex max-h-[calc(100vh-7.75rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl sm:max-h-[90vh]">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">{editingLead ? 'Edit Lead' : 'Add Lead'}</h2>
             </div>
-            <form onSubmit={handleSave} className="p-6 flex flex-col gap-4">
+            <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
               {error && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-semibold text-red-900">Error</p>
-                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4">
+                  <p className="text-sm font-semibold text-destructive">Error</p>
+                  <p className="mt-1 text-sm text-destructive/80">{error}</p>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-6">
+                <div className="grid grid-cols-1 gap-4">
                 <FormField label="Name *">
                   <input type="text" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     className="form-input" />
                 </FormField>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField label="Email">
                     <input type="email" value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))}
                       className="form-input" />
                   </FormField>
                   <FormField label="Phone">
-                    <input type="tel" value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
-                      className="form-input" />
+                    <PhoneNumberInput
+                      value={form.contact_phone}
+                      onChange={value => setForm(current => ({ ...current, contact_phone: value }))}
+                    />
                   </FormField>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField label="Lead Source">
-                    <select value={form.lead_source} onChange={e => setForm(f => ({ ...f, lead_source: e.target.value }))} className="form-input">
-                      {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <SuggestionSelect
+                      value={form.lead_source}
+                      options={LEAD_SOURCES.map(source => ({ value: source, label: source }))}
+                      onChange={value => setForm(f => ({ ...f, lead_source: value }))}
+                    />
                   </FormField>
                   {form.lead_source === 'Other' && (
                     <FormField label="Custom Source">
@@ -383,32 +481,42 @@ export default function Leads() {
                     </FormField>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField label="Status">
-                    <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="form-input">
-                      {['Open', 'Qualified', 'Converted', 'Rejected', 'Ghosted'].map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <SuggestionSelect
+                      value={form.status}
+                      options={['Open', 'Qualified', 'Converted', 'Rejected', 'Ghosted'].map(status => ({ value: status, label: status }))}
+                      onChange={value => setForm(f => ({ ...f, status: value }))}
+                    />
                   </FormField>
                   <FormField label="Assign To (MS only)">
-                    <select value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} className="form-input">
-                      <option value="">Unassigned</option>
-                      {msMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
-                    </select>
+                    <SuggestionSelect
+                      value={form.assigned_to}
+                      options={[
+                        { value: '', label: 'Unassigned' },
+                        ...msMembers.map(member => ({
+                          value: member.id,
+                          label: member.full_name || member.email,
+                        })),
+                      ]}
+                      onChange={value => setForm(f => ({ ...f, assigned_to: value }))}
+                    />
                   </FormField>
                 </div>
                 <FormField label="Notes">
                   <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                     rows={3} className="form-input resize-none" />
                 </FormField>
+                </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+              <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-border bg-card px-5 py-4 sm:ml-auto sm:flex sm:w-auto sm:min-w-[17rem]">
+                <ModalActionButton onClick={() => setShowModal(false)}>
                   Cancel
-                </button>
-                <Button type="submit">
+                </ModalActionButton>
+                <ModalActionButton type="submit" variant="primary">
                   {editingLead ? 'Save Changes' : 'Create Lead'}
-                </Button>
+                </ModalActionButton>
               </div>
             </form>
           </div>
@@ -417,21 +525,21 @@ export default function Leads() {
 
       {/* Convert to Project modal */}
       {convertModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-bold">Lead Converted!</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 px-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] pt-4 backdrop-blur-sm sm:p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Lead Converted</h2>
             </div>
-            <div className="p-6 flex flex-col gap-4">
-              <p className="text-sm">The lead has been marked as Converted. Would you like to create a project from this lead?</p>
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <button type="button" onClick={() => setConvertModal(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+            <div className="flex flex-col gap-4 p-5">
+              <p className="text-sm text-muted-foreground">The lead has been marked as converted. Create a project from this lead when the handoff is ready.</p>
+              <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
+                <ModalActionButton onClick={() => setConvertModal(null)}>
                   Not Now
-                </button>
-                <Button onClick={handleConvertToProject} className="flex items-center gap-2">
+                </ModalActionButton>
+                <ModalActionButton onClick={handleConvertToProject} variant="primary">
                   <Settings size={16} />
                   Create Project
-                </Button>
+                </ModalActionButton>
               </div>
             </div>
           </div>
@@ -441,10 +549,101 @@ export default function Leads() {
   );
 }
 
+type ModalActionButtonVariant = 'primary' | 'secondary';
+
+function ModalActionButton({
+  children,
+  type = 'button',
+  variant = 'secondary',
+  onClick,
+}: {
+  children: React.ReactNode;
+  type?: 'button' | 'submit';
+  variant?: ModalActionButtonVariant;
+  onClick?: () => void;
+}) {
+  const variantClass =
+    variant === 'primary'
+      ? 'border-transparent bg-primary text-primary-foreground hover:bg-primary/90'
+      : 'border-border bg-background text-foreground hover:bg-muted';
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      className={`inline-flex h-11 min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-0 text-center text-sm font-medium leading-none transition-colors ${variantClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+interface SuggestionSelectOption {
+  value: string;
+  label: string;
+}
+
+function SuggestionSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: SuggestionSelectOption[];
+  onChange: (value: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(option => option.value === value);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(current => !current)}
+        onBlur={() => {
+          window.setTimeout(() => setIsOpen(false), 120);
+        }}
+        className="flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40 focus:border-foreground"
+      >
+        <span className={selectedOption ? 'truncate' : 'truncate text-muted-foreground'}>
+          {selectedOption?.label || 'Select'}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-[80] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value || 'empty-option'}
+                type="button"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
+                  isSelected ? 'bg-muted text-foreground' : 'hover:bg-muted/70'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check className="h-4 w-4 shrink-0 text-muted-foreground" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-contrast-high mb-1.5"
+      <label className="mb-1.5 block text-xs font-medium text-foreground"
         style={{ fontFamily: "'Neue Montreal', sans-serif" }}>
         {label}
       </label>

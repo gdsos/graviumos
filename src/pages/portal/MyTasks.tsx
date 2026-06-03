@@ -1,15 +1,19 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase, type Task, type Subtask, type Profile } from '../../lib/supabase';
+import { DateInput } from '../../components/common/DateInput';
 import { useAuth } from '../../contexts/AuthContext';
 import TaskDetailModal from "../../components/tasks/TaskDetailModal";
 import TasksBoard from "../../components/tasks/TasksBoard";
-import { Calendar, Plus } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Plus, Check, ChevronDown } from 'lucide-react';
 
 // ——— Types ————————————————————————————————————————————————————————————————————
 
 type TaskStatus = 'Not Started' | 'Ongoing' | 'Overdue' | 'Completed';
 
 interface TaskWithDetails extends Task {
+  assignee?: Profile;
   subtasks: Subtask[];
   effectiveStatus: TaskStatus;
   overdueByDays?: number;
@@ -39,10 +43,7 @@ const EMPTY_FORM: TaskFormState = {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        className="block text-xs font-medium text-contrast-high"
-        style={{ fontFamily: "'Montserrat', 'Arial Narrow', Arial, sans-serif" }}
-      >
+      <label className="block text-xs font-medium text-foreground">
         {label}
       </label>
       {children}
@@ -52,9 +53,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 // ——— Constants ————————————————————————————————————————————————————————————————
 
-const FONT = "'Montserrat', 'Arial Narrow', Arial, sans-serif";
-
-const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing', 'Overdue', 'Completed'];
+const STATUSES: TaskStatus[] = ['Not Started', 'Ongoing'];
 
 // ——— Helpers ——————————————————————————————————————————————————————————————————
 
@@ -76,8 +75,162 @@ function calcOverdueDays(task: Task): number | undefined {
 
 // ——— Main Component ———————————————————————————————————————————————————————————
 
+
+
+interface TaskOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+function TaskFormDropdown({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select',
+  disabled = false,
+}: {
+  value: string;
+  options: TaskOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(option => option.value === value);
+  const selectedLabel = selected?.label || placeholder;
+
+  return (
+    <div
+      className={`relative ${open ? "z-[120]" : "z-0"}`}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute bottom-full left-0 z-[200] mb-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={`${option.value}-${option.label}`}
+                type="button"
+                disabled={option.disabled}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  if (option.disabled) return;
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskScopeFilter({
+  value,
+  onChange,
+}: {
+  value: 'all' | 'assigned';
+  onChange: (value: 'all' | 'assigned') => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const options: {
+    value: 'all' | 'assigned';
+    label: string;
+  }[] = [
+    {
+      value: 'all',
+      label: 'All Tasks',
+    },
+    {
+      value: 'assigned',
+      label: 'My Tasks',
+    },
+  ];
+
+  const selected = options.find(option => option.value === value) || options[0];
+
+  return (
+    <div
+      className="relative min-w-0 flex-1 sm:min-w-[220px]"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span className="truncate">{selected.label}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span>{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MyTasks() {
   const { profile, departments, isDeptHead, isAdmin } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'all' | 'assigned'>('all');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
@@ -91,7 +244,6 @@ export default function MyTasks() {
   const [creating, setCreating] = useState(false);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const deadlineDateRef = useRef<HTMLInputElement>(null);
 
   const [detailTask, setDetailTask] = useState<TaskWithDetails | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -175,10 +327,35 @@ export default function MyTasks() {
     const deptMap: Record<string, string> = {};
     for (const d of departments) deptMap[d.id] = d.name;
 
+    // Fetch assignee profiles so Portal task rows do not show assigned tasks as Unassigned.
+    const assigneeIds = [
+      ...new Set(
+        (tasksData as Task[])
+          .map(task => task.assigned_to)
+          .filter(Boolean) as string[]
+      ),
+    ];
+
+    let assigneeMap: Record<string, Profile> = {};
+
+    if (assigneeIds.length > 0) {
+      const { data: assigneeData } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, department_ids, is_active, role')
+        .in('id', assigneeIds);
+
+      if (assigneeData) {
+        for (const assignee of assigneeData as Profile[]) {
+          assigneeMap[assignee.id] = assignee;
+        }
+      }
+    }
+
     const enriched: TaskWithDetails[] = (tasksData as Task[]).map(t => {
       const subtasks = subtaskMap[t.id] || [];
       return {
         ...t,
+        assignee: t.assigned_to ? assigneeMap[t.assigned_to] : undefined,
         subtasks,
         effectiveStatus: calcEffectiveStatus(t),
         overdueByDays: calcOverdueDays(t),
@@ -235,7 +412,12 @@ export default function MyTasks() {
       completed_at: null,
     };
 
-    const { error: err } = await supabase.from('tasks').insert(payload);
+    const { data, error: err } = await supabase
+      .from('tasks')
+      .insert(payload)
+      .select()
+      .single();
+
     setCreating(false);
 
     if (err) {
@@ -243,9 +425,44 @@ export default function MyTasks() {
       return;
     }
 
+    if (data) {
+
+      const createdTask = data as Task;
+
+      const deptMap: Record<string, string> = {};
+
+      for (const department of departments) {
+        deptMap[department.id] = department.name;
+      }
+
+      const optimisticTask: TaskWithDetails = {
+        ...createdTask,
+        subtasks: [],
+        effectiveStatus: calcEffectiveStatus(createdTask),
+        overdueByDays: calcOverdueDays(createdTask),
+        deptName: createdTask.department_id ? deptMap[createdTask.department_id] : undefined,
+      };
+
+      setTasks(prev => [
+        optimisticTask,
+        ...prev.filter(task => task.id !== optimisticTask.id),
+      ]);
+
+      setFilterAssignee('');
+
+      if (createdTask.assigned_to === profile?.id) {
+        setActiveTab('assigned');
+      } else {
+        setActiveTab('all');
+      }
+    }
+
     setShowCreateModal(false);
     setCreateForm(EMPTY_FORM);
-    fetchTasks();
+
+    window.setTimeout(() => {
+      void fetchTasks();
+    }, 750);
   };
 
   // ——— Subtask operations ————————————————————————————————————————————————————
@@ -257,6 +474,24 @@ export default function MyTasks() {
     setShowDetailModal(true);
   };
 
+  useEffect(() => {
+    const taskId = searchParams.get('taskId');
+
+    if (!taskId || loading || tasks.length === 0) return;
+
+    const matchedTask = tasks.find(task => task.id === taskId);
+
+    if (matchedTask) {
+      setDetailTask(matchedTask);
+      setShowDetailModal(true);
+      setSearchParams(current => {
+        const next = new URLSearchParams(current);
+        next.delete('taskId');
+        return next;
+      }, { replace: true });
+    }
+  }, [loading, searchParams, setSearchParams, tasks]);
+
   const handleTaskDeleted = (taskId: string) => {
   setTasks(prev =>
     prev.filter(t => t.id !== taskId)
@@ -267,6 +502,23 @@ export default function MyTasks() {
     setShowDetailModal(false);
   }
 };
+
+  const handleTaskUpdated = (
+    updatedTask: TaskWithDetails
+  ) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === updatedTask.id
+          ? {
+              ...task,
+              ...updatedTask,
+            }
+          : task
+      )
+    );
+
+    setDetailTask(updatedTask);
+  };
 
   // Sync detail task when tasks list updates
   useEffect(() => {
@@ -291,70 +543,51 @@ export default function MyTasks() {
   // ——— Grouped tasks ————————————————————————————————————————————————————————
 
   const totalTasks = filteredTasks.length;
+  const portalEyebrow = departments.find(department => profile?.department_ids?.includes(department.id))?.name ?? 'Gravium OS';
 
   // ——— Render ———————————————————————————————————————————————————————————————
 
   return (
-    <div className="max-w-full" style={{ fontFamily: FONT }}>
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">
-            {isDeptHeadOnly ? 'Tasks' : 'My Tasks'}
-          </h1>
-          <p className="text-xs text-slate-600">
-            {isDeptHeadOnly
-              ? activeTab === 'assigned'
-                ? `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you`
-                : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} in your department`
-              : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you`}
-          </p>
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              {portalEyebrow}
+            </p>
+
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              {isDeptHeadOnly ? 'Tasks' : 'My Tasks'}
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              {isDeptHeadOnly
+                ? activeTab === 'assigned'
+                  ? `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you.`
+                  : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} in your department.`
+                : `${totalTasks} task${totalTasks !== 1 ? 's' : ''} assigned to you.`}
+            </p>
+          </div>
+
+          {isDeptHeadOnly && (
+            <button
+              onClick={openCreateModal}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus size={16} />
+              Add Task
+            </button>
+          )}
         </div>
-        {isDeptHeadOnly && (
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
-          >
-            <Plus size={16} />
-            Add Task
-          </button>
-        )}
       </div>
 
-      {/* Tabs for department heads */}
-      {isDeptHeadOnly && (
-        <div className="flex gap-6 mb-6 border-b border-contrast-low pb-0">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-0 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'all'
-                ? 'text-primary border-b-2 border-primary -mb-[2px]'
-                : 'text-contrast-medium hover:text-primary'
-            }`}
-            style={{ fontFamily: FONT }}
-          >
-            All Tasks
-          </button>
-          <button
-            onClick={() => setActiveTab('assigned')}
-            className={`px-0 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'assigned'
-                ? 'text-primary border-b-2 border-primary -mb-[2px]'
-                : 'text-contrast-medium hover:text-primary'
-            }`}
-            style={{ fontFamily: FONT }}
-          >
-            My Tasks
-          </button>
-        </div>
-      )}
-
       {error && (
-        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-          <p className="text-sm font-medium text-red-900">
+        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+          <p className="text-sm font-medium text-destructive">
             Error loading tasks
           </p>
-          <p className="text-sm text-red-800 mt-1">
+          <p className="mt-1 text-sm text-destructive/85">
             {error}
           </p>
         </div>
@@ -363,7 +596,7 @@ export default function MyTasks() {
       {/* Kanban board */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             Loading your tasks…
           </p>
         </div>
@@ -374,193 +607,207 @@ export default function MyTasks() {
             filterAssignee={filterAssignee}
             setFilterAssignee={setFilterAssignee}
             deptMembers={allProfiles}
+            filterPrefix={
+              isDeptHeadOnly ? (
+                <TaskScopeFilter
+                  value={activeTab}
+                  onChange={setActiveTab}
+                />
+              ) : undefined
+            }
             onCardClick={openDetail}
           />
       )}
 
       {/* —— Create Task Modal (for dept heads) —————————————————————————————— */}
+      {/* ?? Create Task Modal (for dept heads) ?????????????????????????????? */}
       {isDeptHead() && !isAdmin() && showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+            <div className="border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Task Setup
+              </p>
 
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-bold">Add Task</h2>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                Add Task
+              </h2>
             </div>
 
-            <form onSubmit={handleCreateTask} className="flex flex-col gap-4 p-6">
+            <form
+              onSubmit={handleCreateTask}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="flex flex-col gap-5">
+                  {createError && (
+                    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+                      <p className="text-sm font-medium text-destructive">
+                        Error
+                      </p>
 
-              {createError && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-900">Error</p>
-                  <p className="text-sm text-red-800 mt-1">{createError}</p>
-                </div>
-              )}
+                      <p className="mt-1 text-sm text-destructive/85">
+                        {createError}
+                      </p>
+                    </div>
+                  )}
 
-              {/* Title */}
-              <FormField label="Title *">
-                <input
-                  type="text"
-                  required
-                  value={createForm.title}
-                  onChange={e =>
-                    setCreateForm(f => ({ ...f, title: e.target.value }))
-                  }
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
-                  placeholder="Task title"
-                />
-              </FormField>
-
-              {/* Description */}
-              <FormField label="Description">
-                <textarea
-                  value={createForm.description}
-                  onChange={e =>
-                    setCreateForm(f => ({ ...f, description: e.target.value }))
-                  }
-                  rows={3}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors resize-none"
-                  placeholder="Optional description"
-                />
-              </FormField>
-
-              {/* Department + Assignee */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Department">
-                  <select
-                    value={createForm.department_id}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        department_id: e.target.value,
-                        assigned_to: '',
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-slate-100 text-slate-900"
-                    disabled
-                  >
-                    <option value="">— Select —</option>
-                    {departments.map(d => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-
-                <FormField label="Assign To">
-                  <select
-                    value={createForm.assigned_to}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        assigned_to: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    <option value="">Unassigned</option>
-                    {allProfiles
-                      .filter(
-                        p =>
-                          p.department_ids?.includes(createForm.department_id) &&
-                          p.is_active
-                      )
-                      .map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name || p.email}
-                        </option>
-                      ))}
-                  </select>
-                </FormField>
-              </div>
-
-              {/* Project */}
-              {projects.length > 0 && (
-                <FormField label="Project">
-                  <select
-                    value={createForm.project_id}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        project_id: e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    <option value="">— No Project —</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              )}
-
-              {/* Deadline + Status */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Deadline Date">
-                  <div className="relative">
+                  <FormField label="Title *">
                     <input
-                      ref={deadlineDateRef}
-                      type="date"
-                      value={createForm.deadline_date}
-                      onChange={e =>
-                        setCreateForm(f => ({
-                          ...f,
-                          deadline_date: e.target.value,
+                      type="text"
+                      required
+                      value={createForm.title}
+                      onChange={event =>
+                        setCreateForm(current => ({
+                          ...current,
+                          title: event.target.value,
                         }))
                       }
-                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors pr-9"
+                      className="form-input"
+                      placeholder="Task title"
                     />
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2"
-                      onClick={() => deadlineDateRef.current?.showPicker()}
-                    >
-                      <Calendar size={14} className="text-slate-600" />
-                    </button>
-                  </div>
-                </FormField>
+                  </FormField>
 
-                <FormField label="Status">
-                  <select
-                    value={createForm.status}
-                    onChange={e =>
-                      setCreateForm(f => ({
-                        ...f,
-                        status: e.target.value as TaskStatus,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    {STATUSES.filter(s => s !== 'Overdue').map(s => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
+                  <FormField label="Description">
+                    <textarea
+                      value={createForm.description}
+                      onChange={event =>
+                        setCreateForm(current => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      rows={4}
+                      className="min-h-28 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
+                      placeholder="Optional description"
+                    />
+                  </FormField>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Department">
+                      <TaskFormDropdown
+                        value={createForm.department_id}
+                        placeholder="Select department"
+                        disabled
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            department_id: value,
+                            assigned_to: '',
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Select Department' },
+                          ...departments.map(department => ({
+                            value: department.id,
+                            label: department.name,
+                          })),
+                        ]}
+                      />
+                    </FormField>
+
+                    <FormField label="Assign To">
+                      <TaskFormDropdown
+                        value={createForm.assigned_to}
+                        placeholder="Unassigned"
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            assigned_to: value,
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Unassigned' },
+                          ...allProfiles
+                            .filter(
+                              profile =>
+                                profile.department_ids?.includes(createForm.department_id) &&
+                                profile.is_active
+                            )
+                            .map(profile => ({
+                              value: profile.id,
+                              label: profile.full_name || profile.email || 'Unnamed Member',
+                            })),
+                        ]}
+                      />
+                    </FormField>
+                  </div>
+
+                  {projects.length > 0 && (
+                    <FormField label="Project">
+                      <TaskFormDropdown
+                        value={createForm.project_id}
+                        placeholder="No Project"
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            project_id: value,
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'No Project' },
+                          ...projects.map(project => ({
+                            value: project.id,
+                            label: project.name,
+                          })),
+                        ]}
+                      />
+                    </FormField>
+                  )}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Deadline Date">
+                      <DateInput
+                        value={createForm.deadline_date}
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            deadline_date: value,
+                          }))
+                        }
+                        placeholder="Select deadline"
+                        placement="up"
+                      />
+                    </FormField>
+
+                    <FormField label="Status">
+                      <TaskFormDropdown
+                        value={createForm.status}
+                        onChange={value =>
+                          setCreateForm(current => ({
+                            ...current,
+                            status: value as TaskStatus,
+                          }))
+                        }
+                        options={STATUSES.map(status => ({
+                          value: status,
+                          label: status,
+                        }))}
+                      />
+                    </FormField>
+                  </div>
+                </div>
               </div>
 
-              {/* Footer */}
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
+              <div className="shrink-0 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowCreateModal(false)}
+                    className="h-10 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
 
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {creating ? 'Creating...' : 'Create Task'}
-                </button>
+                  <Button
+                    type="submit"
+                    disabled={creating}
+                    className="h-10 rounded-xl"
+                  >
+                    {creating ? 'Creating...' : 'Create Task'}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
@@ -577,6 +824,7 @@ export default function MyTasks() {
         departments={departments}
         canManage={isDeptHead() && !isAdmin()}
         onRefresh={fetchTasks}
+        onTaskUpdated={handleTaskUpdated}
         onTaskDeleted={handleTaskDeleted}
       />
     </div>

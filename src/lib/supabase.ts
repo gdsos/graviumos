@@ -24,6 +24,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   department_ids: string[];
+  page_permissions: Record<string, 'view' | 'manage'>;
   employee_code: string | null;
   phone: string;
   address: string;

@@ -1,0 +1,412 @@
+// Experimental dark liquid-glass mobile bottom nav reference.
+// Kept for future UI work. This .txt file is intentionally not compiled.
+
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  CalendarClock,
+  CheckSquare,
+  ClipboardList,
+  DollarSign,
+  Folder,
+  Home,
+  LayoutGrid,
+  MoreHorizontal,
+  Package,
+  Settings,
+  Store,
+} from 'lucide-react';
+
+import { useAuth } from '@/contexts/AuthContext';
+
+interface MobileBottomNavProps {
+  isAdmin: boolean;
+}
+
+interface MobileNavItem {
+  label: string;
+  icon: typeof Home;
+  path: string;
+}
+
+function getBasePath(isAdmin: boolean) {
+  return isAdmin ? '/admin' : '/portal';
+}
+
+function getPrimaryNavItems(isAdmin: boolean): MobileNavItem[] {
+  const basePath = getBasePath(isAdmin);
+
+  return [
+    {
+      label: 'Home',
+      icon: Home,
+      path: isAdmin ? `${basePath}/dashboard` : `${basePath}/overview`,
+    },
+    {
+      label: 'Projects',
+      icon: Folder,
+      path: `${basePath}/projects`,
+    },
+    {
+      label: 'Tasks',
+      icon: CheckSquare,
+      path: `${basePath}/tasks`,
+    },
+    {
+      label: 'Timeline',
+      icon: CalendarClock,
+      path: `${basePath}/timeline`,
+    },
+  ];
+}
+
+function getMoreNavItems(isAdmin: boolean, isFinance: boolean, isMS: boolean) {
+  const basePath = getBasePath(isAdmin);
+
+  const items: MobileNavItem[] = [
+    {
+      label: 'Cost Estimates',
+      icon: ClipboardList,
+      path: `${basePath}/cost-estimates`,
+    },
+    {
+      label: 'Items',
+      icon: Package,
+      path: `${basePath}/items`,
+    },
+    {
+      label: 'Vendors',
+      icon: Store,
+      path: `${basePath}/vendors`,
+    },
+  ];
+
+  if (isAdmin || isFinance) {
+    items.push({
+      label: 'Financials',
+      icon: DollarSign,
+      path: `${basePath}/financials`,
+    });
+  }
+
+  if (isAdmin || isMS) {
+    items.push({
+      label: 'Leads',
+      icon: LayoutGrid,
+      path: `${basePath}/leads`,
+    });
+  }
+
+  if (isAdmin) {
+    items.push({
+      label: 'Settings',
+      icon: Settings,
+      path: `${basePath}/settings`,
+    });
+  }
+
+  return items;
+}
+
+function getMobileNavItemClass(isActive: boolean) {
+  const baseClass =
+    'relative z-20 flex h-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-[1.05rem] px-2 text-[10px] font-semibold leading-none transition-colors duration-200 ease-in-out';
+
+  if (isActive) {
+    return `${baseClass} text-foreground dark:text-white`;
+  }
+
+  return `${baseClass} text-foreground/45 hover:text-foreground/82 dark:text-white/42 dark:hover:text-white/82`;
+}
+
+export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
+  const location = useLocation();
+  const { isFinance, isMS } = useAuth();
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isBubbleWarping, setIsBubbleWarping] = useState(false);
+  const [isBubbleSkewing, setIsBubbleSkewing] = useState(false);
+  const [bubbleDirection, setBubbleDirection] = useState(0);
+  const [movementDistance, setMovementDistance] = useState(1);
+  const [organicWarp, setOrganicWarp] = useState({
+    radius: '48% 52% 51% 49% / 49% 47% 53% 51%',
+    innerRadius: '50% 48% 52% 50% / 48% 52% 50% 50%',
+    highlightX: '17%',
+    highlightY: '11%',
+  });
+  const navRef = useRef<HTMLDivElement | null>(null);
+  const previousActiveIndexRef = useRef<number | null>(null);
+
+  const primaryItems = getPrimaryNavItems(isAdmin);
+  const moreItems = getMoreNavItems(isAdmin, isFinance(), isMS());
+  const activePrimaryIndex = primaryItems.findIndex(item => location.pathname === item.path);
+  const isMoreActive = moreItems.some(item => location.pathname === item.path);
+  const activeIndex = isMoreOpen || isMoreActive || activePrimaryIndex === -1 ? 4 : activePrimaryIndex;
+
+  const isLongTravel = movementDistance >= 3;
+  const isMediumTravel = movementDistance === 2;
+
+  const travelConfig = {
+    blur: isBubbleWarping ? (isLongTravel ? 2.7 : isMediumTravel ? 1.35 : 0.18) : 0,
+    scaleX: isBubbleWarping ? (isLongTravel ? 1.68 : isMediumTravel ? 1.32 : 1.035) : 1,
+    scaleY: isBubbleWarping ? (isLongTravel ? 0.82 : isMediumTravel ? 0.92 : 0.992) : 1,
+    skew: isBubbleWarping ? bubbleDirection * (isLongTravel ? -17 : isMediumTravel ? -7 : -0.9) : 0,
+    duration: isLongTravel ? 330 : isMediumTravel ? 390 : 500,
+  };
+
+  const activeBubbleStyle: CSSProperties = {
+    left: `calc(${activeIndex * 20}% + 10%)`,
+    width: '3.92rem',
+    borderRadius: organicWarp.radius,
+    filter: `blur(${travelConfig.blur}px)`,
+    transform: `translate(-50%, -50%) scaleX(${isBubbleWarping ? 1.14 : 1}) scaleY(${isBubbleWarping ? 0.97 : 1}) skewX(${isBubbleSkewing ? bubbleDirection * 7 : 0}deg)`,
+    transitionDuration: `${travelConfig.duration}ms`,
+    transitionTimingFunction: movementDistance >= 3 ? 'ease-in-out' : 'cubic-bezier(0.22, 1, 0.36, 1)',
+  };
+
+  const activeBubbleInnerStyle: CSSProperties = {
+    borderRadius: organicWarp.innerRadius,
+    transitionDuration: `${travelConfig.duration}ms`,
+    transitionTimingFunction: movementDistance >= 3 ? 'ease-in-out' : 'cubic-bezier(0.22, 1, 0.36, 1)',
+  };
+
+  const activeBubbleHighlightStyle: CSSProperties = {
+    borderRadius: organicWarp.radius,
+    background: `linear-gradient(105deg,rgba(255,255,255,0.72) 0%,rgba(255,255,255,0.34) 8%,rgba(255,255,255,0.04) 22%,transparent 38%),radial-gradient(circle at ${organicWarp.highlightX} ${organicWarp.highlightY},rgba(255,255,255,0.78),transparent 22%),radial-gradient(circle at 78% 82%,rgba(255,255,255,0.18),transparent 34%)`,
+    transitionDuration: `${travelConfig.duration}ms`,
+    transitionTimingFunction: movementDistance >= 3 ? 'ease-in-out' : 'cubic-bezier(0.22, 1, 0.36, 1)',
+  };
+
+  useEffect(() => {
+    if (previousActiveIndexRef.current === null) {
+      previousActiveIndexRef.current = activeIndex;
+      return;
+    }
+
+    if (previousActiveIndexRef.current === activeIndex) return;
+
+    const previousIndex = previousActiveIndexRef.current;
+    const distance = Math.abs(activeIndex - previousIndex);
+    const direction = activeIndex > previousIndex ? 1 : -1;
+
+    const subtleOrganicShapes = [
+      {
+        radius: '49.6% 50.4% 50.2% 49.8% / 50% 49.4% 50.6% 50%',
+        innerRadius: '50.2% 49.8% 50.4% 49.6% / 49.7% 50.3% 50% 50%',
+        highlightX: '18%',
+        highlightY: '12%',
+      },
+      {
+        radius: '50.5% 49.5% 49.7% 50.3% / 50% 50.6% 49.4% 50%',
+        innerRadius: '49.6% 50.4% 50% 50% / 50.5% 49.5% 50.4% 49.6%',
+        highlightX: '19%',
+        highlightY: '13%',
+      },
+      {
+        radius: '50% 50% 50.7% 49.3% / 49.6% 50% 50.4% 50%',
+        innerRadius: '50.4% 49.6% 50% 50% / 50% 50.4% 49.6% 50%',
+        highlightX: '17%',
+        highlightY: '13%',
+      },
+    ];
+
+    const mediumOrganicShapes = [
+      {
+        radius: '48% 52% 51% 49% / 49% 47% 53% 51%',
+        innerRadius: '50% 48% 52% 50% / 48% 52% 50% 50%',
+        highlightX: '17%',
+        highlightY: '11%',
+      },
+      {
+        radius: '51% 49% 48% 52% / 50% 53% 47% 50%',
+        innerRadius: '48% 52% 50% 50% / 51% 49% 52% 48%',
+        highlightX: '21%',
+        highlightY: '13%',
+      },
+    ];
+
+    const strongOrganicShapes = [
+      {
+        radius: '45% 55% 52% 48% / 48% 44% 56% 52%',
+        innerRadius: '49% 51% 54% 46% / 45% 55% 48% 52%',
+        highlightX: '15%',
+        highlightY: '10%',
+      },
+      {
+        radius: '54% 46% 45% 55% / 51% 57% 43% 49%',
+        innerRadius: '46% 54% 49% 51% / 55% 45% 53% 47%',
+        highlightX: '23%',
+        highlightY: '13%',
+      },
+      {
+        radius: '47% 53% 57% 43% / 45% 50% 55% 50%',
+        innerRadius: '54% 46% 48% 52% / 47% 53% 44% 56%',
+        highlightX: '14%',
+        highlightY: '16%',
+      },
+    ];
+
+    const organicShapes =
+      distance >= 3
+        ? strongOrganicShapes
+        : distance === 2
+          ? mediumOrganicShapes
+          : subtleOrganicShapes;
+
+    const settleDelay =
+      distance >= 3
+        ? 165
+        : distance === 2
+          ? 195
+          : 280;
+
+    previousActiveIndexRef.current = activeIndex;
+    setMovementDistance(distance);
+    setBubbleDirection(direction);
+    setIsBubbleWarping(true);
+    setIsBubbleSkewing(true);
+
+    const skewTimeout = window.setTimeout(() => {
+      setIsBubbleSkewing(false);
+    }, 115);
+
+    const settleTimeout = window.setTimeout(() => {
+      const nextShape = organicShapes[Math.floor(Math.random() * organicShapes.length)];
+      setOrganicWarp(nextShape);
+      setIsBubbleWarping(false);
+      setIsBubbleSkewing(false);
+      setBubbleDirection(0);
+    }, settleDelay);
+
+    return () => {
+      window.clearTimeout(settleTimeout);
+      window.clearTimeout(skewTimeout);
+    };
+  }, [activeIndex]);
+
+  useEffect(() => {
+    if (!isMoreOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+
+      if (target && navRef.current?.contains(target)) return;
+
+      setIsMoreOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isMoreOpen]);
+
+  useEffect(() => {
+    setIsMoreOpen(false);
+  }, [location.pathname]);
+
+  return (
+    <div
+      ref={navRef}
+      className="fixed inset-x-0 bottom-0 z-50 px-4 pb-[calc(env(safe-area-inset-bottom)+0.7rem)] md:hidden"
+    >
+      {isMoreOpen && (
+        <div className="mb-4 overflow-hidden rounded-[1.9rem] border border-white/55 bg-white/58 p-2.5 text-foreground shadow-[0_24px_70px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.70),inset_0_-1px_0_rgba(255,255,255,0.20)] backdrop-blur-[26px] backdrop-saturate-150 dark:border-white/18 dark:bg-black/48 dark:text-white dark:shadow-[0_24px_70px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.05)]">
+          <div className="mb-2 flex items-center justify-between px-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-foreground/55 dark:text-white/52">
+                More
+              </p>
+              <p className="text-xs text-foreground/48 dark:text-white/45">
+                Secondary modules
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMoreOpen(false)}
+              className="rounded-full border border-foreground/10 bg-white/35 px-3 py-1 text-xs font-medium text-foreground/58 backdrop-blur-xl transition hover:bg-white/55 hover:text-foreground dark:border-white/16 dark:bg-white/8 dark:text-white/58 dark:hover:bg-white/14 dark:hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {moreItems.map(item => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex min-h-12 items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-sm font-medium backdrop-blur-xl transition ${
+                    isActive
+                      ? 'border-white/65 bg-white/58 text-foreground shadow-[0_12px_30px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-white/30 dark:bg-white/14 dark:text-white dark:shadow-[0_12px_30px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.18)]'
+                      : 'border-foreground/8 bg-white/30 text-foreground/48 hover:border-foreground/14 hover:bg-white/52 hover:text-foreground dark:border-white/12 dark:bg-white/6 dark:text-white/50 dark:hover:border-white/20 dark:hover:bg-white/11 dark:hover:text-white'
+                  }`}
+                >
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                      isActive ? 'bg-white/48 dark:bg-white/12' : 'bg-white/32 dark:bg-white/7'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <nav className="relative mx-auto h-[3.08rem] max-w-[22rem] overflow-visible rounded-full border border-white/65 bg-white/42 text-foreground shadow-[0_18px_48px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.78),inset_0_-1px_0_rgba(255,255,255,0.22)] backdrop-blur-[28px] backdrop-saturate-150 before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-[linear-gradient(180deg,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.28)_28%,rgba(255,255,255,0.08)_58%,rgba(255,255,255,0.02)_100%)] before:content-[''] after:pointer-events-none after:absolute after:inset-[1px] after:rounded-full after:border after:border-white/40 after:bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.62),transparent_28%),radial-gradient(circle_at_78%_100%,rgba(255,255,255,0.18),transparent_30%)] after:content-[''] dark:border-white/18 dark:bg-black/44 dark:text-white dark:shadow-[0_18px_48px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.20),inset_0_-1px_0_rgba(255,255,255,0.06)] dark:before:bg-[linear-gradient(180deg,rgba(255,255,255,0.24)_0%,rgba(255,255,255,0.075)_28%,rgba(255,255,255,0.018)_58%,rgba(0,0,0,0.22)_100%)] dark:after:border-white/9 dark:after:bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.26),transparent_28%),radial-gradient(circle_at_78%_100%,rgba(255,255,255,0.08),transparent_30%)]">
+        <span
+          aria-hidden="true"
+          style={activeBubbleStyle}
+          className="pointer-events-none absolute top-1/2 z-10 h-[3.92rem] border border-white/75 bg-white/48 shadow-[0_18px_42px_rgba(0,0,0,0.18),inset_1px_1px_0_rgba(255,255,255,0.90),inset_-1px_-1px_0_rgba(255,255,255,0.34),inset_8px_0_12px_rgba(255,255,255,0.22)] backdrop-blur-[30px] backdrop-saturate-150 transition-[left,transform,filter,border-radius] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:border-white/54 dark:bg-white/14 dark:shadow-[0_18px_42px_rgba(0,0,0,0.34),inset_1px_1px_0_rgba(255,255,255,0.70),inset_-1px_-1px_0_rgba(255,255,255,0.13),inset_8px_0_12px_rgba(255,255,255,0.10)]"
+        >
+          <span
+            aria-hidden="true"
+            style={activeBubbleInnerStyle}
+            className="absolute inset-[0.28rem] border border-white/40 bg-white/18 shadow-[inset_0_1px_0_rgba(255,255,255,0.42),inset_0_-1px_0_rgba(255,255,255,0.18)] transition-[border-radius] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] dark:border-white/10 dark:bg-black/42 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.13),inset_0_-1px_0_rgba(255,255,255,0.05)]"
+          />
+          <span
+            aria-hidden="true"
+            style={activeBubbleHighlightStyle}
+            className="absolute inset-0 mix-blend-screen opacity-100 transition-[background,border-radius,opacity] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          />
+        </span>
+
+        <div className="relative z-20 grid h-full grid-cols-5 items-center gap-1 py-1">
+          {primaryItems.map(item => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={getMobileNavItemClass(isActive)}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="max-w-full truncate">{item.label}</span>
+              </Link>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setIsMoreOpen(current => !current)}
+            className={getMobileNavItemClass(isMoreOpen || isMoreActive)}
+            aria-label="Open more navigation"
+            aria-expanded={isMoreOpen}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+            <span>More</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+  );
+}

@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Business Operating System</title>
-    <meta name="description" content="All-in-one business engine for operations, finance, and team management.">
+    <title>Gravium OS</title>
+    <meta name="description" content="Internal operating system for Gravium Design Studio." />
 
     <!-- PWA CORE -->
     <link rel="manifest" href="/manifest.json" />
@@ -16,23 +16,11 @@
     <link rel="shortcut icon" href="/favicon-v2.png" />
 
     <!-- Social -->
-    <meta property="og:image" content="https://bolt.new/static/og_default.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
   </head>
 
   <body>
     <div id="root"></div>
 
-    <script type="module" src="/src/main.tsx"></script>
-
-    <!-- PWA SERVICE WORKER (from PWA Build Studio) -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
-    </script>
-  </body>
+    <script type="module" src="/src/main.tsx"></script>  </body>
 </html>

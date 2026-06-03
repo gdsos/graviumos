@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   supabase,
@@ -9,7 +9,8 @@ import {
 } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
-import { Calendar, Plus } from 'lucide-react';
+import { DateInput } from '../../components/common/DateInput';
+import { Plus, Check, ChevronDown, Search } from 'lucide-react';
 import TaskDetailModal from '../../components/tasks/TaskDetailModal';
 import TasksBoard from '../../components/tasks/TasksBoard';
 import { createNotification } from '../../lib/notifications';
@@ -47,7 +48,6 @@ const DEPT_NAMES = [
 const STATUSES: TaskStatus[] = [
   'Not Started',
   'Ongoing',
-  'Completed',
 ];
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-900 mb-1.5">
+      <label className="block text-xs font-medium text-foreground mb-1.5">
         {label}
       </label>
 
@@ -93,6 +93,191 @@ const EMPTY_FORM: TaskFormState = {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+
+
+
+interface TaskOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+function TaskFormDropdown({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select',
+  disabled = false,
+}: {
+  value: string;
+  options: TaskOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(option => option.value === value);
+  const selectedLabel = selected?.label || placeholder;
+
+  return (
+    <div
+      className={`relative ${open ? "z-[120]" : "z-0"}`}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(current => !current)}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute bottom-full left-0 z-[200] mb-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+          {options.map(option => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={`${option.value}-${option.label}`}
+                type="button"
+                disabled={option.disabled}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => {
+                  if (option.disabled) return;
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check size={14} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface DepartmentFilterOption {
+  name: string;
+  count: number;
+  index: number;
+}
+
+function DepartmentFilter({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: DepartmentFilterOption[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selected = options.find(option => option.name === value);
+  const selectedLabel = selected?.name || 'Select Department';
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  return (
+    <div
+      className="relative min-w-0 flex-1 sm:min-w-[220px]"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(current => !current);
+          setQuery('');
+        }}
+        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 focus:border-primary focus:outline-none"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl">
+          <div className="hidden items-center gap-2 border-b border-border px-3 py-2 sm:flex">
+            <Search size={14} className="text-muted-foreground" />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Search department"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-64 overflow-y-auto p-1">
+            {filteredOptions.map(option => {
+              const isSelected = option.name === value;
+
+              return (
+                <button
+                  key={option.name}
+                  type="button"
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => {
+                    onChange(option.name);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                    isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  <span className="truncate">{option.name}</span>
+
+                  <span className="flex items-center gap-2">
+                    {option.count > 0 && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                        {option.count}
+                      </span>
+                    )}
+
+                    {isSelected && <Check size={14} />}
+                  </span>
+                </button>
+              );
+            })}
+
+            {filteredOptions.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                No department found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Tasks() {
   const location = useLocation();
@@ -129,8 +314,6 @@ export default function Tasks() {
 
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
-
-  const deadlineDateRef = useRef<HTMLInputElement>(null);
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
@@ -182,8 +365,18 @@ export default function Tasks() {
   const fetchTasks = useCallback(
     async (showLoader = false) => {
       try {
+        if (!profile?.id) {
+          return;
+        }
+
         if (showLoader) {
           setLoading(true);
+        }
+
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!authData.user?.id) {
+          return;
         }
 
         // TASKS
@@ -196,7 +389,6 @@ export default function Tasks() {
             });
 
         if (tasksErr) {
-          console.error(tasksErr);
           return;
         }
 
@@ -338,7 +530,7 @@ export default function Tasks() {
       window.history.replaceState(
         {},
         '',
-        '/portal/tasks'
+        '/admin/tasks'
       );
 
       return;
@@ -534,7 +726,7 @@ export default function Tasks() {
             notifTitle,
             notifMessage,
             'task',
-            `/portal/tasks?task=${editingTask.id}`
+            `/portal/tasks?taskId=${editingTask.id}`
           );
         }
       }
@@ -557,6 +749,40 @@ export default function Tasks() {
 
         err = insertError;
 
+        if (!insertError && data) {
+
+          const createdTask = data as Task;
+
+          const createdDeptIndex = DEPT_NAMES.findIndex(name => {
+            const dept = departments.find(d => d.name === name);
+
+            return dept?.id === createdTask.department_id;
+          });
+
+          if (createdDeptIndex >= 0) {
+            setActiveTabIndex(createdDeptIndex);
+          }
+
+          setFilterAssignee('');
+
+          const assignee = createdTask.assigned_to
+            ? allProfiles.find(profile => profile.id === createdTask.assigned_to)
+            : undefined;
+
+          const optimisticTask: TaskWithDetails = {
+            ...createdTask,
+            assignee,
+            subtasks: [],
+            effectiveStatus: calcEffectiveStatus(createdTask),
+            overdueByDays: calcOverdueDays(createdTask),
+          };
+
+          setTasks(prev => [
+            optimisticTask,
+            ...prev.filter(task => task.id !== optimisticTask.id),
+          ]);
+        }
+
         if (
           !insertError &&
           data &&
@@ -567,7 +793,7 @@ export default function Tasks() {
             'New Task Assigned',
             `You were assigned: ${form.title}`,
             'task',
-            `/portal/tasks?task=${data.id}`
+            `/portal/tasks?taskId=${data.id}`
           );
         }
       }
@@ -578,8 +804,10 @@ export default function Tasks() {
       }
 
       setShowTaskModal(false);
+      setForm(EMPTY_FORM);
 
-      await fetchTasks();
+      // Keep the optimistic task visible after creation.
+      // A background refetch can hide the new row when Supabase/RLS filters have not caught up yet.
     } catch (error) {
       console.error(error);
 
@@ -607,10 +835,27 @@ export default function Tasks() {
     window.history.replaceState(
       {},
       '',
-      '/portal/tasks'
+      '/admin/tasks'
     );
 
     fetchTasks();
+  };
+
+  const handleTaskUpdated = (
+    updatedTask: TaskWithDetails
+  ) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === updatedTask.id
+          ? {
+              ...task,
+              ...updatedTask,
+            }
+          : task
+      )
+    );
+
+    setSelectedTask(updatedTask);
   };
 
   // ─── Active Tasks ──────────────────────────────────────────────────────────
@@ -627,51 +872,94 @@ export default function Tasks() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+
+  const departmentFilterOptions = DEPT_NAMES.reduce<DepartmentFilterOption[]>(
+    (items, deptName, index) => {
+      const dept =
+        departments.find(
+          d => d.name === deptName
+        );
+
+      if (
+        !isAdmin() &&
+        dept &&
+        !profile?.department_ids?.includes(
+          dept.id
+        )
+      ) {
+        return items;
+      }
+
+      items.push({
+        name: deptName,
+        index,
+        count: dept ? tabTasks(dept.id).length : 0,
+      });
+
+      return items;
+    },
+    []
+  );
+
+  const handleDepartmentFilterChange = (deptName: string) => {
+    const nextIndex = Array.from<string>(DEPT_NAMES).indexOf(deptName);
+
+    if (nextIndex < 0) return;
+
+    setActiveTabIndex(nextIndex);
+    setFilterAssignee('');
+  };
+
   return (
-    <div className="max-w-full">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
       {/* Header */}
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">
-            Tasks
-          </h1>
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Gravium OS
+            </p>
 
-          <p className="text-xs text-slate-600">
-            Manage department tasks
-            across your organisation
-          </p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Tasks
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              Manage department tasks across your organisation.
+            </p>
+          </div>
+
+          {canManage && (
+            <Button
+              onClick={openCreate}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium"
+            >
+              <Plus size={16} />
+              Add Task
+            </Button>
+          )}
         </div>
-
-        {canManage && (
-          <Button
-            onClick={openCreate}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Add Task
-          </Button>
-        )}
       </div>
 
       {/* Error */}
 
       {error && (
-        <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-          <p className="text-sm font-medium text-red-900">
+        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+          <p className="text-sm font-medium text-destructive">
             Error
           </p>
 
-          <p className="text-sm text-red-800 mt-1">
+          <p className="mt-1 text-sm text-destructive/85">
             {error}
           </p>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Department Switcher */}
 
-      <div className="border-b border-slate-200 mb-6">
-        <div className="flex gap-6 overflow-x-auto">
+      <div className="mb-6 hidden overflow-x-auto rounded-2xl border border-border bg-card/60 p-2 md:block">
+        <div className="flex min-w-max gap-2">
           {DEPT_NAMES.map(
             (deptName, idx) => {
               const dept =
@@ -696,6 +984,8 @@ export default function Tasks() {
                   tabTasks(dept.id).length;
               }
 
+              const isActive = idx === activeTabIndex;
+
               return (
                 <button
                   key={deptName}
@@ -708,17 +998,25 @@ export default function Tasks() {
                       ''
                     );
                   }}
-                  className={`py-3 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
-                    idx === activeTabIndex
-                      ? 'border-slate-900 text-slate-900'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  {deptName}
+                  <span>{deptName}</span>
 
-                  {deptTaskCount > 0
-                    ? ` (${deptTaskCount})`
-                    : ''}
+                  {deptTaskCount > 0 && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        isActive
+                          ? 'bg-primary-foreground/15 text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {deptTaskCount}
+                    </span>
+                  )}
                 </button>
               );
             }
@@ -739,6 +1037,15 @@ export default function Tasks() {
             setFilterAssignee
           }
           deptMembers={deptMembers}
+          filterPrefix={
+            <div className="min-w-0 flex-1 sm:min-w-[220px] md:hidden">
+              <DepartmentFilter
+                value={activeDeptName}
+                options={departmentFilterOptions}
+                onChange={handleDepartmentFilterChange}
+              />
+            </div>
+          }
           onCardClick={setSelectedTask}
         />
       )}
@@ -746,271 +1053,197 @@ export default function Tasks() {
       {/* Modal */}
 
       {showTaskModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-bold">
-                {editingTask
-                  ? 'Edit Task'
-                  : 'Add Task'}
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+            <div className="border-b border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Task Setup
+              </p>
+
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                {editingTask ? 'Edit Task' : 'Add Task'}
               </h2>
             </div>
 
             <form
               onSubmit={handleSaveTask}
-              className="flex flex-col gap-4 p-6"
+              className="flex min-h-0 flex-1 flex-col"
             >
-              {formError && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-900">
-                    Error
-                  </p>
+              <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="flex flex-col gap-5">
+                  {formError && (
+                    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4">
+                      <p className="text-sm font-medium text-destructive">
+                        Error
+                      </p>
 
-                  <p className="text-sm text-red-800 mt-1">
-                    {formError}
-                  </p>
-                </div>
-              )}
+                      <p className="mt-1 text-sm text-destructive/85">
+                        {formError}
+                      </p>
+                    </div>
+                  )}
 
-              {/* Title */}
-
-              <FormField label="Title *">
-                <input
-                  type="text"
-                  required
-                  value={form.title}
-                  onChange={e =>
-                    setForm(f => ({
-                      ...f,
-                      title:
-                        e.target.value,
-                    }))
-                  }
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors"
-                  placeholder="Task title"
-                />
-              </FormField>
-
-              {/* Description */}
-
-              <FormField label="Description">
-                <textarea
-                  value={form.description}
-                  onChange={e =>
-                    setForm(f => ({
-                      ...f,
-                      description:
-                        e.target.value,
-                    }))
-                  }
-                  rows={3}
-                  className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 transition-colors resize-none"
-                  placeholder="Optional description"
-                />
-              </FormField>
-
-              {/* Department + Assignee */}
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Department">
-                  <select
-                    value={
-                      form.department_id
-                    }
-                    onChange={e =>
-                      setForm(f => ({
-                        ...f,
-                        department_id:
-                          e.target.value,
-                        assigned_to: '',
-                      }))
-                    }
-                    disabled={
-                      !isAdmin() &&
-                      isDeptHead()
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    <option value="">
-                      — Select —
-                    </option>
-
-                    {departments.map(d => (
-                      <option
-                        key={d.id}
-                        value={d.id}
-                      >
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-
-                <FormField label="Assign To">
-                  <select
-                    value={
-                      form.assigned_to
-                    }
-                    onChange={e =>
-                      setForm(f => ({
-                        ...f,
-                        assigned_to:
-                          e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    <option value="">
-                      Unassigned
-                    </option>
-
-                    {(form.department_id
-                      ? allProfiles.filter(
-                          p =>
-                            p.department_ids?.includes(
-                              form.department_id
-                            ) &&
-                            p.is_active
-                        )
-                      : allProfiles.filter(
-                          p => p.is_active
-                        )
-                    ).map(p => (
-                      <option
-                        key={p.id}
-                        value={p.id}
-                      >
-                        {p.full_name ||
-                          p.email}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-
-              {/* Project */}
-
-              {projects.length > 0 && (
-                <FormField label="Project">
-                  <select
-                    value={
-                      form.project_id
-                    }
-                    onChange={e =>
-                      setForm(f => ({
-                        ...f,
-                        project_id:
-                          e.target.value,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    <option value="">
-                      — No Project —
-                    </option>
-
-                    {projects.map(p => (
-                      <option
-                        key={p.id}
-                        value={p.id}
-                      >
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              )}
-
-              {/* Date + Status */}
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Deadline Date">
-                  <div className="relative">
+                  <FormField label="Title *">
                     <input
-                      ref={
-                        deadlineDateRef
-                      }
-                      type="date"
-                      value={
-                        form.deadline_date
-                      }
-                      onChange={e =>
-                        setForm(f => ({
-                          ...f,
-                          deadline_date:
-                            e.target.value,
+                      type="text"
+                      required
+                      value={form.title}
+                      onChange={event =>
+                        setForm(current => ({
+                          ...current,
+                          title: event.target.value,
                         }))
                       }
-                      className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors pr-9"
+                      className="form-input"
+                      placeholder="Task title"
                     />
+                  </FormField>
 
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      aria-label="Pick date"
-                      className="absolute right-2 top-1/2 -translate-y-1/2"
-                      onClick={() =>
-                        deadlineDateRef.current?.showPicker()
+                  <FormField label="Description">
+                    <textarea
+                      value={form.description}
+                      onChange={event =>
+                        setForm(current => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
                       }
-                    >
-                      <Calendar
-                        size={14}
-                        className="text-slate-600"
-                      />
-                    </button>
-                  </div>
-                </FormField>
+                      rows={4}
+                      className="min-h-28 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none"
+                      placeholder="Optional description"
+                    />
+                  </FormField>
 
-                <FormField label="Status">
-                  <select
-                    value={form.status}
-                    onChange={e =>
-                      setForm(f => ({
-                        ...f,
-                        status:
-                          e.target
-                            .value as TaskStatus,
-                      }))
-                    }
-                    className="w-full px-4 py-2 rounded-lg border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-slate-900 transition-colors"
-                  >
-                    {STATUSES.map(s => (
-                      <option
-                        key={s}
-                        value={s}
-                      >
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Department">
+                      <TaskFormDropdown
+                        value={form.department_id}
+                        placeholder="Select department"
+                        disabled={!isAdmin() && isDeptHead()}
+                        onChange={value =>
+                          setForm(current => ({
+                            ...current,
+                            department_id: value,
+                            assigned_to: '',
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Select Department' },
+                          ...departments.map(department => ({
+                            value: department.id,
+                            label: department.name,
+                          })),
+                        ]}
+                      />
+                    </FormField>
+
+                    <FormField label="Assign To">
+                      <TaskFormDropdown
+                        value={form.assigned_to}
+                        placeholder="Unassigned"
+                        onChange={value =>
+                          setForm(current => ({
+                            ...current,
+                            assigned_to: value,
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Unassigned' },
+                          ...(form.department_id
+                            ? allProfiles.filter(
+                                profile =>
+                                  profile.department_ids?.includes(form.department_id) &&
+                                  profile.is_active
+                              )
+                            : allProfiles.filter(profile => profile.is_active)
+                          ).map(profile => ({
+                            value: profile.id,
+                            label: profile.full_name || profile.email || 'Unnamed Member',
+                          })),
+                        ]}
+                      />
+                    </FormField>
+                  </div>
+
+                  {projects.length > 0 && (
+                    <FormField label="Project">
+                      <TaskFormDropdown
+                        value={form.project_id}
+                        placeholder="No Project"
+                        onChange={value =>
+                          setForm(current => ({
+                            ...current,
+                            project_id: value,
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'No Project' },
+                          ...projects.map(project => ({
+                            value: project.id,
+                            label: project.name,
+                          })),
+                        ]}
+                      />
+                    </FormField>
+                  )}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Deadline Date">
+                      <DateInput
+                        value={form.deadline_date}
+                        onChange={value =>
+                          setForm(current => ({
+                            ...current,
+                            deadline_date: value,
+                          }))
+                        }
+                        placeholder="Select deadline"
+                        placement="up"
+                      />
+                    </FormField>
+
+                    <FormField label="Status">
+                      <TaskFormDropdown
+                        value={form.status}
+                        onChange={value =>
+                          setForm(current => ({
+                            ...current,
+                            status: value as TaskStatus,
+                          }))
+                        }
+                        options={STATUSES.map(status => ({
+                          value: status,
+                          label: status,
+                        }))}
+                      />
+                    </FormField>
+                  </div>
+                </div>
               </div>
 
-              {/* Actions */}
+              <div className="shrink-0 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:px-6">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowTaskModal(false)}
+                    className="h-10 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
 
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    setShowTaskModal(
-                      false
-                    )
-                  }
-                >
-                  Cancel
-                </Button>
-
-                <Button
-                  type="submit"
-                  disabled={saving}
-                >
-                  {saving
-                    ? 'Saving...'
-                    : editingTask
-                    ? 'Save Changes'
-                    : 'Create Task'}
-                </Button>
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    className="h-10 rounded-xl"
+                  >
+                    {saving
+                      ? 'Saving...'
+                      : editingTask
+                        ? 'Save Changes'
+                        : 'Create Task'}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
@@ -1028,12 +1261,13 @@ export default function Tasks() {
           window.history.replaceState(
             {},
             '',
-            '/portal/tasks'
+            '/admin/tasks'
           );
         }}
         departments={departments}
         canManage={canManage}
         onRefresh={fetchTasks}
+        onTaskUpdated={handleTaskUpdated}
         onTaskDeleted={handleTaskDeleted}
       />
     </div>
