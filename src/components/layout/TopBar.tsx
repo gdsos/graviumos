@@ -1,6 +1,6 @@
 import { GraviumLogo } from '@/components/common/GraviumLogo';
 import { ThemeModeToggle } from '@/components/common/ThemeModeToggle';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
@@ -53,6 +53,19 @@ export default function TopBar({}: TopBarProps) {
     
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
+  const fetchNotifications = useCallback(async () => {
+    if (!profile) return;
+
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    setNotifications(data || []);
+  }, [profile?.id]);
+
   useEffect(() => {
     const handleTaskNotificationsDeleted = (event: Event) => {
       const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
@@ -84,17 +97,6 @@ export default function TopBar({}: TopBarProps) {
 
   useEffect(() => {
     if (!profile) return;
-
-    const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", profile.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      setNotifications(data || []);
-    };
 
     const fetchAnnouncements = async () => {
       let query = supabase
@@ -225,7 +227,44 @@ export default function TopBar({}: TopBarProps) {
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(announcementsChannel);
     };
-  }, [profile]);
+  }, [profile, fetchNotifications]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (notificationsOpen) {
+      fetchNotifications();
+    }
+  }, [fetchNotifications, notificationsOpen, profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    };
+
+    const handleFocus = () => {
+      refreshIfVisible();
+    };
+
+    const handleVisibilityChange = () => {
+      refreshIfVisible();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const interval = window.setInterval(refreshIfVisible, 20000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [fetchNotifications, profile]);
 
   const markAllRead = async () => {
     if (!profile) return;
