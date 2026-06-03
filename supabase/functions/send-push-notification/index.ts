@@ -110,7 +110,7 @@ Deno.serve(async request => {
     title: body.title || "Gravium OS",
     body: body.body || "You have a new notification.",
     icon: body.icon || "/icons/icon-192.png",
-    badge: body.badge || "/icons/icon-192.png",
+    badge: body.badge || "/icons/notification-badge-96.png",
     url: body.url || "/portal/overview",
   });
 

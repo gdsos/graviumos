@@ -98,7 +98,7 @@ self.addEventListener("push", event => {
     title: "Gravium OS",
     body: "You have a new notification.",
     icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    badge: "/icons/notification-badge-96.png",
     url: "/portal/overview",
   };
 
@@ -116,7 +116,7 @@ self.addEventListener("push", event => {
   const notificationOptions = {
     body: payload.body,
     icon: payload.icon || "/icons/icon-192.png",
-    badge: payload.badge || "/icons/icon-192.png",
+    badge: payload.badge || "/icons/notification-badge-96.png",
     data: {
       url: payload.url || "/portal/overview",
     },
