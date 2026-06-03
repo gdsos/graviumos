@@ -17,7 +17,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { hasPermission } from "@/auth/permissions";
 import { supabase } from "../../lib/supabase";
-import { Bell, Megaphone, LogOut, User, Settings } from "lucide-react";
+import { Bell, Megaphone, LogOut, User, Settings, Shield } from "lucide-react";
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -440,14 +440,30 @@ export default function TopBar({}: TopBarProps) {
               onClick={() => navigate(accountRoute)}
               className="cursor-pointer flex items-center gap-2"
             >
-              {isAdmin ? (
-                <Settings size={16} />
-              ) : (
-                <User size={16} />
-              )}
+              <User size={16} />
 
               {accountLabel}
             </DropdownMenuItem>
+
+            {isAdmin && (
+              <DropdownMenuItem
+                onClick={() => navigate("/admin/dashboard")}
+                className="cursor-pointer flex items-center gap-2"
+              >
+                <Shield size={16} />
+                Admin Console
+              </DropdownMenuItem>
+            )}
+
+            {isAdmin && (
+              <DropdownMenuItem
+                onClick={() => navigate("/admin/settings")}
+                className="cursor-pointer flex items-center gap-2"
+              >
+                <Settings size={16} />
+                Admin Settings
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem
               onClick={signOut}

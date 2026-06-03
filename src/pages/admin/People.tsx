@@ -404,11 +404,25 @@ export default function People() {
 
     try {
       if (editingEmployee) {
-        // —— UPDATE existing employee ——
+        // ?? UPDATE existing employee ??
+        let employeeCode = editingEmployee.employee_code;
+
+        if (!employeeCode && form.department_ids.length > 0) {
+          const firstDeptId = form.department_ids[0];
+          const dept = departments.find(d => d.id === firstDeptId);
+
+          if (!dept) {
+            throw new Error('Selected department not found.');
+          }
+
+          employeeCode = await generateEmployeeCode(dept.code);
+        }
+
         const updates: Partial<Profile> = {
           full_name: form.full_name,
-          role: form.role,
+          role: editingEmployee.role === 'super_admin' ? 'super_admin' : form.role,
           department_ids: form.department_ids,
+          employee_code: employeeCode,
           base_salary: form.base_salary ? parseFloat(form.base_salary) : 0,
           phone: form.phone,
           address: form.address,
