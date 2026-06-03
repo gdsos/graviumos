@@ -33,12 +33,20 @@ export default function CreateAdminPage() {
       return;
     }
 
-    if (adminKey !== 'GRAVIUM_ADMIN_2024') {
+    setLoading(true);
+
+    const { data: isValidAdminKey, error: adminKeyError } = await supabase.rpc(
+      'verify_admin_key',
+      {
+        input_key: adminKey.trim(),
+      }
+    );
+
+    if (adminKeyError || !isValidAdminKey) {
       setError('Invalid admin key.');
+      setLoading(false);
       return;
     }
-
-    setLoading(true);
 
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
