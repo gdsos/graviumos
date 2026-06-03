@@ -1,7 +1,7 @@
 import { GraviumLogo } from '@/components/common/GraviumLogo';
 import { ThemeModeToggle } from '@/components/common/ThemeModeToggle';
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
   DropdownMenu,
@@ -25,6 +25,7 @@ interface TopBarProps {
 
 export default function TopBar({}: TopBarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile, signOut } = useAuth();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -43,14 +44,10 @@ export default function TopBar({}: TopBarProps) {
     );
   }).length;
   const isAdmin = hasPermission(profile?.role, "settings.view");
-  const accountRoute = isAdmin
-    ? "/admin/settings"
-    : "/portal/profile";
-  
-  const accountLabel = isAdmin
-    ? "Settings"
-    : "Account Settings";
-    
+  const isInAdminConsole = location.pathname.startsWith("/admin");
+  const accountRoute = isInAdminConsole ? "/admin/settings" : "/portal/profile";
+  const accountLabel = isInAdminConsole ? "Admin Settings" : "Account Settings";
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const fetchNotifications = useCallback(async () => {
@@ -440,28 +437,29 @@ export default function TopBar({}: TopBarProps) {
               onClick={() => navigate(accountRoute)}
               className="cursor-pointer flex items-center gap-2"
             >
-              <User size={16} />
+              {isInAdminConsole ? (
+                <Settings size={16} />
+              ) : (
+                <User size={16} />
+              )}
 
               {accountLabel}
             </DropdownMenuItem>
 
             {isAdmin && (
               <DropdownMenuItem
-                onClick={() => navigate("/admin/dashboard")}
+                onClick={() =>
+                  navigate(isInAdminConsole ? "/portal/overview" : "/admin/dashboard")
+                }
                 className="cursor-pointer flex items-center gap-2"
               >
-                <Shield size={16} />
-                Admin Console
-              </DropdownMenuItem>
-            )}
+                {isInAdminConsole ? (
+                  <User size={16} />
+                ) : (
+                  <Shield size={16} />
+                )}
 
-            {isAdmin && (
-              <DropdownMenuItem
-                onClick={() => navigate("/admin/settings")}
-                className="cursor-pointer flex items-center gap-2"
-              >
-                <Settings size={16} />
-                Admin Settings
+                {isInAdminConsole ? "Employee Portal" : "Admin Console"}
               </DropdownMenuItem>
             )}
 

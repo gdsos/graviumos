@@ -59,12 +59,7 @@ export default function LoginPage({ portalType }: LoginPageProps) {
         return;
       }
 
-      if (portalType === 'employee' && userRole === 'super_admin') {
-        navigate('/admin/dashboard');
-        return;
-      }
-
-      navigate(portalType === 'admin' ? '/admin/dashboard' : '/portal/overview');
+      navigate('/portal/overview');
     }
 
     setLoading(false);
@@ -193,15 +188,15 @@ export default function LoginPage({ portalType }: LoginPageProps) {
                 </p>
               </div>
             ) : (
-              <p className="text-center text-sm text-muted-foreground">
-                Admin?{' '}
-                <Link
-                  to="/login/admin"
-                  className="font-medium text-foreground underline hover:text-muted-foreground"
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setError('Password reset is not available yet. Please contact the admin.')}
+                  className="text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:text-muted-foreground"
                 >
-                  Switch to Admin Portal
-                </Link>
-              </p>
+                  Forgot Password?
+                </button>
+              </div>
             )}
           </div>
         </div>

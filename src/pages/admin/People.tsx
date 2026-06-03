@@ -384,15 +384,24 @@ export default function People() {
   // ——— Toggle dept selection ———————————————————————————————————————————————————
 
   const toggleDept = (deptId: string) => {
-    setForm(f => {
-      const already = f.department_ids.includes(deptId);
+    setForm(current => {
+      const already = current.department_ids.includes(deptId);
+      const nextDepartmentIds = already ? [] : [deptId];
+      const nextDepartmentCodes = nextDepartmentIds
+        .map(id => departments.find(department => department.id === id)?.code)
+        .filter(Boolean) as string[];
+
       return {
-        ...f,
-        department_ids: already
-          ? f.department_ids.filter(id => id !== deptId)
-          : [...f.department_ids, deptId],
+        ...current,
+        department_ids: nextDepartmentIds,
+        page_permissions: getDefaultPagePermissions({
+          role: current.role,
+          departmentCodes: nextDepartmentCodes,
+        }),
       };
     });
+
+    setPermissionsTouched(true);
   };
 
   // ——— Save (create or update) —————————————————————————————————————————————————
@@ -404,10 +413,10 @@ export default function People() {
 
     try {
       if (editingEmployee) {
-        // ?? UPDATE existing employee ??
+        // UPDATE existing employee
         let employeeCode = editingEmployee.employee_code;
 
-        if (!employeeCode && form.department_ids.length > 0) {
+        if (form.department_ids.length > 0) {
           const firstDeptId = form.department_ids[0];
           const dept = departments.find(d => d.id === firstDeptId);
 
@@ -415,7 +424,11 @@ export default function People() {
             throw new Error('Selected department not found.');
           }
 
-          employeeCode = await generateEmployeeCode(dept.code);
+          const expectedCodePrefix = `GDS${new Date().getFullYear()}${dept.code}`;
+
+          if (!employeeCode || !employeeCode.startsWith(expectedCodePrefix)) {
+            employeeCode = await generateEmployeeCode(dept.code);
+          }
         }
 
         const updates: Partial<Profile> = {
@@ -894,7 +907,7 @@ export default function People() {
 
                   <div>
                     <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      Departments *
+                      Department *
                     </label>
                     <div className="flex flex-wrap gap-3">
                       {departments.map(dept => {
@@ -921,7 +934,7 @@ export default function People() {
                       <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                         <Filter className="h-3.5 w-3.5" />
                         <span>
-                          Employee code:{' '}
+                          Employee code preview:{' '}
                           <span className="font-mono font-semibold text-foreground">
                             {generatingCode ? 'Generating...' : previewCode || '-'}
                           </span>

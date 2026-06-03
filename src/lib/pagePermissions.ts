@@ -158,8 +158,6 @@ export function getPageAccess(
   profile: Profile | null | undefined,
   key: PagePermissionKey
 ): PageAccess {
-  if (profile?.role === 'super_admin') return 'manage';
-
   return normalizePagePermissions(profile?.page_permissions)[key] ?? 'hidden';
 }
 
