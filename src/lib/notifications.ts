@@ -1,5 +1,29 @@
 import { supabase } from './supabase';
 
+async function sendPushNotification(
+  userId: string,
+  title: string,
+  message: string,
+  link: string
+) {
+  try {
+    const { error } = await supabase.functions.invoke('send-push-notification', {
+      body: {
+        userId,
+        title,
+        body: message,
+        url: link || '/portal/overview',
+      },
+    });
+
+    if (error) {
+      console.error('Failed to send push notification', error);
+    }
+  } catch (error) {
+    console.error('Failed to send push notification', error);
+  }
+}
+
 export async function createNotification(
   userId: string,
   title: string,
@@ -9,7 +33,7 @@ export async function createNotification(
 ) {
   if (!userId) return;
 
-  await supabase
+  const { error } = await supabase
     .from('notifications')
     .insert({
       user_id: userId,
@@ -18,6 +42,13 @@ export async function createNotification(
       type,
       link,
     });
+
+  if (error) {
+    console.error('Failed to create notification', error);
+    return;
+  }
+
+  await sendPushNotification(userId, title, message, link);
 }
 
 export async function deleteTaskNotifications(taskId: string) {
