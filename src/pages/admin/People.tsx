@@ -17,6 +17,7 @@ import { supabase, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader } from '../../components/common/PageHeader';
 import { PhoneNumberInput } from '../../components/common/PhoneNumberInput';
+import { PAGE_PERMISSION_CONFIGS, getDefaultPagePermissions, normalizePagePermissions, type PageAccess, type PagePermissionKey, type PagePermissions } from '../../lib/pagePermissions';
 
 // ——— Types ———————————————————————————————————————————————————————————————————
 
@@ -37,6 +38,7 @@ interface EmployeeForm {
   pf_enabled: boolean;
   esi_enabled: boolean;
   professional_tax_enabled: boolean;
+  page_permissions: PagePermissions;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -64,6 +66,7 @@ const EMPTY_FORM: EmployeeForm = {
   pf_enabled: false,
   esi_enabled: false,
   professional_tax_enabled: false,
+  page_permissions: {},
 };
 
 // ——— Employee Code Generation —————————————————————————————————————————————————
@@ -193,6 +196,7 @@ export default function People() {
   const [saving, setSaving] = useState(false);
   const [deptHeadWarning, setDeptHeadWarning] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [permissionsTouched, setPermissionsTouched] = useState(false);
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
@@ -288,10 +292,65 @@ export default function People() {
     setDeptHeadWarning(warning);
   }, [form.role, form.department_ids, editingEmployee, checkDeptHeadConflict]);
 
+  const selectedDepartmentCodes = form.department_ids
+    .map(id => departments.find(department => department.id === id)?.code)
+    .filter(Boolean) as string[];
+
+  const suggestedPagePermissions = getDefaultPagePermissions({
+    role: form.role,
+    departmentCodes: selectedDepartmentCodes,
+  });
+
+  useEffect(() => {
+    if (editingEmployee || permissionsTouched) return;
+
+    setForm(current => ({
+      ...current,
+      page_permissions: getDefaultPagePermissions({
+        role: current.role,
+        departmentCodes: current.department_ids
+          .map(id => departments.find(department => department.id === id)?.code)
+          .filter(Boolean) as string[],
+      }),
+    }));
+  }, [editingEmployee, permissionsTouched, form.role, form.department_ids, departments]);
+
+  const setPagePermission = (key: PagePermissionKey, access: PageAccess) => {
+    setPermissionsTouched(true);
+
+    setForm(current => {
+      const nextPermissions = {
+        ...current.page_permissions,
+      };
+
+      if (access === 'hidden') {
+        delete nextPermissions[key];
+      } else {
+        nextPermissions[key] = access;
+      }
+
+      return {
+        ...current,
+        page_permissions: nextPermissions,
+      };
+    });
+  };
+
+  const applySuggestedPagePermissions = () => {
+    setPermissionsTouched(true);
+
+    setForm(current => ({
+      ...current,
+      page_permissions: suggestedPagePermissions,
+    }));
+  };
+
+
   // ——— Modal helpers ———————————————————————————————————————————————————————————
 
   const openCreate = () => {
     setEditingEmployee(null);
+    setPermissionsTouched(false);
     setForm(EMPTY_FORM);
     setPreviewCode('');
     setError('');
@@ -314,7 +373,9 @@ export default function People() {
       pf_enabled: emp.pf_enabled ?? false,
       esi_enabled: emp.esi_enabled ?? false,
       professional_tax_enabled: emp.professional_tax_enabled ?? false,
+      page_permissions: normalizePagePermissions(emp.page_permissions),
     });
+    setPermissionsTouched(true);
     setError('');
     setDeptHeadWarning('');
     setShowModal(true);
@@ -355,6 +416,7 @@ export default function People() {
           pf_enabled: form.pf_enabled,
           esi_enabled: form.esi_enabled,
           professional_tax_enabled: form.professional_tax_enabled,
+          page_permissions: form.page_permissions,
           updated_at: new Date().toISOString(),
         };
 
@@ -416,6 +478,7 @@ export default function People() {
           pf_enabled: form.pf_enabled,
           esi_enabled: form.esi_enabled,
           professional_tax_enabled: form.professional_tax_enabled,
+          page_permissions: form.page_permissions,
           kpi_score: 0,
           is_active: true,
         };
@@ -851,6 +914,74 @@ export default function People() {
                         </span>
                       </div>
                     )}
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-background/40 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Page Permissions
+                        </label>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Choose which portal pages this user can see or manage.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={applySuggestedPagePermissions}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+                      >
+                        Apply Suggested Defaults
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      {PAGE_PERMISSION_CONFIGS.map(permission => {
+                        const currentAccess = form.page_permissions[permission.key] ?? 'hidden';
+
+                        return (
+                          <div
+                            key={permission.key}
+                            className="rounded-xl border border-border bg-card p-3"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {permission.label}
+                                  </p>
+                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    {permission.group}
+                                  </span>
+                                </div>
+
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                  {permission.description}
+                                </p>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-background p-1">
+                                {(['hidden', 'view', 'manage'] as PageAccess[]).map(access => (
+                                  <button
+                                    key={access}
+                                    type="button"
+                                    onClick={() => setPagePermission(permission.key, access)}
+                                    className={`h-8 rounded-lg px-2 text-xs font-semibold capitalize transition-colors ${
+                                      currentAccess === access
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    }`}
+                                  >
+                                    {access === 'hidden' ? 'Hide' : access}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div>

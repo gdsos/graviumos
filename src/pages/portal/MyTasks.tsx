@@ -543,6 +543,7 @@ export default function MyTasks() {
   // ——— Grouped tasks ————————————————————————————————————————————————————————
 
   const totalTasks = filteredTasks.length;
+  const portalEyebrow = departments.find(department => profile?.department_ids?.includes(department.id))?.name ?? 'Gravium OS';
 
   // ——— Render ———————————————————————————————————————————————————————————————
 
@@ -553,7 +554,7 @@ export default function MyTasks() {
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
-              Gravium OS
+              {portalEyebrow}
             </p>
 
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">

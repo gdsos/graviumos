@@ -801,6 +801,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   const financials = selectedProject ? calcFinancials(selectedProject) : null;
+  const portalEyebrow = departments.find(department => profile?.department_ids?.includes(department.id))?.name ?? 'Gravium OS';
 
   return (
     <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
@@ -809,7 +810,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
-              Gravium OS
+              {portalEyebrow}
             </p>
 
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">

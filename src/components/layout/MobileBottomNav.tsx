@@ -6,6 +6,7 @@ import {
   CheckSquare,
   ClipboardList,
   DollarSign,
+  FileText,
   Folder,
   Home,
   LayoutGrid,
@@ -17,6 +18,7 @@ import {
 
 import GlassSurface from '@/components/ui/GlassSurface';
 import { useAuth } from '@/contexts/AuthContext';
+import { hasPageAccess, type PagePermissionKey } from '@/lib/pagePermissions';
 
 interface MobileBottomNavProps {
   isAdmin: boolean;
@@ -28,6 +30,7 @@ interface MobileNavItem {
   path: string;
   helper?: string;
   group?: string;
+  pagePermissionKey?: PagePermissionKey;
 }
 
 function getBasePath(isAdmin: boolean) {
@@ -47,6 +50,7 @@ function getPrimaryNavItems(isAdmin: boolean): MobileNavItem[] {
       label: 'Projects',
       icon: Folder,
       path: `${basePath}/projects`,
+      pagePermissionKey: isAdmin ? undefined : 'portal.projects',
     },
     {
       label: 'Tasks',
@@ -57,11 +61,12 @@ function getPrimaryNavItems(isAdmin: boolean): MobileNavItem[] {
       label: 'Timeline',
       icon: CalendarClock,
       path: `${basePath}/timeline`,
+      pagePermissionKey: isAdmin ? undefined : 'portal.timeline',
     },
   ];
 }
 
-function getMenuNavItems(isAdmin: boolean, isFinance: boolean, isMS: boolean): MobileNavItem[] {
+function getMenuNavItems(isAdmin: boolean): MobileNavItem[] {
   const basePath = getBasePath(isAdmin);
 
   const items: MobileNavItem[] = [
@@ -71,6 +76,7 @@ function getMenuNavItems(isAdmin: boolean, isFinance: boolean, isMS: boolean): M
       path: `${basePath}/cost-estimates`,
       helper: 'Project estimates',
       group: 'Procurement',
+      pagePermissionKey: isAdmin ? undefined : 'portal.cost-estimates',
     },
     {
       label: 'Items',
@@ -78,6 +84,7 @@ function getMenuNavItems(isAdmin: boolean, isFinance: boolean, isMS: boolean): M
       path: `${basePath}/items`,
       helper: 'Item master',
       group: 'Procurement',
+      pagePermissionKey: isAdmin ? undefined : 'portal.items',
     },
     {
       label: 'Vendors',
@@ -85,26 +92,45 @@ function getMenuNavItems(isAdmin: boolean, isFinance: boolean, isMS: boolean): M
       path: `${basePath}/vendors`,
       helper: 'Vendor directory',
       group: 'Procurement',
+      pagePermissionKey: isAdmin ? undefined : 'portal.vendors',
     },
   ];
 
-  if (isAdmin || isFinance) {
-    items.push({
-      label: 'Financials',
-      icon: DollarSign,
-      path: `${basePath}/financials`,
-      helper: 'Payments and values',
-      group: 'Finance',
-    });
-  }
+  items.push({
+    label: 'Financials',
+    icon: DollarSign,
+    path: `${basePath}/financials`,
+    helper: 'Payments and values',
+    group: 'Finance',
+    pagePermissionKey: isAdmin ? undefined : 'portal.financials',
+  });
 
-  if (isAdmin || isMS) {
+  items.push({
+    label: 'Payroll',
+    icon: DollarSign,
+    path: `${basePath}/payroll`,
+    helper: 'Payroll records',
+    group: 'Finance',
+    pagePermissionKey: isAdmin ? undefined : 'portal.payroll',
+  });
+
+  items.push({
+    label: 'Leads',
+    icon: LayoutGrid,
+    path: `${basePath}/leads`,
+    helper: 'Sales pipeline',
+    group: 'Sales',
+    pagePermissionKey: isAdmin ? undefined : 'portal.leads',
+  });
+
+  if (!isAdmin) {
     items.push({
-      label: 'Leads',
-      icon: LayoutGrid,
-      path: `${basePath}/leads`,
-      helper: 'Sales pipeline',
-      group: 'Sales',
+      label: 'Whiteboard',
+      icon: FileText,
+      path: `${basePath}/whiteboard`,
+      helper: 'Shared notes',
+      group: 'Utility',
+      pagePermissionKey: 'portal.whiteboard',
     });
   }
 
@@ -310,12 +336,29 @@ function MenuDrawer({
 
 export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
   const location = useLocation();
-  const { isFinance, isMS } = useAuth();
+  const { profile } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navRef = useRef<HTMLDivElement | null>(null);
 
-  const primaryItems = getPrimaryNavItems(isAdmin);
-  const menuItems = getMenuNavItems(isAdmin, isFinance(), isMS());
+  const filterByPageAccess = (item: MobileNavItem) => {
+    if (isAdmin || !item.pagePermissionKey) return true;
+
+    return hasPageAccess(profile, item.pagePermissionKey, 'view');
+  };
+
+  const visiblePrimaryItems = getPrimaryNavItems(isAdmin).filter(filterByPageAccess);
+  const visibleMenuItems = getMenuNavItems(isAdmin).filter(filterByPageAccess);
+  const visibleItems = [...visiblePrimaryItems, ...visibleMenuItems];
+
+  const primaryItems =
+    visibleItems.length <= 5 ? visibleItems : visiblePrimaryItems.slice(0, 4);
+
+  const menuItems =
+    visibleItems.length <= 5
+      ? []
+      : [...visiblePrimaryItems.slice(4), ...visibleMenuItems];
+
+  const navColumnCount = primaryItems.length + (menuItems.length > 0 ? 1 : 0);
   const activePrimaryPath = isMenuOpen ? '' : location.pathname;
 
   useEffect(() => {
@@ -340,13 +383,14 @@ export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
     setIsMenuOpen(false);
   }, [location.pathname]);
 
+
   return (
     <div
       ref={navRef}
       className="fixed inset-x-0 bottom-0 z-[70] px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden"
     >
       <AnimatePresence>
-        {isMenuOpen && (
+        {isMenuOpen && menuItems.length > 0 && (
           <MenuDrawer
             items={menuItems}
             currentPath={location.pathname}
@@ -357,7 +401,11 @@ export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
 
       <motion.nav
         initial={false}
-        className="relative mx-auto grid h-[64px] max-w-[28rem] grid-cols-5 items-center gap-1 overflow-visible rounded-[2rem] border border-white/18 bg-[#4F4E4D]/52 px-2 text-black shadow-2xl shadow-black/22 backdrop-blur-sm supports-[backdrop-filter]:bg-[#4F4E4D]/46 dark:border-white/10 dark:bg-black/55 dark:text-white dark:shadow-black/20"
+        className="relative mx-auto grid h-[64px] items-center gap-1 overflow-visible rounded-[2rem] border border-white/18 bg-[#4F4E4D]/52 px-2 text-black shadow-2xl shadow-black/22 backdrop-blur-sm supports-[backdrop-filter]:bg-[#4F4E4D]/46 dark:border-white/10 dark:bg-black/55 dark:text-white dark:shadow-black/20"
+        style={{
+          gridTemplateColumns: `repeat(${navColumnCount}, minmax(0, 1fr))`,
+          width: `min(${navColumnCount * 4.6}rem, calc(100vw - 1.5rem))`,
+        }}
       >
         <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/14 via-white/4 to-transparent dark:from-white/24 dark:via-white/6" />
 
@@ -369,10 +417,12 @@ export default function MobileBottomNav({ isAdmin }: MobileBottomNavProps) {
           />
         ))}
 
-        <MenuButton
-          isActive={isMenuOpen}
-          onClick={() => setIsMenuOpen(current => !current)}
-        />
+        {menuItems.length > 0 && (
+          <MenuButton
+            isActive={isMenuOpen}
+            onClick={() => setIsMenuOpen(current => !current)}
+          />
+        )}
       </motion.nav>
     </div>
   );

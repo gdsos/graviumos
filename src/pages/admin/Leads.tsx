@@ -22,7 +22,15 @@ interface LeadWithProfile extends Lead {
   assignee?: Profile;
 }
 
-export default function Leads() {
+interface LeadsProps {
+  eyebrow?: string;
+  portalMode?: boolean;
+}
+
+export default function Leads({
+  eyebrow = 'Marketing & Sales',
+  portalMode = false,
+}: LeadsProps = {}) {
   const { profile, departments, isAdmin, isDeptHead, isMS } = useAuth();
   const [leads, setLeads] = useState<LeadWithProfile[]>([]);
   const [msMembers, setMsMembers] = useState<Profile[]>([]);
@@ -142,20 +150,49 @@ export default function Leads() {
   const canDelete = isAdmin() || (isDeptHead() && isMS());
   const openLeadCount = leads.filter(lead => lead.status === 'Open').length;
   const convertedLeadCount = leads.filter(lead => lead.status === 'Converted').length;
+  const headerAction = (
+    <Button onClick={openCreate} className="h-10 justify-center gap-2">
+      <Plus size={16} />
+      Add Lead
+    </Button>
+  );
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <PageHeader
-        eyebrow="Marketing & Sales"
-        title="Leads"
-        description="Manage client enquiries, assignments, and CRM pipeline status."
-        actions={
-          <Button onClick={openCreate} className="h-10 justify-center gap-2">
-            <Plus size={16} />
-            Add Lead
-          </Button>
-        }
-      />
+    <div
+      className={
+        portalMode
+          ? 'mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10'
+          : 'mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8'
+      }
+    >
+      {portalMode ? (
+        <div className="mb-8 border-b border-border pb-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+                {eyebrow}
+              </p>
+
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                Leads
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+                Manage client enquiries, assignments, and CRM pipeline status.
+              </p>
+            </div>
+
+            {headerAction}
+          </div>
+        </div>
+      ) : (
+        <PageHeader
+          eyebrow={eyebrow}
+          title="Leads"
+          description="Manage client enquiries, assignments, and CRM pipeline status."
+          actions={headerAction}
+        />
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <SectionCard className="shadow-none">

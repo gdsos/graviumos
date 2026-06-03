@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { hasPageAccess, type PagePermissionKey } from "@/lib/pagePermissions";
 
 interface NavItem {
   label: string;
@@ -27,6 +28,7 @@ interface NavItem {
   adminOnly?: boolean;
   financeOnly?: boolean;
   msOnly?: boolean;
+  pagePermissionKey?: PagePermissionKey;
 }
 
 interface NavGroup {
@@ -44,8 +46,8 @@ const adminNavGroups: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
-      { label: "Leads", icon: BarChart3, path: "/admin/leads" },
       { label: "Projects", icon: Folder, path: "/admin/projects" },
+      { label: "Tasks", icon: CheckSquare, path: "/admin/tasks" },
     ],
   },
   {
@@ -63,11 +65,22 @@ const adminNavGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Marketing & Sales",
     items: [
-      { label: "Tasks", icon: CheckSquare, path: "/admin/tasks" },
-      { label: "People", icon: Users, path: "/admin/people" },
+      { label: "Leads", icon: BarChart3, path: "/admin/leads" },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
       { label: "Financials", icon: DollarSign, path: "/admin/financials" },
       { label: "Payroll", icon: ReceiptIndianRupee, path: "/admin/payroll" },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { label: "People", icon: Users, path: "/admin/people" },
       { label: "Reports", icon: FileText, path: "/admin/reports" },
       { label: "Announcements", icon: Megaphone, path: "/admin/announcements" },
     ],
@@ -78,37 +91,48 @@ const employeeNavGroups: NavGroup[] = [
   {
     items: [
       { label: "Overview", icon: LayoutDashboard, path: "/portal/overview" },
+      { label: "Projects", icon: Folder, path: "/portal/projects", pagePermissionKey: "portal.projects" },
       { label: "My Tasks", icon: CheckSquare, path: "/portal/tasks" },
-      { label: "Projects", icon: Folder, path: "/portal/projects" },
     ],
   },
   {
     label: "Procurement",
     items: [
-      { label: "Items", icon: Package, path: "/portal/items" },
-      { label: "Vendors", icon: Store, path: "/portal/vendors" },
-      { label: "Cost Estimates", icon: ClipboardList, path: "/portal/cost-estimates" },
+      { label: "Items", icon: Package, path: "/portal/items", pagePermissionKey: "portal.items" },
+      { label: "Vendors", icon: Store, path: "/portal/vendors", pagePermissionKey: "portal.vendors" },
+      { label: "Cost Estimates", icon: ClipboardList, path: "/portal/cost-estimates", pagePermissionKey: "portal.cost-estimates" },
     ],
   },
   {
     label: "Execution",
     items: [
-      { label: "Timeline", icon: CalendarClock, path: "/portal/timeline" },
+      { label: "Timeline", icon: CalendarClock, path: "/portal/timeline", pagePermissionKey: "portal.timeline" },
     ],
   },
   {
+    label: "Marketing & Sales",
     items: [
-      { label: "Leads", icon: BarChart3, path: "/portal/leads", msOnly: true },
-      { label: "Financials", icon: DollarSign, path: "/portal/financials", financeOnly: true },
-      { label: "Payroll", icon: ReceiptIndianRupee, path: "/portal/payroll", financeOnly: true },
-      { label: "Whiteboard", icon: FileText, path: "/portal/whiteboard" },
+      { label: "Leads", icon: BarChart3, path: "/portal/leads", pagePermissionKey: "portal.leads" },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { label: "Financials", icon: DollarSign, path: "/portal/financials", pagePermissionKey: "portal.financials" },
+      { label: "Payroll", icon: ReceiptIndianRupee, path: "/portal/payroll", pagePermissionKey: "portal.payroll" },
+    ],
+  },
+  {
+    label: "Utility",
+    items: [
+      { label: "Whiteboard", icon: FileText, path: "/portal/whiteboard", pagePermissionKey: "portal.whiteboard" },
     ],
   },
 ];
 
 export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) {
   const location = useLocation();
-  const { isFinance, isMS } = useAuth();
+  const { profile } = useAuth();
 
   const [isMobile, setIsMobile] = useState(false);
 
@@ -125,9 +149,9 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
       items: isAdmin
         ? group.items
         : group.items.filter((item) => {
-            if (item.financeOnly && !isFinance()) return false;
-            if (item.msOnly && !isMS()) return false;
-            return true;
+            if (!item.pagePermissionKey) return true;
+
+            return hasPageAccess(profile, item.pagePermissionKey, 'view');
           }),
     }))
     .filter((group) => group.items.length > 0);

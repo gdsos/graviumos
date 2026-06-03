@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { PageHeader } from '../../components/common/PageHeader';
 import {
   AlignCenter,
   AlignLeft,
@@ -131,7 +130,8 @@ function ToolbarButton({
 }
 
 export default function Whiteboard() {
-  const { profile } = useAuth();
+  const { profile, departments } = useAuth();
+  const portalEyebrow = departments.find(department => profile?.department_ids?.includes(department.id))?.name ?? 'Gravium OS';
 
   const [notes, setNotes] = useState<WhiteboardNote[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string>('');
@@ -770,25 +770,36 @@ export default function Whiteboard() {
     selectableSectionNoteIds.every(noteId => selectedNoteIds.has(noteId));
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 pb-32 sm:px-6 lg:px-8 lg:pb-6">
-      <PageHeader
-        eyebrow="Employee Portal"
-        title="Whiteboard"
-        description="Private notes, drafts, and working thoughts."
-        actions={
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-10">
+      <div className="mb-8 border-b border-border pb-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              {portalEyebrow}
+            </p>
+
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Whiteboard
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              Private notes, drafts, and working thoughts.
+            </p>
+          </div>
+
           <div className="flex items-center gap-3">
             <SaveIndicator status={saveStatus} />
             <button
               type="button"
               onClick={createNote}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               New Note
             </button>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {error && (
         <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">

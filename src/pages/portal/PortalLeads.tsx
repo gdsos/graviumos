@@ -1,19 +1,26 @@
 import { useAuth } from '../../contexts/AuthContext';
+import { hasPageAccess } from '../../lib/pagePermissions';
 import Leads from '../admin/Leads';
 
 export default function PortalLeads() {
-  const { isMS, isAdmin } = useAuth();
+  const { profile, departments, isAdmin } = useAuth();
+  const canViewLeads = isAdmin() || hasPageAccess(profile, 'portal.leads', 'view');
+  const portalEyebrow =
+    departments.find(department => profile?.department_ids?.includes(department.id))?.name ??
+    'Gravium OS';
 
-  if (!isMS() && !isAdmin()) {
+  if (!canViewLeads) {
     return (
-      <div className="max-w-2xl mx-auto mt-20 flex flex-col items-center gap-4">
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 w-full">
-          <p className="text-sm font-semibold text-red-900">Access Restricted</p>
-          <p className="text-sm text-red-700 mt-1">The Leads module is only accessible to the Marketing & Sales department.</p>
+      <div className="mx-auto max-w-2xl px-4 py-20">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
+          <p className="text-sm font-semibold text-foreground">Access Restricted</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            You do not have access to view this page.
+          </p>
         </div>
       </div>
     );
   }
 
-  return <Leads />;
+  return <Leads eyebrow={portalEyebrow} portalMode />;
 }
