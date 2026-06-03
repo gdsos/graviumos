@@ -9,6 +9,8 @@ import {
   Link,
   X,
   AlertTriangle,
+  Bell,
+  BellOff,
 } from 'lucide-react';
 import {
   supabase,
@@ -17,6 +19,13 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader } from '../../components/common/PageHeader';
 import { PhoneNumberInput } from '../../components/common/PhoneNumberInput';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getExistingPushSubscription,
+  getPushSupportStatus,
+  type PushSupportStatus,
+} from '../../lib/pushNotifications';
 
 interface ProfileFormState {
   profile_picture_url: string;
@@ -272,6 +281,10 @@ export default function ProfilePage() {
   // Name change request
   const [nameRequest, setNameRequest] = useState<ApprovalRequest | null>(null);
   const [showNameModal, setShowNameModal] = useState(false);
+  const [pushStatus, setPushStatus] = useState<PushSupportStatus>('unsupported');
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushSaving, setPushSaving] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
   const [newName, setNewName] = useState('');
   const [nameRequestLoading, setNameRequestLoading] = useState(false);
   const [nameRequestError, setNameRequestError] = useState('');
@@ -435,6 +448,64 @@ export default function ProfilePage() {
 
   // ——— Render ———————————————————————————————————————————————————————————————
 
+  useEffect(() => {
+    let mounted = true;
+
+    const checkPushStatus = async () => {
+      const status = getPushSupportStatus();
+      const subscription = await getExistingPushSubscription();
+
+      if (!mounted) return;
+
+      setPushStatus(status);
+      setPushEnabled(Boolean(subscription));
+    };
+
+    checkPushStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleTogglePushNotifications = async () => {
+    if (!profile) return;
+
+    setPushSaving(true);
+    setPushMessage('');
+
+    try {
+      if (pushEnabled) {
+        await disablePushNotifications(profile.id);
+        setPushEnabled(false);
+        setPushMessage('Push notifications disabled for this device.');
+      } else {
+        const result = await enablePushNotifications(profile.id);
+
+        if (!result.ok) {
+          setPushStatus(result.status);
+          setPushMessage(
+            result.status === 'not-configured'
+              ? 'Push notifications are not configured yet.'
+              : result.status === 'blocked'
+                ? 'Notifications are blocked in this browser.'
+                : 'Push notifications are not supported on this device.'
+          );
+          return;
+        }
+
+        setPushStatus('supported');
+        setPushEnabled(true);
+        setPushMessage('Push notifications enabled for this device.');
+      }
+    } catch (error) {
+      console.error(error);
+      setPushMessage('Could not update push notifications.');
+    } finally {
+      setPushSaving(false);
+    }
+  };
+
   if (!profile) {
     return (
       <div className="flex h-48 items-center justify-center">
@@ -553,6 +624,54 @@ export default function ProfilePage() {
               taskCount={taskCount}
               isActive={profile.is_active}
             />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Notification Preferences</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Enable push notifications for task updates and important Gravium OS alerts on this device.
+              </p>
+
+              {pushMessage && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {pushMessage}
+                </p>
+              )}
+
+              {pushStatus === 'not-configured' && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                  VAPID public key is not configured yet. We will enable this after server setup.
+                </p>
+              )}
+
+              {pushStatus === 'blocked' && (
+                <p className="mt-2 text-xs text-destructive">
+                  Notifications are blocked in this browser. Enable them from browser site settings.
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTogglePushNotifications}
+              disabled={pushSaving || pushStatus === 'unsupported' || pushStatus === 'not-configured'}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pushEnabled ? (
+                <>
+                  <BellOff className="h-4 w-4" />
+                  Disable Notifications
+                </>
+              ) : (
+                <>
+                  <Bell className="h-4 w-4" />
+                  Enable Notifications
+                </>
+              )}
+            </button>
           </div>
         </section>
 

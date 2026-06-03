@@ -22,15 +22,5 @@
   <body>
     <div id="root"></div>
 
-    <script type="module" src="/src/main.tsx"></script>
-
-    <!-- PWA SERVICE WORKER (from PWA Build Studio) -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
-    </script>
-  </body>
+    <script type="module" src="/src/main.tsx"></script>  </body>
 </html>
