@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravium-os-cache-v4-no-api-cache";
+const CACHE_NAME = "gravium-os-cache-v6-stable-push-click";
 
 const PRECACHE_URLS = [
   "/",
@@ -130,25 +130,33 @@ self.addEventListener("push", event => {
 self.addEventListener("notificationclick", event => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || "/portal/overview";
+  const rawTargetUrl = event.notification.data?.url || "/portal/overview";
+  const targetUrl = new URL(rawTargetUrl, self.location.origin).href;
 
   event.waitUntil(
-    self.clients.matchAll({
-      type: "window",
-      includeUncontrolled: true,
-    }).then(clientList => {
-      for (const client of clientList) {
-        if ("focus" in client) {
-          client.navigate(targetUrl);
-          return client.focus();
-        }
-      }
-
+    (async () => {
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
 
+      const clientList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      const appClient = clientList.find(client => {
+        try {
+          return new URL(client.url).origin === self.location.origin;
+        } catch (error) {
+          return false;
+        }
+      });
+
+      if (appClient && "focus" in appClient) {
+        return appClient.focus();
+      }
+
       return undefined;
-    })
+    })()
   );
 });

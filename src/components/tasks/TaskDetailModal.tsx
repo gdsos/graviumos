@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Task, type Subtask, type Department, type Profile } from '../../lib/supabase';
-import { deleteTaskNotifications } from '../../lib/notifications';
+import { createNotification, deleteTaskNotifications } from '../../lib/notifications';
 import { Button } from '../ui/button';
 import { DateInput } from '../common/DateInput';
 import { Check, CheckCircle2, ChevronDown, Pencil, RotateCcw, User, Trash2, List } from 'lucide-react';
@@ -331,21 +331,17 @@ export default function TaskDetailModal({
     if (!error) {
       // CREATE NOTIFICATION
       if (currentTask.assigned_to) {
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: currentTask.assigned_to,
-            title:
-              editForm.status === 'Completed'
-                ? 'Task Completed'
-                : 'Task Updated',
-            message:
-              editForm.status === 'Completed'
-                ? `Task "${editForm.title}" was marked completed`
-                : `Task "${editForm.title}" was updated`,
-            type: 'task',
-            link: `/portal/tasks?taskId=${currentTask.id}`,
-          });
+        await createNotification(
+          currentTask.assigned_to,
+          editForm.status === 'Completed'
+            ? 'Task Completed'
+            : 'Task Updated',
+          editForm.status === 'Completed'
+            ? `Task "${editForm.title}" was marked completed`
+            : `Task "${editForm.title}" was updated`,
+          'task',
+          `/portal/tasks?taskId=${currentTask.id}`
+        );
       }
 
       const updatedTask: TaskWithDetails = {
@@ -392,17 +388,15 @@ export default function TaskDetailModal({
     }
 
     if (currentTask.assigned_to) {
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: currentTask.assigned_to,
-          title: nextIsCompleted ? 'Task Completed' : 'Task Reopened',
-          message: nextIsCompleted
-            ? `Task "${currentTask.title}" was marked completed`
-            : `Task "${currentTask.title}" was reopened`,
-          type: 'task',
-          link: `/portal/tasks?taskId=${currentTask.id}`,
-        });
+      await createNotification(
+        currentTask.assigned_to,
+        nextIsCompleted ? 'Task Completed' : 'Task Reopened',
+        nextIsCompleted
+          ? `Task "${currentTask.title}" was marked completed`
+          : `Task "${currentTask.title}" was reopened`,
+        'task',
+        `/portal/tasks?taskId=${currentTask.id}`
+      );
     }
 
     const updatedTask: TaskWithDetails = {
