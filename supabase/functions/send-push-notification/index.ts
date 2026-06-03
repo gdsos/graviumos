@@ -124,13 +124,23 @@ Deno.serve(async request => {
         await webpush.sendNotification(subscriptionRow.subscription, payload);
         sent += 1;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const pushError = error as {
+          message?: string;
+          statusCode?: number;
+          body?: string;
+          headers?: Record<string, string>;
+        };
+
+        const message = pushError.message || String(error);
+        const statusCode = pushError.statusCode;
+        const responseBody = pushError.body || "";
+
         failures.push({
           id: subscriptionRow.id,
           message,
+          statusCode,
+          body: responseBody,
         });
-
-        const statusCode = (error as { statusCode?: number })?.statusCode;
 
         if (statusCode === 404 || statusCode === 410) {
           await supabase

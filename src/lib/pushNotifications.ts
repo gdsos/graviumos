@@ -84,6 +84,15 @@ export async function removePushSubscription(userId: string, subscription: PushS
   await subscription.unsubscribe();
 }
 
+async function removeAllUserPushSubscriptions(userId: string) {
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('user_id', userId);
+
+  if (error) throw error;
+}
+
 export async function enablePushNotifications(userId: string) {
   const status = getPushSupportStatus();
 
@@ -106,13 +115,14 @@ export async function enablePushNotifications(userId: string) {
   const registration = await navigator.serviceWorker.ready;
   const existingSubscription = await registration.pushManager.getSubscription();
 
-  if (existingSubscription) {
-    await savePushSubscription(userId, existingSubscription);
+  // VAPID key rotations can leave the browser with a subscription created
+  // using an older applicationServerKey. Always force a fresh subscription
+  // when the user enables notifications so the saved endpoint matches the
+  // current VAPID public/private key pair.
+  await removeAllUserPushSubscriptions(userId);
 
-    return {
-      ok: true,
-      subscription: existingSubscription,
-    } as const;
+  if (existingSubscription) {
+    await existingSubscription.unsubscribe();
   }
 
   const vapidPublicKey = getVapidPublicKey();
@@ -140,10 +150,11 @@ export async function enablePushNotifications(userId: string) {
 export async function disablePushNotifications(userId: string) {
   const subscription = await getExistingPushSubscription();
 
-  if (!subscription) {
-    return true;
+  await removeAllUserPushSubscriptions(userId);
+
+  if (subscription) {
+    await subscription.unsubscribe();
   }
 
-  await removePushSubscription(userId, subscription);
   return true;
 }
