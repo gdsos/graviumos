@@ -13,7 +13,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 const getSystemTheme = (): ResolvedTheme => {
-  if (typeof window === 'undefined') return 'light';
+  if (typeof window === 'undefined') return 'dark';
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
@@ -21,7 +21,7 @@ const getSystemTheme = (): ResolvedTheme => {
 };
 
 const getStoredTheme = (): Theme => {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'dark';
 
   const storedTheme = localStorage.getItem('gravium-theme');
 
@@ -33,7 +33,7 @@ const getStoredTheme = (): Theme => {
     return storedTheme;
   }
 
-  return 'system';
+  return 'dark';
 };
 
 const applyTheme = (resolvedTheme: ResolvedTheme) => {
@@ -43,6 +43,12 @@ const applyTheme = (resolvedTheme: ResolvedTheme) => {
   root.classList.add(resolvedTheme);
 
   root.style.colorScheme = resolvedTheme;
+
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+
+  if (themeColorMeta) {
+    themeColorMeta.setAttribute('content', resolvedTheme === 'dark' ? '#000000' : '#F5F5F5');
+  }
 };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

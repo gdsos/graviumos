@@ -1,9 +1,9 @@
 {
   "name": "Gravium OS",
   "short_name": "Gravium OS",
-  "start_url": "/login",
+  "start_url": "/portal/overview",
   "display": "standalone",
-  "description": "Employee portal",
+  "description": "Internal operating system for Gravium Design Studio.",
   "theme_color": "#000000",
   "background_color": "#000000",
   "icons": [
@@ -17,5 +17,6 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "scope": "/"
 }
