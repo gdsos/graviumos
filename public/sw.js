@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravium-os-cache-v6-stable-push-click";
+const CACHE_NAME = "gravium-os-cache-v7-push-focus-navigation";
 
 const PRECACHE_URLS = [
   "/",
@@ -135,10 +135,6 @@ self.addEventListener("notificationclick", event => {
 
   event.waitUntil(
     (async () => {
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
-      }
-
       const clientList = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,
@@ -153,7 +149,16 @@ self.addEventListener("notificationclick", event => {
       });
 
       if (appClient && "focus" in appClient) {
+        appClient.postMessage({
+          type: "GRAVIUM_NAVIGATE",
+          url: targetUrl,
+        });
+
         return appClient.focus();
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
       }
 
       return undefined;

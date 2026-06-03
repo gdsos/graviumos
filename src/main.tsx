@@ -18,3 +18,15 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");
   });
 }
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", event => {
+    if (event.data?.type !== "GRAVIUM_NAVIGATE") return;
+
+    const targetUrl = event.data.url;
+
+    if (typeof targetUrl !== "string") return;
+
+    window.location.assign(targetUrl);
+  });
+}
