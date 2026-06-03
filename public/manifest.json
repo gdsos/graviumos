@@ -1,6 +1,6 @@
 {
   "name": "Gravium OS",
-  "short_name": "Gravium",
+  "short_name": "Gravium OS",
   "start_url": "/login",
   "display": "standalone",
   "description": "Employee portal",
