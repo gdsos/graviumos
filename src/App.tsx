@@ -3,10 +3,12 @@ import { useEffect } from 'react';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { OperationFeedbackProvider } from './contexts/OperationFeedbackContext';
 
 import LoginPage from './pages/auth/LoginPage';
 import CreateAdminPage from './pages/auth/CreateAdminPage';
 import AppLayout from './components/layout/AppLayout';
+import { AppLoader } from './components/common/AppLoader';
 
 // Admin pages
 import Dashboard from './pages/admin/Dashboard';
@@ -36,7 +38,7 @@ import PortalPayroll from './pages/portal/PortalPayroll';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <AppLoader />;
   if (!user) return <Navigate to="/login/admin" replace />;
   if (profile && profile.role !== 'super_admin') return <Navigate to="/portal/overview" replace />;
   return <>{children}</>;
@@ -44,9 +46,30 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <AppLoader />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+function InitialLoaderBridge() {
+  const { loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+
+    const el = document.getElementById('app-loader');
+    if (!el) return;
+
+    el.style.opacity = '0';
+    el.style.pointerEvents = 'none';
+    el.style.transition = 'opacity 220ms ease';
+
+    window.setTimeout(() => {
+      el.remove();
+    }, 240);
+  }, [loading]);
+
+  return null;
 }
 
 function AppWithTheme() {
@@ -99,12 +122,6 @@ function AppWithTheme() {
 }
 
 export default function App() {
-  // splash removal
-  useEffect(() => {
-    const el = document.getElementById("app-loader");
-    if (el) el.remove();
-  }, []);
-
   // PWA update reload
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -116,9 +133,12 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppWithTheme />
-      </AuthProvider>
+      <OperationFeedbackProvider>
+        <AuthProvider>
+          <InitialLoaderBridge />
+          <AppWithTheme />
+        </AuthProvider>
+      </OperationFeedbackProvider>
     </ThemeProvider>
   );
 }

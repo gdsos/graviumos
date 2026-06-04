@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Task, type Subtask, type Department, type Profile } from '../../lib/supabase';
 import { createNotification, deleteTaskNotifications } from '../../lib/notifications';
+import { useOperationFeedback } from '../../contexts/OperationFeedbackContext';
 import { Button } from '../ui/button';
 import { DateInput } from '../common/DateInput';
 import { Check, CheckCircle2, ChevronDown, Pencil, RotateCcw, User, Trash2, List } from 'lucide-react';
@@ -157,6 +158,12 @@ export default function TaskDetailModal({
   onTaskUpdated,
   onTaskDeleted,
 }: TaskDetailModalProps) {
+  const {
+    showOperationLoading,
+    showOperationSuccess,
+    showOperationError,
+  } = useOperationFeedback();
+
   const [currentTask, setCurrentTask] = useState<TaskWithDetails | null>(task);
   const [editingTask, setEditingTask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -316,6 +323,11 @@ export default function TaskDetailModal({
         ? currentTask.completed_at || new Date().toISOString()
         : null;
 
+    const isMarkingCompleted =
+      editForm.status === 'Completed' && currentTask.status !== 'Completed';
+
+    showOperationLoading(isMarkingCompleted ? 'Marking Completed' : 'Saving Changes');
+
     const { error } = await supabase
       .from('tasks')
       .update({
@@ -327,6 +339,12 @@ export default function TaskDetailModal({
         updated_at: new Date().toISOString(),
       })
       .eq('id', currentTask.id);
+
+    if (error) {
+      console.error(error);
+      await showOperationError('Save Failed');
+      return;
+    }
 
     if (!error) {
       // CREATE NOTIFICATION
@@ -362,6 +380,10 @@ export default function TaskDetailModal({
       setCurrentTask(enrichedUpdatedTask);
       onTaskUpdated?.(enrichedUpdatedTask);
 
+      await showOperationSuccess(
+        isMarkingCompleted ? 'Marked Completed' : 'Saved Successfully'
+      );
+
       setEditingTask(false);
     }
   };
@@ -372,6 +394,10 @@ export default function TaskDetailModal({
     const nextIsCompleted = currentTask.status !== 'Completed';
     const nextStatus: TaskStatus = nextIsCompleted ? 'Completed' : 'Ongoing';
     const nextCompletedAt = nextIsCompleted ? new Date().toISOString() : null;
+
+    if (nextIsCompleted) {
+      showOperationLoading('Marking Completed');
+    }
 
     const { error } = await supabase
       .from('tasks')
@@ -384,6 +410,11 @@ export default function TaskDetailModal({
 
     if (error) {
       console.error(error);
+
+      if (nextIsCompleted) {
+        await showOperationError('Update Failed');
+      }
+
       return;
     }
 
@@ -419,6 +450,10 @@ export default function TaskDetailModal({
     }));
     onTaskUpdated?.(enrichedUpdatedTask);
     onRefresh();
+
+    if (nextIsCompleted) {
+      await showOperationSuccess('Marked Completed');
+    }
   };
 
   const handleDeleteTask = async () => {

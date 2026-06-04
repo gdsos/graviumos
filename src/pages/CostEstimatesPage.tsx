@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
+import { useOperationFeedback } from '@/contexts/OperationFeedbackContext';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { CostEstimateSection } from '@/features/cost-estimate/components/CostEstimateSection';
@@ -216,6 +217,10 @@ export default function CostEstimatesPage() {
   const [selectedAreaIds, setSelectedAreaIds] = useState(
     demoCostEstimateAreas.map(area => area.id)
   );
+  const {
+    showOperationLoading,
+    showOperationSuccess,
+  } = useOperationFeedback();
   const [areaSelectionUndoStack, setAreaSelectionUndoStack] = useState<
     {
       areas: CostEstimateArea[];
@@ -552,8 +557,18 @@ export default function CostEstimatesPage() {
     setIsCreateModalOpen(false);
   };
 
-  const handleSaveEstimate = (payload: EstimateEditorPayload) => {
+  const handleSaveEstimate = async (
+    payload: EstimateEditorPayload,
+    feedback?: { loading: string; success: string }
+  ) => {
     if (!selectedRecordId) return;
+
+    const messages = feedback ?? {
+      loading: 'Saving Draft',
+      success: 'Draft Saved',
+    };
+
+    showOperationLoading(messages.loading);
 
     setRecords(current =>
       current.map(record =>
@@ -573,10 +588,14 @@ export default function CostEstimatesPage() {
           : record
       )
     );
+
+    await showOperationSuccess(messages.success);
   };
 
-  const handleApproveEstimate = (payload: EstimateEditorPayload) => {
+  const handleApproveEstimate = async (payload: EstimateEditorPayload) => {
     if (!selectedRecordId) return;
+
+    showOperationLoading('Approving Estimate');
 
     setRecords(current =>
       current.map(record =>
@@ -597,10 +616,14 @@ export default function CostEstimatesPage() {
           : record
       )
     );
+
+    await showOperationSuccess('Estimate Approved');
   };
 
-  const handleCreateRevisionFromEditor = (payload: EstimateEditorPayload) => {
+  const handleCreateRevisionFromEditor = async (payload: EstimateEditorPayload) => {
     if (!selectedRecordId || !selectedRecord) return;
+
+    showOperationLoading('Creating Revision');
 
     const approvedSnapshot: EstimateEditorPayload = {
       grandTotal: selectedRecord.grandTotal,
@@ -632,24 +655,35 @@ export default function CostEstimatesPage() {
           : record
       )
     );
+
+    await showOperationSuccess('Revision Created');
   };
 
-  const handleSaveAndCloseEstimate = (payload: EstimateEditorPayload) => {
-    handleSaveEstimate(payload);
+  const handleSaveAndCloseEstimate = async (payload: EstimateEditorPayload) => {
+    await handleSaveEstimate(payload, {
+      loading: 'Saving Estimate',
+      success: 'Estimate Saved',
+    });
     setSelectedRecordId(null);
   };
 
-  const handleDeleteRecord = (recordId: string) => {
+  const handleDeleteRecord = async (recordId: string) => {
+    showOperationLoading('Deleting Estimate');
+
     setRecords(current => current.filter(record => record.id !== recordId));
 
     if (selectedRecordId === recordId) {
       setIsViewingApprovedSnapshot(false);
       setSelectedRecordId(null);
     }
+
+    await showOperationSuccess('Estimate Deleted');
   };
 
-  const handleDeleteSelectedEstimate = () => {
+  const handleDeleteSelectedEstimate = async () => {
     if (!selectedRecordId) return;
+
+    showOperationLoading('Deleting Estimate');
 
     const currentRecord = records.find(record => record.id === selectedRecordId);
 
@@ -685,7 +719,9 @@ export default function CostEstimatesPage() {
     setSelectedRecordId(null);
   };
 
-  const handleCreateRevision = (record: EstimateCardRecord) => {
+  const handleCreateRevision = async (record: EstimateCardRecord) => {
+    showOperationLoading('Creating Revision');
+
     const approvedSnapshot: EstimateEditorPayload = {
       grandTotal: record.grandTotal,
       status: 'approved',
@@ -714,6 +750,7 @@ export default function CostEstimatesPage() {
 
     setIsViewingApprovedSnapshot(false);
     setSelectedRecordId(record.id);
+    await showOperationSuccess('Revision Created');
   };
 
   if (activeSelectedRecord) {
@@ -961,8 +998,8 @@ export default function CostEstimatesPage() {
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => {
-                  handleDeleteRecord(deleteRecordId);
+                onClick={async () => {
+                  await handleDeleteRecord(deleteRecordId);
                   setDeleteRecordId(null);
                 }}
               >
