@@ -9,7 +9,6 @@ import {
   Phone,
   Plus,
   RefreshCcw,
-  RotateCcw,
   Store,
   Trash2,
   UsersRound,
@@ -24,7 +23,6 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
 import {
-  demoVendors,
   vendorAvailabilityLabels,
   vendorCategoryLabels,
   vendorStatusLabels,
@@ -43,7 +41,7 @@ type VendorModalState =
   | { mode: 'create'; vendor: null }
   | { mode: 'edit'; vendor: Vendor }
   | null;
-const VENDORS_STORAGE_KEY = 'gravium-os-vendors-demo';
+const VENDORS_STORAGE_KEY = 'gravium-os-vendors';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
 
@@ -473,18 +471,18 @@ export default function VendorsPage() {
     getStoredCategoryOptions()
   );
   const [vendors, setVendors] = useState<Vendor[]>(() => {
-    if (typeof window === 'undefined') return demoVendors;
+    if (typeof window === 'undefined') return [];
 
     try {
       const storedVendors = localStorage.getItem(VENDORS_STORAGE_KEY);
 
-      if (!storedVendors) return demoVendors;
+      if (!storedVendors) return [];
 
       const parsedVendors = JSON.parse(storedVendors) as Vendor[];
 
-      return Array.isArray(parsedVendors) ? parsedVendors : demoVendors;
+      return Array.isArray(parsedVendors) ? parsedVendors : [];
     } catch {
-      return demoVendors;
+      return [];
     }
   });
   const [search, setSearch] = useState('');
@@ -624,22 +622,6 @@ export default function VendorsPage() {
     await showOperationSuccess('Vendor Deleted');
   };
 
-  // For demo purposes, allow resetting to original demo data
-  const handleResetDemoData = () => {
-  const confirmed = window.confirm(
-    'Reset vendors to the original demo data? This will remove locally added vendors.'
-  );
-
-  if (!confirmed) return;
-
-  localStorage.removeItem(VENDORS_STORAGE_KEY);
-  setVendors(demoVendors);
-  setSearch('');
-  setCategory('all');
-  setStatus('all');
-  setAvailability('all');
-};
-
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
@@ -647,26 +629,14 @@ export default function VendorsPage() {
         title="Vendors"
         description="Global vendor directory for execution, procurement, site work, and future timeline planning."
         actions={
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResetDemoData}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset Demo
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() => setModalState({ mode: 'create', vendor: null })}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Add Vendor
-            </Button>
-          </div>
+          <Button
+            type="button"
+            onClick={() => setModalState({ mode: 'create', vendor: null })}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Vendor
+          </Button>
         }
       />
 
@@ -771,21 +741,34 @@ export default function VendorsPage() {
       ) : (
         <EmptyState
           icon={Store}
-          title="No vendors found"
-          description="Try changing the search term or filters to find matching vendors."
+          title={vendors.length === 0 ? 'No vendors yet' : 'No vendors found'}
+          description={
+            vendors.length === 0
+              ? 'Add your first vendor to start building your real procurement network.'
+              : 'Try changing the search term or filters to find matching vendors.'
+          }
           action={
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setSearch('');
-                setCategory('all');
-                setStatus('all');
-                setAvailability('all');
-              }}
-            >
-              Clear Filters
-            </Button>
+            vendors.length === 0 ? (
+              <Button
+                type="button"
+                onClick={() => setModalState({ mode: 'create', vendor: null })}
+              >
+                Add Vendor
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSearch('');
+                  setCategory('all');
+                  setStatus('all');
+                  setAvailability('all');
+                }}
+              >
+                Clear Filters
+              </Button>
+            )
           }
         />
       )}
