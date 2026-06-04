@@ -182,6 +182,7 @@ export default function People() {
   const [employees, setEmployees] = useState<ProfileWithDepts[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDeptId, setFilterDeptId] = useState<string>('all');
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Modal state
@@ -565,6 +566,25 @@ export default function People() {
 
   // ——— Filtered list ————————————————————————————————————————————————————————————
 
+  const departmentFilterOptions = [
+    {
+      id: 'all',
+      label: 'All Departments',
+      shortLabel: 'All',
+      count: employees.length,
+    },
+    ...departments.map(dept => ({
+      id: dept.id,
+      label: dept.name,
+      shortLabel: dept.code,
+      count: employees.filter(emp => emp.department_ids?.includes(dept.id)).length,
+    })),
+  ];
+
+  const selectedDepartmentFilter =
+    departmentFilterOptions.find(option => option.id === filterDeptId) ??
+    departmentFilterOptions[0];
+
   const filtered =
     filterDeptId === 'all'
       ? employees
@@ -592,33 +612,99 @@ export default function People() {
         }
       />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setFilterDeptId('all')}
-          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-            filterDeptId === 'all'
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
-        >
-          All Departments
-        </button>
+      <div className="mb-6">
+        <div className="hidden rounded-2xl border border-border bg-card/60 p-2 md:block">
+          <div className="grid grid-cols-3 gap-2 xl:grid-cols-6">
+            {departmentFilterOptions.map(option => {
+              const isActive = filterDeptId === option.id;
 
-        {departments.map(dept => (
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setFilterDeptId(option.id)}
+                  className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  <span className="min-w-0 whitespace-nowrap text-center leading-tight">{option.label}</span>
+                  <span
+                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${
+                      isActive
+                        ? 'bg-primary-foreground/18 text-primary-foreground'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {option.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div
+          className="relative md:hidden"
+          onBlur={event => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setFilterMenuOpen(false);
+            }
+          }}
+        >
           <button
-            key={dept.id}
             type="button"
-            onClick={() => setFilterDeptId(dept.id)}
-            className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-              filterDeptId === dept.id
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
+            onClick={() => setFilterMenuOpen(open => !open)}
+            className="flex h-11 w-full items-center justify-between rounded-2xl border border-border bg-card px-4 text-left text-sm font-medium text-foreground shadow-sm"
+            aria-expanded={filterMenuOpen}
           >
-            {dept.code}
+            <span className="min-w-0 truncate">
+              {selectedDepartmentFilter.label}
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                filterMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
           </button>
-        ))}
+
+          {filterMenuOpen && (
+            <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+              {departmentFilterOptions.map(option => {
+                const isActive = filterDeptId === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={() => {
+                      setFilterDeptId(option.id);
+                      setFilterMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <span className="min-w-0 whitespace-nowrap text-center leading-tight">{option.label}</span>
+                    <span
+                      className={`ml-3 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${
+                        isActive
+                          ? 'bg-primary-foreground/18 text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {option.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && !showModal && (
