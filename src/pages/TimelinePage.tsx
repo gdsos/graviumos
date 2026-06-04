@@ -146,13 +146,13 @@ type StoredTimelineState = {
   selectedTimelineProjectId?: string;
 };
 
-type TimelineTab = 'overview' | 'work' | 'payments' | 'gantt' | 'alerts';
+type TimelineTab = 'overview' | 'work' | 'payments' | 'schedule' | 'alerts';
 
 const tabs: Array<{ id: TimelineTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'work', label: 'Work' },
   { id: 'payments', label: 'Payments' },
-  { id: 'gantt', label: 'Gantt' },
+  { id: 'schedule', label: 'Schedule' },
   { id: 'alerts', label: 'Assist' },
 ];
 
@@ -279,7 +279,7 @@ function getWorkPackageBarStyle(
   };
 }
 
-function getGanttBarTone(status: WorkPackageStatus) {
+function getScheduleBarTone(status: WorkPackageStatus) {
   if (status === 'blocked_by_payment' || status === 'blocked_by_dependency') {
     return 'bg-amber-500/80';
   }
@@ -1257,7 +1257,7 @@ export default function TimelinePage() {
     );
   };
 
-  const renderGanttChart = () => {
+  const renderScheduleView = () => {
     const timelineStartDate = timelineDateRange.startDate;
     const timelineEndDate = timelineDateRange.endDate;
     const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
@@ -1269,7 +1269,7 @@ export default function TimelinePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-semibold text-foreground">
-                  Gantt Timeline
+                  Schedule View
                 </h2>
                 <StatusBadge variant="outline">{activeTimelineProject.name}</StatusBadge>
               </div>
@@ -1349,7 +1349,7 @@ export default function TimelinePage() {
                     })}
 
                     <div
-                      className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${getGanttBarTone(
+                      className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${getScheduleBarTone(
                         workPackage.status
                       )}`}
                       style={getWorkPackageBarStyle(
@@ -1436,8 +1436,8 @@ export default function TimelinePage() {
       );
     }
 
-    if (activeTab === 'gantt') {
-      return renderGanttChart();
+    if (activeTab === 'schedule') {
+      return renderScheduleView();
     }
 
     return (
@@ -2006,9 +2006,7 @@ export default function TimelinePage() {
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
                     className={`rounded-xl px-2 py-2.5 text-xs font-medium transition sm:text-sm ${
-                      tab.id === 'gantt' ? 'hidden sm:block ' : ''
-                    }${
-                      tab.id === 'gantt' ? 'hidden sm:block ' : ''
+                      tab.id === 'schedule' ? 'hidden sm:block ' : ''
                     }${
                       isActive
                         ? 'bg-primary text-primary-foreground'
