@@ -501,8 +501,6 @@ export default function TimelinePage() {
     new Date().toISOString().slice(0, 10)
   );
   const [scheduleZoom, setScheduleZoom] = useState(1);
-  const [showScheduleGateDateControls, setShowScheduleGateDateControls] =
-    useState(false);
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingScheduleScrollLeftRef = useRef<number | null>(null);
   const scheduleDragStartXRef = useRef<number | null>(null);
@@ -1841,25 +1839,13 @@ export default function TimelinePage() {
         </div>
 
         <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Payment Gate Markers
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Gate dates are auto-distributed across the planned timeline and can be adjusted manually.
-              </p>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowScheduleGateDateControls(current => !current)}
-              className="h-9 gap-2"
-            >
-              <Pencil className="h-4 w-4" />
-              {showScheduleGateDateControls ? 'Done Editing' : 'Edit Gate Dates'}
-            </Button>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Payment Gate Markers
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Gate markers show scheduled collection points. Edit gate dates from the Payment Gates tab.
+            </p>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -1884,46 +1870,6 @@ export default function TimelinePage() {
               );
             })}
           </div>
-
-          {showScheduleGateDateControls && (
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {paymentGates.map((paymentGate, paymentGateIndex) => {
-                const paymentGateTone = getPaymentGateScheduleTone(paymentGateIndex);
-
-                return (
-                  <div
-                    key={`edit-${paymentGate.id}`}
-                    className="rounded-2xl border border-border bg-background p-3"
-                  >
-                    <div className="mb-2 flex items-center gap-2">
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${paymentGateTone.badge}`}
-                      >
-                        {paymentGateIndex + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {paymentGate.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatINR(paymentGate.amount)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <DateInput
-                      value={paymentGate.dueDate}
-                      onChange={value =>
-                        handleUpdatePaymentGateDate(paymentGate.id, value)
-                      }
-                      placeholder="Select gate date"
-                      popoverMode="fixed"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
 
       </section>
@@ -1948,6 +1894,7 @@ export default function TimelinePage() {
             paymentGates={paymentGates}
             onMarkReceived={handleMarkPaymentReceived}
             onMarkPending={handleMarkPaymentPending}
+            onUpdateDueDate={handleUpdatePaymentGateDate}
           />
 
           {renderAssistPreview()}
@@ -1977,6 +1924,7 @@ export default function TimelinePage() {
           paymentGates={paymentGates}
           onMarkReceived={handleMarkPaymentReceived}
           onMarkPending={handleMarkPaymentPending}
+        onUpdateDueDate={handleUpdatePaymentGateDate}
         />
       );
     }
