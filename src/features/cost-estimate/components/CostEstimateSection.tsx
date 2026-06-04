@@ -16,7 +16,6 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
-import { demoProcurementItems } from '@/features/items/data';
 import type { ProcurementItem } from '@/features/items/types';
 import { vendorCategoryLabels } from '@/features/vendors/data';
 
@@ -95,7 +94,8 @@ function createEstimateLineItemDescription({
 
 
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
-const ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
+const ITEMS_STORAGE_KEY = 'gravium-os-items';
+const LEGACY_ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
 const PROCUREMENT_UNITS_STORAGE_KEY = 'gravium-os-procurement-units-demo';
@@ -263,42 +263,58 @@ function mapProcurementItemToPreset(item: ProcurementItem): CostEstimateItemPres
   };
 }
 
+function getValidProcurementItemsFromStorage(rawItems: string | null) {
+  if (!rawItems) return [];
+
+  const parsedItems = JSON.parse(rawItems);
+
+  if (!Array.isArray(parsedItems)) return [];
+
+  return parsedItems.filter(item => {
+    return (
+      item &&
+      typeof item.id === 'string' &&
+      typeof item.name === 'string' &&
+      typeof item.category === 'string' &&
+      typeof item.defaultUnitLabel === 'string' &&
+      typeof item.purchaseRatePerUnit === 'number' &&
+      typeof item.markupPercent === 'number' &&
+      typeof item.sellingRatePerUnit === 'number' &&
+      typeof item.defaultDescription === 'string' &&
+      ['active', 'inactive'].includes(item.status)
+    );
+  }) as ProcurementItem[];
+}
+
 function getStoredItemPresets() {
-  if (typeof window === 'undefined') {
-    return demoProcurementItems.map(mapProcurementItemToPreset);
-  }
+  if (typeof window === 'undefined') return [];
 
   try {
-    const storedItems = localStorage.getItem(ITEMS_STORAGE_KEY);
+    const storedItems = getValidProcurementItemsFromStorage(
+      localStorage.getItem(ITEMS_STORAGE_KEY)
+    );
 
-    if (!storedItems) {
-      return demoProcurementItems.map(mapProcurementItemToPreset);
+    if (storedItems.length > 0) {
+      return storedItems
+        .filter(item => item.status === 'active')
+        .map(mapProcurementItemToPreset);
     }
 
-    const parsedItems = JSON.parse(storedItems);
+    const legacyItems = getValidProcurementItemsFromStorage(
+      localStorage.getItem(LEGACY_ITEMS_STORAGE_KEY)
+    );
 
-    if (!Array.isArray(parsedItems)) {
-      return demoProcurementItems.map(mapProcurementItemToPreset);
+    if (legacyItems.length > 0) {
+      localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(legacyItems));
+
+      return legacyItems
+        .filter(item => item.status === 'active')
+        .map(mapProcurementItemToPreset);
     }
 
-    const validItems = parsedItems.filter(item => {
-      return (
-        item &&
-        typeof item.id === 'string' &&
-        typeof item.name === 'string' &&
-        typeof item.category === 'string' &&
-        typeof item.defaultUnitLabel === 'string' &&
-        typeof item.purchaseRatePerUnit === 'number' &&
-        typeof item.markupPercent === 'number' &&
-        typeof item.sellingRatePerUnit === 'number' &&
-        typeof item.defaultDescription === 'string' &&
-        item.status === 'active'
-      );
-    }) as ProcurementItem[];
-
-    return validItems.map(mapProcurementItemToPreset);
+    return [];
   } catch {
-    return demoProcurementItems.map(mapProcurementItemToPreset);
+    return [];
   }
 }
 
@@ -308,27 +324,17 @@ function saveItemPresetToItemsMaster(preset: CostEstimateItemPreset) {
   let currentItems: ProcurementItem[] = [];
 
   try {
-    const storedItems = localStorage.getItem(ITEMS_STORAGE_KEY);
-    const parsedItems = storedItems ? JSON.parse(storedItems) : demoProcurementItems;
+    currentItems = getValidProcurementItemsFromStorage(
+      localStorage.getItem(ITEMS_STORAGE_KEY)
+    );
 
-    currentItems = Array.isArray(parsedItems)
-      ? (parsedItems.filter(item => {
-          return (
-            item &&
-            typeof item.id === 'string' &&
-            typeof item.name === 'string' &&
-            typeof item.category === 'string' &&
-            typeof item.defaultUnitLabel === 'string' &&
-            typeof item.purchaseRatePerUnit === 'number' &&
-            typeof item.markupPercent === 'number' &&
-            typeof item.sellingRatePerUnit === 'number' &&
-            typeof item.defaultDescription === 'string' &&
-            ['active', 'inactive'].includes(item.status)
-          );
-        }) as ProcurementItem[])
-      : demoProcurementItems;
+    if (currentItems.length === 0) {
+      currentItems = getValidProcurementItemsFromStorage(
+        localStorage.getItem(LEGACY_ITEMS_STORAGE_KEY)
+      );
+    }
   } catch {
-    currentItems = demoProcurementItems;
+    currentItems = [];
   }
 
   const nextItem: ProcurementItem = {
@@ -356,6 +362,7 @@ function saveItemPresetToItemsMaster(preset: CostEstimateItemPreset) {
 
   localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(nextItems));
 }
+
 
 interface CostEstimateSavePayload {
   grandTotal: number;
