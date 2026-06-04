@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save,
+  Trash2,
+} from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { DateInput } from '@/components/common/DateInput';
 
 import {
   calculateTimelineSummary,
@@ -140,6 +143,7 @@ type StoredTimelineState = {
   paymentGates: PaymentGate[];
   workPackages: WorkPackage[];
   timelineConfirmedAt?: string;
+  selectedTimelineProjectId?: string;
 };
 
 type TimelineTab = 'overview' | 'work' | 'payments' | 'gantt' | 'alerts';
@@ -190,6 +194,10 @@ function getStoredTimelineState(): StoredTimelineState | null {
         timelineConfirmedAt:
           typeof parsedTimeline.timelineConfirmedAt === 'string'
             ? parsedTimeline.timelineConfirmedAt
+            : '',
+        selectedTimelineProjectId:
+          typeof parsedTimeline.selectedTimelineProjectId === 'string'
+            ? parsedTimeline.selectedTimelineProjectId
             : '',
       };
     }
@@ -332,6 +340,11 @@ export default function TimelinePage() {
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [pendingTimelineDraft, setPendingTimelineDraft] =
     useState<GeneratedTimelineReviewDraft | null>(null);
+  const [isDeleteTimelineDialogOpen, setIsDeleteTimelineDialogOpen] =
+    useState(false);
+  const [openPendingStatusMenuId, setOpenPendingStatusMenuId] = useState<
+    string | null
+  >(null);
   const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     () => storedTimeline?.timelineConfirmedAt ?? ''
   );
@@ -341,7 +354,9 @@ export default function TimelinePage() {
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
   >(() => getStoredCostEstimateRecords());
-  const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState('');
+  const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
+    () => storedTimeline?.selectedTimelineProjectId ?? ''
+  );
   const [timelineStartDate, setTimelineStartDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -360,9 +375,16 @@ export default function TimelinePage() {
         paymentGates,
         workPackages,
         timelineConfirmedAt,
+        selectedTimelineProjectId,
       })
     );
-  }, [hasTimeline, paymentGates, timelineConfirmedAt, workPackages]);
+  }, [
+    hasTimeline,
+    paymentGates,
+    selectedTimelineProjectId,
+    timelineConfirmedAt,
+    workPackages,
+  ]);
 
   const summary = useMemo(
     () => calculateTimelineSummary(workPackages, paymentGates),
@@ -373,17 +395,6 @@ export default function TimelinePage() {
     () => generateTimelineAlerts(workPackages, paymentGates),
     [paymentGates, workPackages]
   );
-
-  const alerts = useMemo(() => {
-    const sourceAlerts = hasTimeline ? generatedAlerts : [];
-
-    const uniqueAlerts = sourceAlerts.filter(
-      (alert, index, array) =>
-        array.findIndex(currentAlert => currentAlert.id === alert.id) === index
-    );
-
-    return uniqueAlerts.filter(alert => !ignoredAlertIds.includes(alert.id));
-  }, [generatedAlerts, hasTimeline, ignoredAlertIds]);
 
   const blockedWorkPackages = useMemo(
     () =>
@@ -417,6 +428,19 @@ export default function TimelinePage() {
     () => getLinkedCostEstimate(costEstimateRecords, selectedTimelineProjectId),
     [costEstimateRecords, selectedTimelineProjectId]
   );
+  useEffect(() => {
+    if (!hasTimeline || selectedTimelineProjectId) return;
+
+    const onlyApprovedProjectEstimate =
+      approvedCostEstimateRecords.length === 1
+        ? approvedCostEstimateRecords[0]
+        : null;
+
+    if (onlyApprovedProjectEstimate?.projectId) {
+      setSelectedTimelineProjectId(onlyApprovedProjectEstimate.projectId);
+    }
+  }, [approvedCostEstimateRecords, hasTimeline, selectedTimelineProjectId]);
+
   const activeTimelineProject = useMemo<TimelineProject>(
     () => ({
       ...emptyTimelineProject,
@@ -459,6 +483,21 @@ export default function TimelinePage() {
   ]);
 
   const isTimelineEstimateApproved = linkedCostEstimate?.status === 'approved';
+  const hasSelectedApprovedProjectEstimate = Boolean(
+    linkedCostEstimate?.projectId && linkedCostEstimate.status === 'approved'
+  );
+  const hasActiveTimeline = hasTimeline && hasSelectedApprovedProjectEstimate;
+  const alerts = useMemo(() => {
+    const sourceAlerts = hasActiveTimeline ? generatedAlerts : [];
+
+    const uniqueAlerts = sourceAlerts.filter(
+      (alert, index, array) =>
+        array.findIndex(currentAlert => currentAlert.id === alert.id) === index
+    );
+
+    return uniqueAlerts.filter(alert => !ignoredAlertIds.includes(alert.id));
+  }, [generatedAlerts, hasActiveTimeline, ignoredAlertIds]);
+
   const paymentPercentageValues = {
     booking: bookingPaymentPercent === '' ? 0 : Number(bookingPaymentPercent) || 0,
     stageOne:
@@ -475,6 +514,7 @@ export default function TimelinePage() {
     paymentPercentageValues.handover;
   const isPaymentPercentageMatched = paymentPercentageTotal === 100;
   const canBuildTimeline =
+    hasSelectedApprovedProjectEstimate &&
     isTimelineEstimateApproved &&
     isContractSigned &&
     isBookingPaymentCollected &&
@@ -554,7 +594,7 @@ export default function TimelinePage() {
   };
 
   const handleOpenTimelineWizard = () => {
-    if (!canBuildTimeline || !linkedCostEstimate) return;
+    if (!canBuildTimeline || !linkedCostEstimate || !hasSelectedApprovedProjectEstimate) return;
 
     const generatedTimeline = generateTimelineFromApprovedEstimate({
       source: linkedCostEstimate,
@@ -608,6 +648,8 @@ export default function TimelinePage() {
   const handleSelectTimelineSource = (projectId?: string) => {
     if (!projectId) return;
 
+    const isChangingSource = selectedTimelineProjectId !== projectId;
+
     setSelectedTimelineProjectId(projectId);
     setIsContractSigned(false);
     setIsBookingPaymentCollected(false);
@@ -616,6 +658,15 @@ export default function TimelinePage() {
     setShowEstimateSourcePicker(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
+
+    if (isChangingSource) {
+      setPaymentGates([]);
+      setWorkPackages([]);
+      setHasTimeline(false);
+      setIgnoredAlertIds([]);
+      setIsPlanningControlsLocked(false);
+      setShowPaymentGateControls(false);
+    }
   };
 
   const handleUseTimelineDraft = (generatedTimeline: {
@@ -631,20 +682,36 @@ export default function TimelinePage() {
     setActiveTab('overview');
   };
 
+  const handleReviseTimeline = () => {
+    if (!hasActiveTimeline || workPackages.length === 0) return;
+
+    setPendingTimelineDraft({
+      paymentGates,
+      workPackages,
+    });
+    setIgnoredAlertIds([]);
+    setShowCreateWizard(false);
+    setShowEstimateSourcePicker(false);
+    setActiveTab('overview');
+  };
+
   const handleResetTimeline = () => {
-    const confirmed = window.confirm(
-      'Reset timeline? This will remove the created timeline and return this project to the no-timeline state.'
-    );
+    setIsDeleteTimelineDialogOpen(true);
+  };
 
-    if (!confirmed) return;
-
+  const handleConfirmDeleteTimeline = () => {
     localStorage.removeItem(TIMELINE_STORAGE_KEY);
     setPaymentGates([]);
     setWorkPackages([]);
     setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
+    setTimelineConfirmedAt('');
     setShowCreateWizard(false);
+    setShowEstimateSourcePicker(false);
+    setIsPlanningControlsLocked(false);
+    setShowPaymentGateControls(false);
+    setIsDeleteTimelineDialogOpen(false);
     setActiveTab('overview');
   };
 
@@ -681,8 +748,11 @@ export default function TimelinePage() {
 
   const handleCancelPendingTimeline = () => {
     setPendingTimelineDraft(null);
-    setHasTimeline(false);
-    setTimelineConfirmedAt('');
+
+    if (!hasTimeline) {
+      setTimelineConfirmedAt('');
+    }
+
     setActiveTab('overview');
   };
 
@@ -906,15 +976,15 @@ export default function TimelinePage() {
                   <span className="text-xs font-medium text-muted-foreground">
                     Start
                   </span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={workPackage.estimatedStartDate}
-                    onChange={event =>
+                    onChange={value =>
                       handleUpdatePendingWorkPackage(workPackage.id, {
-                        estimatedStartDate: event.target.value,
+                        estimatedStartDate: value,
                       })
                     }
-                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                    placeholder="Select start date"
+                    popoverMode="fixed"
                   />
                 </label>
 
@@ -922,15 +992,15 @@ export default function TimelinePage() {
                   <span className="text-xs font-medium text-muted-foreground">
                     End
                   </span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={workPackage.estimatedEndDate}
-                    onChange={event =>
+                    onChange={value =>
                       handleUpdatePendingWorkPackage(workPackage.id, {
-                        estimatedEndDate: event.target.value,
+                        estimatedEndDate: value,
                       })
                     }
-                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
+                    placeholder="Select end date"
+                    popoverMode="fixed"
                   />
                 </label>
 
@@ -953,21 +1023,51 @@ export default function TimelinePage() {
                   <span className="text-xs font-medium text-muted-foreground">
                     Status
                   </span>
-                  <select
-                    value={workPackage.status}
-                    onChange={event =>
-                      handleUpdatePendingWorkPackage(workPackage.id, {
-                        status: event.target.value as WorkPackageStatus,
-                      })
-                    }
-                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
-                  >
-                    {workPackageStatusOptions.map(statusOption => (
-                      <option key={statusOption} value={statusOption}>
-                        {toTitleCase(statusOption)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenPendingStatusMenuId(current =>
+                          current === workPackage.id ? null : workPackage.id
+                        )
+                      }
+                      className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40 focus:border-foreground"
+                    >
+                      <span>{toTitleCase(workPackage.status)}</span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                          openPendingStatusMenuId === workPackage.id
+                            ? 'rotate-180'
+                            : ''
+                        }`}
+                      />
+                    </button>
+
+                    {openPendingStatusMenuId === workPackage.id && (
+                      <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+                        {workPackageStatusOptions.map(statusOption => (
+                          <button
+                            key={statusOption}
+                            type="button"
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={() => {
+                              handleUpdatePendingWorkPackage(workPackage.id, {
+                                status: statusOption,
+                              });
+                              setOpenPendingStatusMenuId(null);
+                            }}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                              statusOption === workPackage.status
+                                ? 'bg-muted text-foreground'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            }`}
+                          >
+                            {toTitleCase(statusOption)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </label>
               </div>
 
@@ -1364,31 +1464,26 @@ export default function TimelinePage() {
               : 'Create one active timeline for this project before using dashboard, work packages, payments, or Intelligent Assist.'
         }
         actions={
-          hasTimeline ? (
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          hasActiveTimeline ? (
+            <div className="flex w-full flex-row gap-2 sm:w-auto">
               <Button
                 type="button"
-                onClick={handleOpenTimelineWizard}
-                disabled={!canBuildTimeline}
-                className="gap-2"
+                onClick={handleReviseTimeline}
+                disabled={workPackages.length === 0}
+                className="flex-1 gap-2 bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60 sm:flex-none"
               >
-                <Plus className="h-4 w-4" />
-                Edit Timeline
+                <Pencil className="h-4 w-4" />
+                <span className="whitespace-nowrap">Revise Timeline</span>
               </Button>
 
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleResetTimeline}
-                className="gap-2"
+                className="flex-1 gap-2 border-red-500/35 text-red-600 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 sm:flex-none"
               >
-                <RotateCcw className="h-4 w-4" />
-                Reset
-              </Button>
-
-              <Button type="button" className="gap-2">
-                <CalendarClock className="h-4 w-4" />
-                Override
+                <Trash2 className="h-4 w-4" />
+                <span className="whitespace-nowrap">Delete Timeline</span>
               </Button>
             </div>
           ) : null
@@ -1552,6 +1647,7 @@ export default function TimelinePage() {
         )}
       </div>
 
+      {hasSelectedApprovedProjectEstimate && !hasActiveTimeline && !pendingTimelineDraft && (
       <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -1666,12 +1762,11 @@ export default function TimelinePage() {
                 <span className="text-xs font-medium text-muted-foreground">
                   Timeline Start Date
                 </span>
-                <input
-                  type="date"
+                <DateInput
                   value={timelineStartDate}
-                  onChange={event => setTimelineStartDate(event.target.value)}
-                  disabled={!isTimelineEstimateApproved}
-                  className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground outline-none transition focus:border-foreground disabled:opacity-50"
+                  onChange={setTimelineStartDate}
+                  placeholder="Select start date"
+                  popoverMode="fixed"
                 />
               </label>
             </div>
@@ -1812,8 +1907,43 @@ export default function TimelinePage() {
           </Button>
         </div>
       </div>
+      )}
 
       {renderGeneratedTimelineReview()}
+
+      {isDeleteTimelineDialogOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                Delete Timeline?
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                This will remove the confirmed planned timeline for this project. The approved cost estimate and project revenue will remain unchanged.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDeleteTimelineDialogOpen(false)}
+              >
+                Keep Timeline
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleConfirmDeleteTimeline}
+                className="gap-2 bg-red-600 text-white hover:bg-red-700"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Timeline
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateWizard && isTimelineEstimateApproved && (
         <div className="mb-6">
@@ -1824,7 +1954,7 @@ export default function TimelinePage() {
         </div>
       )}
 
-      {!showCreateWizard && !hasTimeline && !pendingTimelineDraft && (
+      {!showCreateWizard && !hasActiveTimeline && !pendingTimelineDraft && (
         <SectionCard
           title="No timeline created yet"
           description="Create a timeline from a design-only workflow or from an approved cost estimate before using dashboard, payment gates, work packages, or Intelligent Assist."
@@ -1843,7 +1973,7 @@ export default function TimelinePage() {
         </SectionCard>
       )}
 
-      {!showCreateWizard && hasTimeline && (
+      {!showCreateWizard && hasActiveTimeline && (
         <>
           <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-foreground">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
