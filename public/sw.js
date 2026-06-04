@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravium-os-cache-v7-push-focus-navigation";
+const CACHE_NAME = "gravium-os-cache-v8-push-crown-icon";
 
 const PRECACHE_URLS = [
   "/",
@@ -97,7 +97,7 @@ self.addEventListener("push", event => {
   let payload = {
     title: "Gravium OS",
     body: "You have a new notification.",
-    icon: "/icons/icon-192.png",
+    icon: "/icons/notification-icon-192.png",
     badge: "/icons/notification-badge-96.png",
     url: "/portal/overview",
   };
@@ -115,7 +115,7 @@ self.addEventListener("push", event => {
 
   const notificationOptions = {
     body: payload.body,
-    icon: payload.icon || "/icons/icon-192.png",
+    icon: payload.icon || "/icons/notification-icon-192.png",
     badge: payload.badge || "/icons/notification-badge-96.png",
     data: {
       url: payload.url || "/portal/overview",
