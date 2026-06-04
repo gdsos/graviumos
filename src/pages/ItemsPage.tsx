@@ -26,6 +26,7 @@ import type {
 } from '@/features/items/types';
 
 const ITEMS_STORAGE_KEY = 'gravium-os-items';
+const LEGACY_ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
 const PROCUREMENT_UNITS_STORAGE_KEY = 'gravium-os-procurement-units-demo';
@@ -350,12 +351,10 @@ function createFormState(item?: ProcurementItem): ItemFormState {
 function getStoredItems() {
   if (typeof window === 'undefined') return [];
 
-  try {
-    const storedItems = localStorage.getItem(ITEMS_STORAGE_KEY);
+  const parseItems = (rawItems: string | null) => {
+    if (!rawItems) return [];
 
-    if (!storedItems) return [];
-
-    const parsedItems = JSON.parse(storedItems);
+    const parsedItems = JSON.parse(rawItems);
 
     if (!Array.isArray(parsedItems)) return [];
 
@@ -374,6 +373,21 @@ function getStoredItems() {
         typeof item.updatedAt === 'string'
       );
     }) as ProcurementItem[];
+  };
+
+  try {
+    const storedItems = parseItems(localStorage.getItem(ITEMS_STORAGE_KEY));
+
+    if (storedItems.length > 0) return storedItems;
+
+    const legacyItems = parseItems(localStorage.getItem(LEGACY_ITEMS_STORAGE_KEY));
+
+    if (legacyItems.length > 0) {
+      localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(legacyItems));
+      return legacyItems;
+    }
+
+    return [];
   } catch {
     return [];
   }
