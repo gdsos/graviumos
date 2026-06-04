@@ -16,6 +16,8 @@ import {
 import { supabase, type Profile } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader } from '../../components/common/PageHeader';
+import { useOperationFeedback } from '../../contexts/OperationFeedbackContext';
+import { AppLoader } from '../../components/common/AppLoader';
 import { PhoneNumberInput } from '../../components/common/PhoneNumberInput';
 import { PAGE_PERMISSION_CONFIGS, getDefaultPagePermissions, normalizePagePermissions, type PageAccess, type PagePermissionKey, type PagePermissions } from '../../lib/pagePermissions';
 
@@ -178,6 +180,11 @@ function InlineNotice({
 
 export default function People() {
   const { profile: _currentUserProfile, departments, isAdmin, suppressAuthChanges } = useAuth();
+  const {
+    showOperationLoading,
+    showOperationSuccess,
+    showOperationError,
+  } = useOperationFeedback();
 
   const [employees, setEmployees] = useState<ProfileWithDepts[]>([]);
   const [loading, setLoading] = useState(true);
@@ -410,7 +417,10 @@ export default function People() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const isEditingEmployee = Boolean(editingEmployee);
+
     setSaving(true);
+    showOperationLoading(isEditingEmployee ? 'Saving Employee' : 'Creating Employee');
 
     try {
       if (editingEmployee) {
@@ -520,8 +530,10 @@ export default function People() {
 
       setShowModal(false);
       await fetchEmployees();
+      await showOperationSuccess(isEditingEmployee ? 'Employee Saved' : 'Employee Created');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+      await showOperationError('Save Failed');
     } finally {
       setSaving(false);
     }
@@ -530,6 +542,8 @@ export default function People() {
   // ——— Toggle active ————————————————————————————————————————————————————————————
 
   const toggleActive = async (emp: Profile) => {
+    showOperationLoading(emp.is_active ? 'Deactivating Employee' : 'Activating Employee');
+
     const { error: toggleErr } = await supabase
       .from('profiles')
       .update({ is_active: !emp.is_active, updated_at: new Date().toISOString() })
@@ -539,7 +553,11 @@ export default function People() {
       setEmployees(prev =>
         prev.map(e => (e.id === emp.id ? { ...e, is_active: !emp.is_active } : e))
       );
+      await showOperationSuccess(emp.is_active ? 'Employee Deactivated' : 'Employee Activated');
+      return;
     }
+
+    await showOperationError('Update Failed');
   };
 
   // ——— Delete ———————————————————————————————————————————————————————————————————
@@ -547,6 +565,7 @@ export default function People() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    showOperationLoading('Deleting Employee');
 
     // Remove from profiles (auth user cleanup requires admin edge function or manual action)
     const { error: delErr } = await supabase
@@ -559,9 +578,11 @@ export default function People() {
 
     if (delErr) {
       setError(delErr.message);
+      await showOperationError('Delete Failed');
       return;
     }
     await fetchEmployees();
+    await showOperationSuccess('Employee Deleted');
   };
 
   // ——— Filtered list ————————————————————————————————————————————————————————————
@@ -719,9 +740,7 @@ export default function People() {
       )}
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Loading employees...</p>
-        </div>
+        <AppLoader />
       ) : filtered.length === 0 ? (
         <div className="flex h-48 flex-col items-center justify-center rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
           <User className="h-8 w-8 text-muted-foreground" />

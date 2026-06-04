@@ -13,6 +13,7 @@ import {
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
+import { useOperationFeedback } from '@/contexts/OperationFeedbackContext';
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -395,6 +396,10 @@ export default function ItemsPage() {
   const [formState, setFormState] = useState<ItemFormState>(() =>
     createFormState()
   );
+  const {
+    showOperationLoading,
+    showOperationSuccess,
+  } = useOperationFeedback();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -536,7 +541,7 @@ export default function ItemsPage() {
     setFormState(createFormState());
   };
 
-  const handleSubmitItem = () => {
+  const handleSubmitItem = async () => {
     const trimmedName = formState.name.trim();
     const trimmedUnit = formState.defaultUnitLabel.trim();
     const purchaseRate = Number(formState.purchaseRatePerUnit);
@@ -544,6 +549,9 @@ export default function ItemsPage() {
 
     if (!trimmedName || !trimmedUnit || Number.isNaN(purchaseRate)) return;
     if (Number.isNaN(markupPercent)) return;
+
+    const isEditingItem = modalState?.mode === 'edit';
+    showOperationLoading(isEditingItem ? 'Saving Item' : 'Adding Item');
 
     const itemCategory = registerCategoryOption(formState.category);
     const itemUnit = registerUnitOption(trimmedUnit);
@@ -574,16 +582,20 @@ export default function ItemsPage() {
     });
 
     closeModal();
+    await showOperationSuccess(isEditingItem ? 'Item Saved' : 'Item Added');
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+
+    showOperationLoading('Deleting Item');
 
     setItems(currentItems =>
       currentItems.filter(item => item.id !== deleteTarget.id)
     );
 
     setDeleteTarget(null);
+    await showOperationSuccess('Item Deleted');
   };
 
   const handleResetDemoData = () => {

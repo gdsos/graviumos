@@ -18,6 +18,7 @@ import {
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
+import { useOperationFeedback } from '@/contexts/OperationFeedbackContext';
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -493,6 +494,10 @@ export default function VendorsPage() {
   const [modalState, setModalState] = useState<VendorModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const {
+    showOperationLoading,
+    showOperationSuccess,
+  } = useOperationFeedback();
 
   useEffect(() => {
     localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(vendors));
@@ -580,7 +585,10 @@ export default function VendorsPage() {
   ).length;
   const busyVendorCount = vendors.filter(vendor => vendor.availability === 'busy').length;
 
-  const handleSubmitVendor = (vendor: Vendor) => {
+  const handleSubmitVendor = async (vendor: Vendor) => {
+    const isEditingVendor = modalState?.mode === 'edit';
+    showOperationLoading(isEditingVendor ? 'Saving Vendor' : 'Adding Vendor');
+
     setVendors(currentVendors => {
       const exists = currentVendors.some(
         currentVendor => currentVendor.id === vendor.id
@@ -596,10 +604,13 @@ export default function VendorsPage() {
     });
 
     setModalState(null);
+    await showOperationSuccess(isEditingVendor ? 'Vendor Saved' : 'Vendor Added');
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+
+    showOperationLoading('Deleting Vendor');
 
     setVendors(currentVendors =>
       currentVendors.filter(vendor => vendor.id !== deleteTarget.id)
@@ -610,6 +621,7 @@ export default function VendorsPage() {
     }
 
     setDeleteTarget(null);
+    await showOperationSuccess('Vendor Deleted');
   };
 
   // For demo purposes, allow resetting to original demo data

@@ -14,6 +14,7 @@ import { Plus, Check, ChevronDown, Search } from 'lucide-react';
 import TaskDetailModal from '../../components/tasks/TaskDetailModal';
 import TasksBoard from '../../components/tasks/TasksBoard';
 import { createNotification } from '../../lib/notifications';
+import { useOperationFeedback } from '../../contexts/OperationFeedbackContext';
 import {
   calcEffectiveStatus,
   calcOverdueDays,
@@ -314,6 +315,11 @@ export default function Tasks() {
 
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const {
+    showOperationLoading,
+    showOperationSuccess,
+    showOperationError,
+  } = useOperationFeedback();
 
   // ─── Derived ───────────────────────────────────────────────────────────────
 
@@ -662,7 +668,11 @@ export default function Tasks() {
       return;
     }
 
+    const operationLoadingMessage = editingTask ? 'Saving Changes' : 'Creating Task';
+    const operationSuccessMessage = editingTask ? 'Saved Successfully' : 'Task Created';
+
     setSaving(true);
+    showOperationLoading(operationLoadingMessage);
     setFormError('');
 
     try {
@@ -800,11 +810,13 @@ export default function Tasks() {
 
       if (err) {
         setFormError(err.message);
+        await showOperationError('Save Failed');
         return;
       }
 
       setShowTaskModal(false);
       setForm(EMPTY_FORM);
+      await showOperationSuccess(operationSuccessMessage);
 
       // Keep the optimistic task visible after creation.
       // A background refetch can hide the new row when Supabase/RLS filters have not caught up yet.
@@ -814,6 +826,7 @@ export default function Tasks() {
       setFormError(
         'Failed to save task.'
       );
+      await showOperationError('Save Failed');
     } finally {
       setSaving(false);
     }
