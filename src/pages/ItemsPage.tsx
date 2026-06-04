@@ -6,7 +6,6 @@ import {
   Package,
   Pencil,
   Plus,
-  RotateCcw,
   Search,
   Trash2,
 } from 'lucide-react';
@@ -19,7 +18,6 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
 import { defaultCostEstimateUnits } from '@/features/cost-estimate/data';
-import { demoProcurementItems } from '@/features/items/data';
 import { vendorCategoryLabels } from '@/features/vendors/data';
 import type {
   ItemCategory,
@@ -27,7 +25,7 @@ import type {
   ProcurementItem,
 } from '@/features/items/types';
 
-const ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
+const ITEMS_STORAGE_KEY = 'gravium-os-items';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
 const PROCUREMENT_UNITS_STORAGE_KEY = 'gravium-os-procurement-units-demo';
@@ -350,16 +348,16 @@ function createFormState(item?: ProcurementItem): ItemFormState {
 }
 
 function getStoredItems() {
-  if (typeof window === 'undefined') return demoProcurementItems;
+  if (typeof window === 'undefined') return [];
 
   try {
     const storedItems = localStorage.getItem(ITEMS_STORAGE_KEY);
 
-    if (!storedItems) return demoProcurementItems;
+    if (!storedItems) return [];
 
     const parsedItems = JSON.parse(storedItems);
 
-    if (!Array.isArray(parsedItems)) return demoProcurementItems;
+    if (!Array.isArray(parsedItems)) return [];
 
     return parsedItems.filter(item => {
       return (
@@ -377,7 +375,7 @@ function getStoredItems() {
       );
     }) as ProcurementItem[];
   } catch {
-    return demoProcurementItems;
+    return [];
   }
 }
 
@@ -598,20 +596,6 @@ export default function ItemsPage() {
     await showOperationSuccess('Item Deleted');
   };
 
-  const handleResetDemoData = () => {
-    const confirmed = window.confirm(
-      'Reset items to the original demo data? This will remove locally added items.'
-    );
-
-    if (!confirmed) return;
-
-    localStorage.removeItem(ITEMS_STORAGE_KEY);
-    setItems(demoProcurementItems);
-    setSearch('');
-    setCategory('all');
-    setStatus('all');
-  };
-
   const purchaseRatePreview = Number(formState.purchaseRatePerUnit);
   const markupPreview = Number(formState.markupPercent);
   const sellingRatePreview =
@@ -626,22 +610,10 @@ export default function ItemsPage() {
         title="Items"
         description="Manage reusable item presets for estimates, procurement rates, markups, units, and default descriptions."
         actions={
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResetDemoData}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset Demo
-            </Button>
-
-            <Button type="button" onClick={openCreateModal} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Item
-            </Button>
-          </div>
+          <Button type="button" onClick={openCreateModal} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Item
+          </Button>
         }
       />
 
@@ -854,20 +826,30 @@ export default function ItemsPage() {
       ) : (
         <EmptyState
           icon={Package}
-          title="No items found"
-          description="Try changing the search term or filters to find matching items."
+          title={items.length === 0 ? 'No items yet' : 'No items found'}
+          description={
+            items.length === 0
+              ? 'Add your first procurement item to start building real estimate presets.'
+              : 'Try changing the search term or filters to find matching items.'
+          }
           action={
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setSearch('');
-                setCategory('all');
-                setStatus('all');
-              }}
-            >
-              Clear Filters
-            </Button>
+            items.length === 0 ? (
+              <Button type="button" onClick={openCreateModal}>
+                Add Item
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSearch('');
+                  setCategory('all');
+                  setStatus('all');
+                }}
+              >
+                Clear Filters
+              </Button>
+            )
           }
         />
       )}
