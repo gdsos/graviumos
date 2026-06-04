@@ -1,12 +1,15 @@
-import { CheckCircle2, CircleDashed, LockKeyhole, WalletCards } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, CircleDashed, LockKeyhole, Pencil } from 'lucide-react';
 
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { DateInput } from '@/components/common/DateInput';
 import type { PaymentGate } from '../types';
 
 interface PaymentGateBarProps {
   paymentGates: PaymentGate[];
   onMarkReceived?: (paymentGate: PaymentGate) => void;
   onMarkPending?: (paymentGate: PaymentGate) => void;
+  onUpdateDueDate?: (paymentGateId: string, dueDate: string) => void;
 }
 
 function formatINR(amount: number) {
@@ -27,7 +30,10 @@ export function PaymentGateBar({
   paymentGates,
   onMarkReceived,
   onMarkPending,
+  onUpdateDueDate,
 }: PaymentGateBarProps) {
+  const [showGateDateControls, setShowGateDateControls] = useState(false);
+
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
       <div className="flex flex-col gap-2 border-b border-border px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
@@ -40,11 +46,51 @@ export function PaymentGateBar({
           </p>
         </div>
 
-        <div className="flex w-fit items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
-          <WalletCards className="h-4 w-4" />
-          {paymentGates.length} gates
-        </div>
+        {onUpdateDueDate ? (
+          <button
+            type="button"
+            onClick={() => setShowGateDateControls(current => !current)}
+            className="inline-flex w-fit items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+          >
+            <Pencil className="h-4 w-4" />
+            {showGateDateControls ? 'Done Editing' : 'Edit Gate Dates'}
+          </button>
+        ) : null}
       </div>
+
+      {showGateDateControls && onUpdateDueDate ? (
+        <div className="border-b border-border px-4 py-4 sm:px-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {paymentGates.map((paymentGate, index) => (
+              <div
+                key={`edit-${paymentGate.id}`}
+                className="rounded-2xl border border-border bg-background p-3"
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {paymentGate.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatINR(paymentGate.amount)}
+                    </p>
+                  </div>
+                </div>
+
+                <DateInput
+                  value={paymentGate.dueDate}
+                  onChange={value => onUpdateDueDate(paymentGate.id, value)}
+                  placeholder="Select gate date"
+                  popoverMode="fixed"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid min-w-0 grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
           {paymentGates.map((paymentGate, index) => {
