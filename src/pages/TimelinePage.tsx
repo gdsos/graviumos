@@ -7,13 +7,6 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
 import {
-  demoPaymentGates,
-  demoTimelineAlerts,
-  demoTimelineProject,
-  demoWorkPackages,
-} from '@/features/timeline/data';
-
-import {
   calculateTimelineSummary,
   generateTimelineAlerts,
   getPaymentGateById,
@@ -37,8 +30,8 @@ import type {
   WorkPackageStatus,
 } from '@/features/timeline/types';
 
-const TIMELINE_STORAGE_KEY = 'gravium-os-villa-athani-client-dummy-timeline';
-const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates-demo';
+const TIMELINE_STORAGE_KEY = 'gravium-os-timeline';
+const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
 
 type LinkedCostEstimateStatus = 'draft' | 'approved' | 'revision';
 
@@ -68,32 +61,17 @@ type StoredCostEstimateRecord = {
   }>;
 };
 
-const fallbackCostEstimateRecords: StoredCostEstimateRecord[] = [
-  {
-    id: 'estimate-villa-athani',
-    projectId: 'project-villa-athani',
-    projectName: 'Villa, Athani',
-    clientName: 'Rafeek Muhammed Ali',
-    status: 'approved',
-    version: 1,
-    grandTotal: 1870215,
-    updatedAt: new Date().toISOString(),
-    areas: [],
-    lineItems: [],
-  },
-];
-
 function getStoredCostEstimateRecords() {
-  if (typeof window === 'undefined') return fallbackCostEstimateRecords;
+  if (typeof window === 'undefined') return [];
 
   try {
     const storedRecords = localStorage.getItem(COST_ESTIMATE_STORAGE_KEY);
 
-    if (!storedRecords) return fallbackCostEstimateRecords;
+    if (!storedRecords) return [];
 
     const parsedRecords = JSON.parse(storedRecords);
 
-    if (!Array.isArray(parsedRecords)) return fallbackCostEstimateRecords;
+    if (!Array.isArray(parsedRecords)) return [];
 
     return parsedRecords.filter(record => {
       return (
@@ -108,7 +86,7 @@ function getStoredCostEstimateRecords() {
       );
     }) as StoredCostEstimateRecord[];
   } catch {
-    return fallbackCostEstimateRecords;
+    return [];
   }
 }
 
@@ -142,6 +120,19 @@ function getEstimateStatusVariant(status?: LinkedCostEstimateStatus) {
 
   return 'muted';
 }
+
+const emptyTimelineProject: TimelineProject = {
+  id: 'timeline-project-unselected',
+  name: 'Select an approved estimate',
+  clientName: 'No client selected',
+  projectType: 'Execution Timeline',
+  status: 'active',
+  startDate: new Date().toISOString().slice(0, 10),
+  expectedHandoverDate: new Date().toISOString().slice(0, 10),
+  currentProjectedHandoverDate: new Date().toISOString().slice(0, 10),
+  revenue: 0,
+  location: '',
+};
 
 
 type StoredTimelineState = {
@@ -332,10 +323,10 @@ export default function TimelinePage() {
     () => storedTimeline?.hasTimeline ?? false
   );
   const [paymentGates, setPaymentGates] = useState<PaymentGate[]>(
-    () => storedTimeline?.paymentGates ?? demoPaymentGates
+    () => storedTimeline?.paymentGates ?? []
   );
   const [workPackages, setWorkPackages] = useState<WorkPackage[]>(
-    () => storedTimeline?.workPackages ?? demoWorkPackages
+    () => storedTimeline?.workPackages ?? []
   );
   const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
@@ -350,9 +341,7 @@ export default function TimelinePage() {
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
   >(() => getStoredCostEstimateRecords());
-  const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
-    demoTimelineProject.id
-  );
+  const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState('');
   const [timelineStartDate, setTimelineStartDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -386,7 +375,7 @@ export default function TimelinePage() {
   );
 
   const alerts = useMemo(() => {
-    const sourceAlerts = hasTimeline ? generatedAlerts : demoTimelineAlerts;
+    const sourceAlerts = hasTimeline ? generatedAlerts : [];
 
     const uniqueAlerts = sourceAlerts.filter(
       (alert, index, array) =>
@@ -430,13 +419,14 @@ export default function TimelinePage() {
   );
   const activeTimelineProject = useMemo<TimelineProject>(
     () => ({
-      ...demoTimelineProject,
-      id: linkedCostEstimate?.projectId ?? selectedTimelineProjectId,
-      name: linkedCostEstimate?.projectName ?? demoTimelineProject.name,
-      clientName: linkedCostEstimate?.clientName ?? demoTimelineProject.clientName,
-      revenue: linkedCostEstimate?.grandTotal ?? demoTimelineProject.revenue,
+      ...emptyTimelineProject,
+      id: (linkedCostEstimate?.projectId ?? selectedTimelineProjectId) || emptyTimelineProject.id,
+      name: linkedCostEstimate?.projectName ?? emptyTimelineProject.name,
+      clientName: linkedCostEstimate?.clientName ?? emptyTimelineProject.clientName,
+      revenue: linkedCostEstimate?.grandTotal ?? 0,
+      startDate: timelineStartDate || emptyTimelineProject.startDate,
     }),
-    [linkedCostEstimate, selectedTimelineProjectId]
+    [linkedCostEstimate, selectedTimelineProjectId, timelineStartDate]
   );
   const timelineDateRange = useMemo(() => {
     if (workPackages.length === 0) {
@@ -641,28 +631,6 @@ export default function TimelinePage() {
     setActiveTab('overview');
   };
 
-  const handleFetchDevTimelineData = () => {
-    setPaymentGates(demoPaymentGates);
-    setWorkPackages(demoWorkPackages);
-    setPendingTimelineDraft(null);
-    setIgnoredAlertIds([]);
-    setHasTimeline(true);
-    setShowCreateWizard(false);
-    setActiveTab('overview');
-  };
-
-  const handleHideDevTimelineData = () => {
-    localStorage.removeItem(TIMELINE_STORAGE_KEY);
-    setPaymentGates(demoPaymentGates);
-    setWorkPackages(demoWorkPackages);
-    setPendingTimelineDraft(null);
-    setIgnoredAlertIds([]);
-    setHasTimeline(false);
-    setTimelineConfirmedAt('');
-    setShowCreateWizard(false);
-    setActiveTab('overview');
-  };
-
   const handleResetTimeline = () => {
     const confirmed = window.confirm(
       'Reset timeline? This will remove the created timeline and return this project to the no-timeline state.'
@@ -671,8 +639,8 @@ export default function TimelinePage() {
     if (!confirmed) return;
 
     localStorage.removeItem(TIMELINE_STORAGE_KEY);
-    setPaymentGates(demoPaymentGates);
-    setWorkPackages(demoWorkPackages);
+    setPaymentGates([]);
+    setWorkPackages([]);
     setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
@@ -1426,39 +1394,6 @@ export default function TimelinePage() {
           ) : null
         }
       />
-
-      <div className="mb-5 rounded-2xl border border-dashed border-border bg-muted/20 p-3 text-card-foreground">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-foreground">
-              Dev Client Timeline Data
-            </p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Use this temporary control to show or hide the Villa - Athani client timeline while the real timeline workflow is being built.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleFetchDevTimelineData}
-              className="h-10 justify-center"
-            >
-              Fetch Data
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleHideDevTimelineData}
-              className="h-10 justify-center"
-            >
-              Hide Data
-            </Button>
-          </div>
-        </div>
-      </div>
 
       <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
         <div className="flex items-start justify-between gap-3">
