@@ -21,7 +21,6 @@ import {
 import {
   demoCostEstimateAreas,
   demoCostEstimateProjects,
-  demoCostEstimateLineItems,
 } from '@/features/cost-estimate/data';
 import type {
   CostEstimateArea,
@@ -100,37 +99,6 @@ function formatUpdatedAt(value: string) {
   });
 }
 
-const initialEstimateCards: EstimateCardRecord[] = [
-  {
-    id: 'estimate-unassigned-draft',
-    projectName: 'Unassigned Draft',
-    status: 'draft',
-    version: 1,
-    grandTotal: 0,
-    updatedAt: nowTimestamp(),
-    areas: demoCostEstimateAreas,
-    lineItems: [],
-    serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
-    miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
-    targetProjectRevenue: 950000,
-  },
-  {
-    id: 'estimate-villa-athani',
-    projectId: 'project-villa-athani',
-    projectName: 'Villa, Athani',
-    clientName: 'Rafeek Muhammed Ali',
-    status: 'approved',
-    version: 1,
-    grandTotal: 1870215,
-    updatedAt: nowTimestamp(),
-    areas: demoCostEstimateAreas,
-    lineItems: demoCostEstimateLineItems,
-    serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
-    miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
-    targetProjectRevenue: 1870215,
-  },
-];
-
 function formatINR(amount: number) {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -161,19 +129,19 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}`;
 }
 
-const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates-demo';
+const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
 
 function getStoredEstimateCards() {
-  if (typeof window === 'undefined') return initialEstimateCards;
+  if (typeof window === 'undefined') return [];
 
   try {
     const storedRecords = localStorage.getItem(COST_ESTIMATE_STORAGE_KEY);
 
-    if (!storedRecords) return initialEstimateCards;
+    if (!storedRecords) return [];
 
     const parsedRecords = JSON.parse(storedRecords);
 
-    if (!Array.isArray(parsedRecords)) return initialEstimateCards;
+    if (!Array.isArray(parsedRecords)) return [];
 
     return parsedRecords.filter(record => {
       return (
@@ -192,7 +160,7 @@ function getStoredEstimateCards() {
       );
     }) as EstimateCardRecord[];
   } catch {
-    return initialEstimateCards;
+    return [];
   }
 }
 
@@ -852,7 +820,28 @@ export default function CostEstimatesPage() {
         </div>
 
         <div className="divide-y divide-border">
-          {records.map(record => (
+          {records.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground">
+                <Plus className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-semibold text-foreground">
+                No cost estimates yet
+              </h2>
+              <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+                Create your first estimate as an unassigned draft or attach it to a project when the project workflow is ready.
+              </p>
+              <Button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="mt-5 gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Create Estimate
+              </Button>
+            </div>
+          ) : (
+            records.map(record => (
             <div
               key={record.id}
               className="grid gap-3 bg-background px-4 py-4 lg:grid-cols-[minmax(210px,0.95fr)_minmax(160px,0.8fr)_140px_125px_295px] lg:items-center lg:gap-4"
@@ -970,7 +959,7 @@ export default function CostEstimatesPage() {
                 </Button>
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </div>
 
