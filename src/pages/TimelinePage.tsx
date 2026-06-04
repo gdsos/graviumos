@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save,
   Trash2,
 } from 'lucide-react';
@@ -247,26 +247,91 @@ function getDayDifference(startDate: string, endDate: string) {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / dayInMs));
 }
 
-function getTimelineSpanPercent(
-  dateString: string,
-  timelineStartDate: string,
-  timelineEndDate: string
-) {
-  const totalDays = Math.max(1, getDayDifference(timelineStartDate, timelineEndDate));
-  const offsetDays = getDayDifference(timelineStartDate, dateString);
+const SCHEDULE_LEFT_COLUMN_WIDTH = 280;
+const SCHEDULE_CHART_LEFT_PADDING = 44;
+const SCHEDULE_BASE_DAY_WIDTH = 44;
+const SCHEDULE_MIN_ZOOM = 0.65;
+const SCHEDULE_MAX_ZOOM = 3.2;
 
-  return Math.min(100, Math.max(0, (offsetDays / totalDays) * 100));
+function clampScheduleZoom(value: number) {
+  return Math.min(SCHEDULE_MAX_ZOOM, Math.max(SCHEDULE_MIN_ZOOM, value));
+}
+
+function formatScheduleTickDate(dateString: string) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+  }).format(date);
+}
+
+function addDaysToDate(dateString: string, days: number) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  date.setDate(date.getDate() + days);
+
+  return date.toISOString().slice(0, 10);
+}
+
+function getSchedulePointLeft(
+  date: string,
+  timelineStartDate: string,
+  dayWidth: number
+) {
+  return (
+    SCHEDULE_CHART_LEFT_PADDING +
+    Math.max(0, getDayDifference(timelineStartDate, date) * dayWidth)
+  );
+}
+
+function getScheduleDateTicks(
+  timelineStartDate: string,
+  totalDays: number,
+  dayWidth: number
+) {
+  const step =
+    dayWidth >= 54
+      ? 1
+      : dayWidth >= 34
+        ? 3
+        : dayWidth >= 22
+          ? 7
+          : 14;
+
+  const ticks = [];
+
+  for (let dayIndex = 0; dayIndex < totalDays; dayIndex += step) {
+    ticks.push({
+      date: addDaysToDate(timelineStartDate, dayIndex),
+      left: SCHEDULE_CHART_LEFT_PADDING + dayIndex * dayWidth,
+      isMajor: dayIndex === 0 || dayIndex % Math.max(step, 7) === 0,
+    });
+  }
+
+  if (ticks[ticks.length - 1]?.date !== addDaysToDate(timelineStartDate, totalDays - 1)) {
+    ticks.push({
+      date: addDaysToDate(timelineStartDate, totalDays - 1),
+      left: SCHEDULE_CHART_LEFT_PADDING + (totalDays - 1) * dayWidth,
+      isMajor: true,
+    });
+  }
+
+  return ticks;
 }
 
 function getWorkPackageBarStyle(
   workPackage: WorkPackage,
   timelineStartDate: string,
-  timelineEndDate: string
+  dayWidth: number
 ) {
-  const totalDays = Math.max(1, getDayDifference(timelineStartDate, timelineEndDate));
-  const offsetDays = getDayDifference(
-    timelineStartDate,
-    workPackage.estimatedStartDate
+  const offsetDays = Math.max(
+    0,
+    getDayDifference(timelineStartDate, workPackage.estimatedStartDate)
   );
   const durationDays = Math.max(
     1,
@@ -274,23 +339,98 @@ function getWorkPackageBarStyle(
   );
 
   return {
-    marginLeft: `${Math.min(96, Math.max(0, (offsetDays / totalDays) * 100))}%`,
-    width: `${Math.min(100, Math.max(3, (durationDays / totalDays) * 100))}%`,
+    left: `${SCHEDULE_CHART_LEFT_PADDING + offsetDays * dayWidth}px`,
+    width: `${Math.max(dayWidth, durationDays * dayWidth)}px`,
   };
 }
 
 function getScheduleBarTone(status: WorkPackageStatus) {
   if (status === 'blocked_by_payment' || status === 'blocked_by_dependency') {
-    return 'bg-amber-500/80';
+    return 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-700';
   }
 
-  if (status === 'in_progress') return 'bg-blue-500/80';
-  if (status === 'completed') return 'bg-emerald-500/80';
-  if (status === 'delayed') return 'bg-red-500/80';
+  if (status === 'in_progress') {
+    return 'bg-gradient-to-r from-blue-500 via-sky-500 to-cyan-500';
+  }
 
-  return 'bg-primary';
+  if (status === 'completed') {
+    return 'bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500';
+  }
+
+  if (status === 'delayed') {
+    return 'bg-gradient-to-r from-red-500 via-rose-500 to-orange-500';
+  }
+
+  if (status === 'paused') {
+    return 'bg-gradient-to-r from-zinc-400 via-neutral-500 to-stone-500';
+  }
+
+  return 'bg-gradient-to-r from-[#603B2A] via-[#555D3A] to-[#2F2F2F]';
 }
 
+function getPaymentGateScheduleTone(index: number) {
+  const tones = [
+    {
+      badge: 'bg-amber-500 text-black',
+      line: 'bg-amber-500/45',
+    },
+    {
+      badge: 'bg-blue-500 text-white',
+      line: 'bg-blue-500/40',
+    },
+    {
+      badge: 'bg-violet-500 text-white',
+      line: 'bg-violet-500/40',
+    },
+    {
+      badge: 'bg-emerald-500 text-black',
+      line: 'bg-emerald-500/40',
+    },
+  ];
+
+  return tones[index % tones.length];
+}
+
+function distributePaymentGatesAcrossTimeline(
+  paymentGates: PaymentGate[],
+  workPackages: WorkPackage[],
+  fallbackStartDate: string
+) {
+  if (paymentGates.length === 0) return paymentGates;
+
+  const packageStartDates = workPackages
+    .map(workPackage => workPackage.estimatedStartDate)
+    .filter(Boolean)
+    .sort();
+
+  const packageEndDates = workPackages
+    .map(workPackage => workPackage.estimatedEndDate)
+    .filter(Boolean)
+    .sort();
+
+  const startDate = packageStartDates[0] ?? fallbackStartDate;
+  const endDate =
+    packageEndDates[packageEndDates.length - 1] ??
+    packageStartDates[packageStartDates.length - 1] ??
+    fallbackStartDate;
+  const totalDays = Math.max(1, getDayDifference(startDate, endDate));
+
+  if (paymentGates.length === 1) {
+    return paymentGates.map(paymentGate => ({
+      ...paymentGate,
+      dueDate: startDate,
+    }));
+  }
+
+  return paymentGates.map((paymentGate, index) => {
+    const offsetDays = Math.round((index / (paymentGates.length - 1)) * totalDays);
+
+    return {
+      ...paymentGate,
+      dueDate: addDaysToDate(startDate, offsetDays),
+    };
+  });
+}
 
 function getNextStatusAfterPaymentUnlock(
   workPackage: WorkPackage,
@@ -360,6 +500,16 @@ export default function TimelinePage() {
   const [timelineStartDate, setTimelineStartDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
+  const [scheduleZoom, setScheduleZoom] = useState(1);
+  const [showScheduleGateDateControls, setShowScheduleGateDateControls] =
+    useState(false);
+  const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingScheduleScrollLeftRef = useRef<number | null>(null);
+  const scheduleDragStartXRef = useRef<number | null>(null);
+  const scheduleDragStartScrollLeftRef = useRef(0);
+  const scheduleIsDraggingRef = useRef(false);
+  const schedulePinchDistanceRef = useRef<number | null>(null);
+  const schedulePinchZoomRef = useRef(1);
   const [isContractSigned, setIsContractSigned] = useState(false);
   const [isBookingPaymentCollected, setIsBookingPaymentCollected] = useState(false);
   const [bookingPaymentPercent, setBookingPaymentPercent] = useState('35');
@@ -385,6 +535,76 @@ export default function TimelinePage() {
     timelineConfirmedAt,
     workPackages,
   ]);
+
+  useEffect(() => {
+    if (activeTab !== 'schedule') return;
+
+    const scheduleElement = scheduleScrollRef.current;
+
+    if (!scheduleElement) return;
+
+    const handleScheduleWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        event.stopPropagation();
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rect = scheduleElement.getBoundingClientRect();
+      const cursorX = event.clientX - rect.left;
+      const currentScrollLeft = scheduleElement.scrollLeft;
+      const direction = event.deltaY > 0 ? -1 : 1;
+
+      setScheduleZoom(currentZoom => {
+        const nextZoom = clampScheduleZoom(currentZoom + direction * 0.08);
+
+        if (nextZoom === currentZoom) return currentZoom;
+
+        const currentDayWidth = Math.round(SCHEDULE_BASE_DAY_WIDTH * currentZoom);
+        const nextDayWidth = Math.round(SCHEDULE_BASE_DAY_WIDTH * nextZoom);
+        const zoomRatio = nextDayWidth / Math.max(1, currentDayWidth);
+
+        const effectiveCursorX = Math.max(
+          cursorX,
+          SCHEDULE_LEFT_COLUMN_WIDTH + 24
+        );
+        const timelineAnchorBeforeZoom = Math.max(
+          0,
+          currentScrollLeft + effectiveCursorX - SCHEDULE_LEFT_COLUMN_WIDTH
+        );
+        const nextScrollLeft =
+          SCHEDULE_LEFT_COLUMN_WIDTH +
+          timelineAnchorBeforeZoom * zoomRatio -
+          effectiveCursorX;
+
+        pendingScheduleScrollLeftRef.current = Math.max(0, nextScrollLeft);
+
+        return nextZoom;
+      });
+    };
+
+    scheduleElement.addEventListener('wheel', handleScheduleWheel, {
+      passive: false,
+    });
+
+    return () => {
+      scheduleElement.removeEventListener('wheel', handleScheduleWheel);
+    };
+  }, [activeTab]);
+
+  useLayoutEffect(() => {
+    if (activeTab !== 'schedule') return;
+
+    const pendingScrollLeft = pendingScheduleScrollLeftRef.current;
+    const scheduleElement = scheduleScrollRef.current;
+
+    if (pendingScrollLeft === null || !scheduleElement) return;
+
+    scheduleElement.scrollLeft = pendingScrollLeft;
+    pendingScheduleScrollLeftRef.current = null;
+  }, [activeTab, scheduleZoom]);
 
   const summary = useMemo(
     () => calculateTimelineSummary(workPackages, paymentGates),
@@ -521,6 +741,35 @@ export default function TimelinePage() {
     Boolean(timelineStartDate) &&
     isPaymentPercentageMatched;
 
+  const handleUpdatePaymentGateDate = (paymentGateId: string, dueDate: string) => {
+    setPaymentGates(currentPaymentGates =>
+      currentPaymentGates.map(paymentGate =>
+        paymentGate.id === paymentGateId
+          ? {
+              ...paymentGate,
+              dueDate,
+            }
+          : paymentGate
+      )
+    );
+
+    setPendingTimelineDraft(currentDraft =>
+      currentDraft
+        ? {
+            ...currentDraft,
+            paymentGates: currentDraft.paymentGates.map(paymentGate =>
+              paymentGate.id === paymentGateId
+                ? {
+                    ...paymentGate,
+                    dueDate,
+                  }
+                : paymentGate
+            ),
+          }
+        : currentDraft
+    );
+  };
+
   const handleMarkPaymentReceived = (paymentGate: PaymentGate) => {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -601,27 +850,36 @@ export default function TimelinePage() {
       startDate: timelineStartDate,
       paymentPercentages: paymentPercentageValues,
     });
+    const distributedPaymentGates = distributePaymentGatesAcrossTimeline(
+      generatedTimeline.paymentGates,
+      generatedTimeline.workPackages,
+      timelineStartDate
+    );
+    const distributedTimeline = {
+      paymentGates: distributedPaymentGates,
+      workPackages: generatedTimeline.workPackages,
+    };
 
     const today = new Date().toISOString().slice(0, 10);
-    const bookingGateId = generatedTimeline.paymentGates.find(
+    const bookingGateId = distributedPaymentGates.find(
       paymentGate => paymentGate.type === 'execution_booking'
     )?.id;
 
     const preparedTimeline = isBookingPaymentCollected && bookingGateId
       ? {
           paymentGates: markPaymentGateReceived(
-            generatedTimeline.paymentGates,
+            distributedPaymentGates,
             bookingGateId,
             today
           ),
-          workPackages: generatedTimeline.workPackages.map(workPackage =>
+          workPackages: distributedTimeline.workPackages.map(workPackage =>
             workPackage.paymentGateId === bookingGateId &&
             workPackage.status === 'blocked_by_payment'
               ? {
                   ...workPackage,
                   status: getNextStatusAfterPaymentUnlock(
                     workPackage,
-                    generatedTimeline.workPackages
+                    distributedTimeline.workPackages
                   ),
                   notes: workPackage.notes
                     ? `${workPackage.notes} Booking payment received on ${today}.`
@@ -630,7 +888,7 @@ export default function TimelinePage() {
               : workPackage
           ),
         }
-      : generatedTimeline;
+      : distributedTimeline;
 
     setPendingTimelineDraft(preparedTimeline);
     setIgnoredAlertIds([]);
@@ -1261,126 +1519,413 @@ export default function TimelinePage() {
     const timelineStartDate = timelineDateRange.startDate;
     const timelineEndDate = timelineDateRange.endDate;
     const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
+    const dayWidth = Math.round(SCHEDULE_BASE_DAY_WIDTH * scheduleZoom);
+    const scheduleCanvasWidth = Math.max(
+      960,
+      SCHEDULE_CHART_LEFT_PADDING + totalDays * dayWidth + 80
+    );
+    const scheduleFullWidth = SCHEDULE_LEFT_COLUMN_WIDTH + scheduleCanvasWidth;
+    const dateTicks = getScheduleDateTicks(timelineStartDate, totalDays, dayWidth);
+    const today = new Date().toISOString().slice(0, 10);
+    const todayOffsetDays = getDayDifference(timelineStartDate, today);
+    const isTodayInsideSchedule =
+      todayOffsetDays >= 0 && todayOffsetDays <= totalDays - 1;
+    const todayMarkerLeft =
+      SCHEDULE_LEFT_COLUMN_WIDTH +
+      SCHEDULE_CHART_LEFT_PADDING +
+      todayOffsetDays * dayWidth +
+      dayWidth / 2;
+    const scheduleZoomPercent = Math.round(scheduleZoom * 100);
+
+    const handleScheduleZoom = (nextZoom: number) => {
+      setScheduleZoom(clampScheduleZoom(nextZoom));
+    };
 
     return (
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-        <div className="border-b border-border px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <section className="min-w-0 overflow-hidden rounded-[1.75rem] border border-border bg-card text-card-foreground shadow-sm">
+        <div className="border-b border-border bg-card px-4 py-4 sm:px-5">
+          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-foreground">
+                <h2 className="text-lg font-semibold text-foreground">
                   Schedule View
                 </h2>
                 <StatusBadge variant="outline">{activeTimelineProject.name}</StatusBadge>
               </div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
-                {formatDate(timelineStartDate)} - {formatDate(timelineEndDate)} -{' '}
-                {totalDays} day(s) - {formatINR(activeTimelineProject.revenue)}
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                {formatDate(timelineStartDate)} - {formatDate(timelineEndDate)}
+                <span className="mx-2 text-muted-foreground/50">/</span>
+                {totalDays} day(s)
+                <span className="mx-2 text-muted-foreground/50">/</span>
+                {formatINR(activeTimelineProject.revenue)}
               </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-background p-1 sm:justify-start">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => handleScheduleZoom(scheduleZoom - 0.12)}
+                className="h-8 rounded-xl px-3 text-base"
+                aria-label="Zoom out schedule"
+              >
+                -
+              </Button>
+              <span className="min-w-14 text-center text-xs font-semibold text-muted-foreground">
+                {scheduleZoomPercent}%
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => handleScheduleZoom(scheduleZoom + 0.12)}
+                className="h-8 rounded-xl px-3 text-base"
+                aria-label="Zoom in schedule"
+              >
+                +
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => handleScheduleZoom(1)}
+                className="h-8 rounded-xl px-3 text-xs"
+              >
+                Reset
+              </Button>
             </div>
           </div>
         </div>
 
-        <div className="min-w-0 overflow-x-auto overscroll-x-contain">
-          <div className="min-w-[820px]">
-            <div className="grid grid-cols-[240px_minmax(0,1fr)] border-b border-border bg-muted/20 text-xs font-medium text-muted-foreground">
-              <div className="sticky left-0 z-20 border-r border-border bg-card px-4 py-2">
-                Work Package
-              </div>
-              <div className="relative px-4 py-2">
-                <div className="flex items-center justify-between">
-                  <span>{formatDate(timelineStartDate)}</span>
-                  <span>{formatDate(timelineEndDate)}</span>
+        <div
+          ref={scheduleScrollRef}
+          className="min-w-0 cursor-grab select-none overflow-x-auto overflow-y-hidden overscroll-x-contain bg-background active:cursor-grabbing"
+          style={{ touchAction: 'pan-x' }}
+          onPointerDown={event => {
+            if (event.pointerType === 'touch' || event.button !== 0) return;
+
+            scheduleIsDraggingRef.current = true;
+            scheduleDragStartXRef.current = event.clientX;
+            scheduleDragStartScrollLeftRef.current = event.currentTarget.scrollLeft;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={event => {
+            if (!scheduleIsDraggingRef.current || scheduleDragStartXRef.current === null) {
+              return;
+            }
+
+            const deltaX = event.clientX - scheduleDragStartXRef.current;
+
+            event.currentTarget.scrollLeft =
+              scheduleDragStartScrollLeftRef.current - deltaX;
+          }}
+          onPointerUp={event => {
+            scheduleIsDraggingRef.current = false;
+            scheduleDragStartXRef.current = null;
+
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onPointerCancel={() => {
+            scheduleIsDraggingRef.current = false;
+            scheduleDragStartXRef.current = null;
+          }}
+          onTouchStart={event => {
+            if (event.touches.length !== 2) return;
+
+            const [firstTouch, secondTouch] = Array.from(event.touches);
+            schedulePinchDistanceRef.current = Math.hypot(
+              firstTouch.clientX - secondTouch.clientX,
+              firstTouch.clientY - secondTouch.clientY
+            );
+            schedulePinchZoomRef.current = scheduleZoom;
+          }}
+          onTouchMove={event => {
+            if (event.touches.length !== 2 || !schedulePinchDistanceRef.current) {
+              return;
+            }
+
+            event.preventDefault();
+
+            const [firstTouch, secondTouch] = Array.from(event.touches);
+            const nextDistance = Math.hypot(
+              firstTouch.clientX - secondTouch.clientX,
+              firstTouch.clientY - secondTouch.clientY
+            );
+
+            handleScheduleZoom(
+              schedulePinchZoomRef.current *
+                (nextDistance / schedulePinchDistanceRef.current)
+            );
+          }}
+          onTouchEnd={() => {
+            schedulePinchDistanceRef.current = null;
+          }}
+        >
+          <div
+            className="relative"
+            style={{ width: `${scheduleFullWidth}px` }}
+          >
+
+            {isTodayInsideSchedule && (
+              <div
+                className="pointer-events-none absolute bottom-0 z-[50]"
+                style={{ left: `${todayMarkerLeft}px`, top: 0 }}
+              >
+                <div className="absolute top-[68px] bottom-0 w-[2px] -translate-x-1/2 bg-black/70 dark:bg-white/75" />
+
+                <div className="absolute top-2 flex -translate-x-1/2 flex-col items-center">
+                  <span className="mb-1 whitespace-nowrap rounded-full bg-black px-4 py-1.5 text-[12px] font-bold leading-none text-white shadow-md dark:bg-white dark:text-black">
+                    {formatScheduleTickDate(today)}
+                  </span>
+
+                  <img
+                    src="/favicon-v2.png"
+                    alt=""
+                    className="h-8 w-8 rounded-full object-contain shadow-lg dark:invert"
+                  />
                 </div>
+              </div>
+            )}
 
-                {paymentGates.map(paymentGate => {
-                  const left = getTimelineSpanPercent(
-                    paymentGate.dueDate,
-                    timelineStartDate,
-                    timelineEndDate
-                  );
+            {paymentGates.map((paymentGate, paymentGateIndex) => {
+              const paymentGateLeft =
+                SCHEDULE_LEFT_COLUMN_WIDTH +
+                getSchedulePointLeft(paymentGate.dueDate, timelineStartDate, dayWidth);
+              const paymentGateTone = getPaymentGateScheduleTone(paymentGateIndex);
 
-                  return (
-                    <div
-                      key={paymentGate.id}
-                      className="absolute bottom-0 top-0 w-px bg-primary/40"
-                      style={{ left: `${left}%` }}
-                      title={`${paymentGate.title} - ${formatINR(paymentGate.amount)}`}
-                    />
-                  );
-                })}
+              return (
+                <div
+                  key={`schedule-gate-marker-${paymentGate.id}`}
+                  className="pointer-events-none absolute bottom-0 z-[60]"
+                  style={{
+                    left: `${paymentGateLeft}px`,
+                    top: 0,
+                  }}
+                  title={`${paymentGate.title} - ${formatDate(paymentGate.dueDate)}`}
+                >
+                  <div
+                    className={`absolute top-[74px] bottom-0 w-px -translate-x-1/2 ${paymentGateTone.line}`}
+                  />
+                  <div
+                    className={`absolute top-[48px] flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border border-background text-xs font-bold shadow-md ${paymentGateTone.badge}`}
+                  >
+                    {paymentGateIndex + 1}
+                  </div>
+                </div>
+              );
+            })}
+
+            <div
+              className="grid border-b border-border bg-muted/25 text-xs font-medium text-muted-foreground"
+              style={{
+                gridTemplateColumns: `${SCHEDULE_LEFT_COLUMN_WIDTH}px ${scheduleCanvasWidth}px`,
+              }}
+            >
+              <div className="relative sticky left-0 z-[90] border-r border-b border-border bg-card px-4 py-3">
+                <span className="pointer-events-none absolute inset-x-0 bottom-[-2px] z-[95] h-[4px] border-b border-border bg-card" />
+                <span className="relative z-[96]">Work Package</span>
+              </div>
+
+              <div
+                className="relative h-16 bg-muted/20"
+                style={{ width: `${scheduleCanvasWidth}px` }}
+              >
+                {dateTicks.map(tick => (
+                  <div
+                    key={`${tick.date}-${tick.left}`}
+                    className={`absolute bottom-0 top-0 border-l ${
+                      tick.isMajor ? 'border-border' : 'border-border/45'
+                    }`}
+                    style={{ left: `${tick.left}px` }}
+                  >
+                    <span className="absolute left-2 top-2 whitespace-nowrap text-[11px] font-semibold text-foreground">
+                      {formatScheduleTickDate(tick.date)}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
             <div>
-              {workPackages.map(workPackage => (
-                <div
-                  key={workPackage.id}
-                  className="grid grid-cols-[240px_minmax(0,1fr)] border-b border-border last:border-b-0"
-                >
-                  <div className="sticky left-0 z-10 min-w-0 border-r border-border bg-card px-4 py-2.5">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {workPackage.title}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      Assigned to : {workPackage.assigneeName}
-                    </p>
-                  </div>
+              {workPackages.map((workPackage, rowIndex) => {
+                const barStyle = getWorkPackageBarStyle(
+                  workPackage,
+                  timelineStartDate,
+                  dayWidth
+                );
 
-                  <div className="relative min-h-14 bg-background px-4">
-                    <div className="absolute inset-y-0 left-1/4 border-l border-dashed border-border/70" />
-                    <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-border/70" />
-                    <div className="absolute inset-y-0 left-3/4 border-l border-dashed border-border/70" />
-
-                    {paymentGates.map(paymentGate => {
-                      const left = getTimelineSpanPercent(
-                        paymentGate.dueDate,
-                        timelineStartDate,
-                        timelineEndDate
-                      );
-
-                      return (
-                        <div
-                          key={`${workPackage.id}-${paymentGate.id}`}
-                          className="absolute inset-y-0 w-px bg-primary/15"
-                          style={{ left: `${left}%` }}
-                        />
-                      );
-                    })}
+                return (
+                  <div
+                    key={workPackage.id}
+                    className="grid border-b border-border last:border-b-0"
+                    style={{
+                      gridTemplateColumns: `${SCHEDULE_LEFT_COLUMN_WIDTH}px ${scheduleCanvasWidth}px`,
+                    }}
+                  >
+                    <div className="relative sticky left-0 z-[80] min-w-0 border-r border-t border-border bg-card px-4 py-4">
+                      <span className="pointer-events-none absolute inset-x-0 top-[-2px] z-[85] h-[4px] border-t border-border bg-card" />
+                      <div className="relative z-[86] flex items-start gap-3">
+                        <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-xs font-semibold text-muted-foreground">
+                          {rowIndex + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {workPackage.title}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            Assigned to: {workPackage.assigneeName}
+                          </p>
+                          <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+                            {formatScheduleTickDate(workPackage.estimatedStartDate)} -{' '}
+                            {formatScheduleTickDate(workPackage.estimatedEndDate)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
                     <div
-                      className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${getScheduleBarTone(
-                        workPackage.status
-                      )}`}
-                      style={getWorkPackageBarStyle(
-                        workPackage,
-                        timelineStartDate,
-                        timelineEndDate
-                      )}
-                    />
+                      className="relative h-[76px] bg-background"
+                      style={{ width: `${scheduleCanvasWidth}px` }}
+                    >
+                      {dateTicks.map(tick => (
+                        <div
+                          key={`${workPackage.id}-${tick.date}-${tick.left}`}
+                          className={`absolute inset-y-0 border-l ${
+                            tick.isMajor ? 'border-border/70' : 'border-border/30'
+                          }`}
+                          style={{ left: `${tick.left}px` }}
+                        />
+                      ))}
 
-                    <div className="absolute bottom-1 right-4 text-[11px] text-muted-foreground">
-                      {formatDate(workPackage.estimatedStartDate)} -{' '}
-                      {formatDate(workPackage.estimatedEndDate)}
+                      {paymentGates.map(paymentGate => {
+                        const left = getSchedulePointLeft(
+                          paymentGate.dueDate,
+                          timelineStartDate,
+                          dayWidth
+                        );
+
+                        return (
+                          <div
+                            key={`${workPackage.id}-${paymentGate.id}`}
+                            className="absolute inset-y-0 w-px bg-primary/15"
+                            style={{ left: `${left}px` }}
+                          />
+                        );
+                      })}
+
+                      <div
+                        className={`absolute top-1/2 h-6 -translate-y-1/2 rounded-none border border-black/10 shadow-sm ${getScheduleBarTone(
+                          workPackage.status
+                        )}`}
+                        style={barStyle}
+                        title={`${workPackage.title}: ${formatDate(
+                          workPackage.estimatedStartDate
+                        )} - ${formatDate(workPackage.estimatedEndDate)}`}
+                      />
+
+                      <div
+                        className="absolute bottom-2 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
+                        style={{
+                          left: `calc(${barStyle.left} + ${barStyle.width})`,
+                          transform: 'translateX(-100%)',
+                        }}
+                      >
+                        {formatScheduleTickDate(workPackage.estimatedEndDate)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
-          {paymentGates.map(paymentGate => (
-            <span
-              key={paymentGate.id}
-              className="rounded-full border border-border bg-background px-2.5 py-1"
+        <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Payment Gate Markers
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Gate dates are auto-distributed across the planned timeline and can be adjusted manually.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowScheduleGateDateControls(current => !current)}
+              className="h-9 gap-2"
             >
-              {paymentGate.title}: {formatINR(paymentGate.amount)}
-            </span>
-          ))}
+              <Pencil className="h-4 w-4" />
+              {showScheduleGateDateControls ? 'Done Editing' : 'Edit Gate Dates'}
+            </Button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {paymentGates.map((paymentGate, paymentGateIndex) => {
+              const paymentGateTone = getPaymentGateScheduleTone(paymentGateIndex);
+
+              return (
+                <span
+                  key={paymentGate.id}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1"
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${paymentGateTone.badge}`}
+                  >
+                    {paymentGateIndex + 1}
+                  </span>
+                  <span>
+                    {paymentGate.title}: {formatINR(paymentGate.amount)} -{' '}
+                    {formatScheduleTickDate(paymentGate.dueDate)}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+
+          {showScheduleGateDateControls && (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {paymentGates.map((paymentGate, paymentGateIndex) => {
+                const paymentGateTone = getPaymentGateScheduleTone(paymentGateIndex);
+
+                return (
+                  <div
+                    key={`edit-${paymentGate.id}`}
+                    className="rounded-2xl border border-border bg-background p-3"
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${paymentGateTone.badge}`}
+                      >
+                        {paymentGateIndex + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {paymentGate.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatINR(paymentGate.amount)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <DateInput
+                      value={paymentGate.dueDate}
+                      onChange={value =>
+                        handleUpdatePaymentGateDate(paymentGate.id, value)
+                      }
+                      placeholder="Select gate date"
+                      popoverMode="fixed"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+
       </section>
     );
   };
