@@ -51,36 +51,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        Promise.all([fetchProfile(session.user.id), fetchDepartments()]).finally(() =>
-          setLoading(false)
-        );
-      } else {
-        fetchDepartments().finally(() => setLoading(false));
-      }
-    });
+    let isMounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const finishInitialLoad = () => {
+      if (isMounted) {
+        setLoading(false);
+      }
+    };
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!isMounted) return;
+
+        setSession(session);
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          Promise.all([fetchProfile(session.user.id), fetchDepartments()]).finally(
+            finishInitialLoad
+          );
+        } else {
+          setProfile(null);
+          fetchDepartments().finally(finishInitialLoad);
+        }
+      })
+      .catch(() => {
+        finishInitialLoad();
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (suppressCountRef.current > 0) return;
 
-      setLoading(true);
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        Promise.all([fetchProfile(session.user.id), fetchDepartments()]).finally(() =>
-          setLoading(false)
-        );
-      } else {
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
         setProfile(null);
-        fetchDepartments().finally(() => setLoading(false));
+        void fetchDepartments();
+        return;
       }
+
+      if (!session?.user) {
+        return;
+      }
+
+      setSession(session);
+      setUser(session.user);
+
+      void Promise.all([fetchProfile(session.user.id), fetchDepartments()]);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const refreshProfile = async () => {
