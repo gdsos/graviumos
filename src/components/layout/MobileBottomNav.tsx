@@ -14,6 +14,7 @@ import {
   Package,
   Settings,
   Store,
+  Users,
 } from 'lucide-react';
 
 import GlassSurface from '@/components/ui/GlassSurface';
@@ -135,6 +136,14 @@ function getMenuNavItems(isAdmin: boolean): MobileNavItem[] {
   }
 
   if (isAdmin) {
+    items.push({
+      label: 'People',
+      icon: Users,
+      path: `${basePath}/people`,
+      helper: 'Team and access',
+      group: 'Admin',
+    });
+
     items.push({
       label: 'Settings',
       icon: Settings,
