@@ -7,10 +7,12 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  RefreshCcw,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
 import { useOperationFeedback } from '@/contexts/OperationFeedbackContext';
+import { supabase, type Project } from '@/lib/supabase';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { CostEstimateSection } from '@/features/cost-estimate/components/CostEstimateSection';
@@ -18,10 +20,7 @@ import {
   DEFAULT_MISC_CHARGE_PERCENT,
   DEFAULT_SERVICE_CHARGE_PERCENT,
 } from '@/features/cost-estimate/calculator';
-import {
-  demoCostEstimateAreas,
-  demoCostEstimateProjects,
-} from '@/features/cost-estimate/data';
+import { demoCostEstimateAreas } from '@/features/cost-estimate/data';
 import type {
   CostEstimateArea,
   CostEstimateLineItem,
@@ -180,6 +179,14 @@ export default function CostEstimatesPage() {
   );
   const [projectSearch, setProjectSearch] = useState('Unassigned Draft');
   const [isProjectSuggestionOpen, setIsProjectSuggestionOpen] = useState(false);
+  const [projectOptions, setProjectOptions] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [pendingRevenueApproval, setPendingRevenueApproval] = useState<{
+    payload: EstimateEditorPayload;
+    record: EstimateCardRecord;
+    currentRevenue: number;
+    approvedRevenue: number;
+  } | null>(null);
   const [modalAreas, setModalAreas] =
     useState<CostEstimateArea[]>(demoCostEstimateAreas);
   const [selectedAreaIds, setSelectedAreaIds] = useState(
@@ -188,6 +195,7 @@ export default function CostEstimatesPage() {
   const {
     showOperationLoading,
     showOperationSuccess,
+    showOperationError,
   } = useOperationFeedback();
   const [areaSelectionUndoStack, setAreaSelectionUndoStack] = useState<
     {
@@ -202,6 +210,33 @@ export default function CostEstimatesPage() {
 
     localStorage.setItem(COST_ESTIMATE_STORAGE_KEY, JSON.stringify(records));
   }, [records]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchProjectOptions() {
+      setIsLoadingProjects(true);
+
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (isMounted && !error && data) {
+        setProjectOptions(data as Project[]);
+      }
+
+      if (isMounted) {
+        setIsLoadingProjects(false);
+      }
+    }
+
+    void fetchProjectOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const selectedRecord = records.find(record => record.id === selectedRecordId);
   const selectedApprovedSnapshot =
@@ -230,7 +265,7 @@ export default function CostEstimatesPage() {
       .filter((projectId): projectId is string => Boolean(projectId))
   );
 
-  const availableProjects = demoCostEstimateProjects.filter(
+  const availableProjects = projectOptions.filter(
     project => !usedProjectIds.has(project.id)
   );
 
@@ -239,12 +274,12 @@ export default function CostEstimatesPage() {
 
     if (!query || query === 'unassigned draft') return true;
 
-    return `${project.name} ${project.clientName} ${project.location ?? ''}`
+    return `${project.name} ${project.client ?? ''}`
       .toLowerCase()
       .includes(query);
   });
 
-  const selectedProject = demoCostEstimateProjects.find(
+  const selectedProject = projectOptions.find(
     project => project.id === selectedProjectId
   );
 
@@ -260,14 +295,14 @@ export default function CostEstimatesPage() {
   };
 
   const handleSelectProject = (projectId: string) => {
-    const project = demoCostEstimateProjects.find(
+    const project = projectOptions.find(
       currentProject => currentProject.id === projectId
     );
 
     if (!project) return;
 
     setSelectedProjectId(project.id);
-    setProjectSearch(`${project.name} - ${project.clientName}`);
+    setProjectSearch(`${project.name} - ${project.client || 'No client assigned'}`);
     setIsProjectSuggestionOpen(false);
   };
 
@@ -507,7 +542,7 @@ export default function CostEstimatesPage() {
         selectedProjectId === UNASSIGNED_PROJECT_ID
           ? getNextUnassignedDraftName()
           : selectedProject?.name ?? 'Unassigned Draft',
-      clientName: selectedProject?.clientName,
+      clientName: selectedProject?.client || undefined,
       status: 'draft',
       version: 1,
       grandTotal: 0,
@@ -516,7 +551,7 @@ export default function CostEstimatesPage() {
       lineItems: [],
       serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
       miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
-      targetProjectRevenue: 950000,
+      targetProjectRevenue: selectedProject?.revenue ?? 0,
     };
 
     setRecords(current => [nextRecord, ...current]);
@@ -560,14 +595,43 @@ export default function CostEstimatesPage() {
     await showOperationSuccess(messages.success);
   };
 
-  const handleApproveEstimate = async (payload: EstimateEditorPayload) => {
-    if (!selectedRecordId) return;
-
+  const approveEstimateWithRevenueSync = async (
+    payload: EstimateEditorPayload,
+    currentRecord: EstimateCardRecord
+  ) => {
+    setPendingRevenueApproval(null);
     showOperationLoading('Approving Estimate');
+
+    if (currentRecord.projectId) {
+      const { error: projectUpdateError } = await supabase
+        .from('projects')
+        .update({
+          revenue: payload.grandTotal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentRecord.projectId);
+
+      if (projectUpdateError) {
+        await showOperationError('Project Revenue Update Failed');
+        return;
+      }
+
+      setProjectOptions(current =>
+        current.map(project =>
+          project.id === currentRecord.projectId
+            ? {
+                ...project,
+                revenue: payload.grandTotal,
+                updated_at: new Date().toISOString(),
+              }
+            : project
+        )
+      );
+    }
 
     setRecords(current =>
       current.map(record =>
-        record.id === selectedRecordId
+        record.id === currentRecord.id
           ? {
               ...record,
               grandTotal: payload.grandTotal,
@@ -586,6 +650,43 @@ export default function CostEstimatesPage() {
     );
 
     await showOperationSuccess('Estimate Approved');
+  };
+
+  const handleApproveEstimate = async (payload: EstimateEditorPayload) => {
+    if (!selectedRecordId) return;
+
+    const currentRecord = records.find(record => record.id === selectedRecordId);
+
+    if (!currentRecord) return;
+
+    if (currentRecord.projectId) {
+      const linkedProject = projectOptions.find(
+        project => project.id === currentRecord.projectId
+      );
+      const currentRevenue = linkedProject?.revenue ?? 0;
+      const approvedRevenue = payload.grandTotal;
+
+      if (currentRevenue > 0 && currentRevenue !== approvedRevenue) {
+        setPendingRevenueApproval({
+          payload,
+          record: currentRecord,
+          currentRevenue,
+          approvedRevenue,
+        });
+        return;
+      }
+    }
+
+    await approveEstimateWithRevenueSync(payload, currentRecord);
+  };
+
+  const handleConfirmRevenueApproval = async () => {
+    if (!pendingRevenueApproval) return;
+
+    await approveEstimateWithRevenueSync(
+      pendingRevenueApproval.payload,
+      pendingRevenueApproval.record
+    );
   };
 
   const handleCreateRevisionFromEditor = async (payload: EstimateEditorPayload) => {
@@ -792,6 +893,54 @@ export default function CostEstimatesPage() {
           onDeleteDraft={handleDeleteSelectedEstimate}
           onSaveAndClose={handleSaveAndCloseEstimate}
         />
+
+        {pendingRevenueApproval && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                  <RefreshCcw className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold text-foreground">
+                    Update Project Revenue?
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    This project currently has revenue{' '}
+                    <span className="font-semibold text-foreground">
+                      {formatINR(pendingRevenueApproval.currentRevenue)}
+                    </span>
+                    . Approving this estimate will update the project revenue to{' '}
+                    <span className="font-semibold text-foreground">
+                      {formatINR(pendingRevenueApproval.approvedRevenue)}
+                    </span>
+                    .
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPendingRevenueApproval(null)}
+                >
+                  Continue Editing
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={handleConfirmRevenueApproval}
+                  className="gap-2"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Update Revenue
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1045,7 +1194,13 @@ export default function CostEstimatesPage() {
                           </span>
                         </button>
 
-                        {matchingProjects.map(project => (
+                        {isLoadingProjects && (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">
+                            Loading projects...
+                          </p>
+                        )}
+
+                        {!isLoadingProjects && matchingProjects.map(project => (
                           <button
                             key={project.id}
                             type="button"
@@ -1057,13 +1212,12 @@ export default function CostEstimatesPage() {
                               {project.name}
                             </span>
                             <span className="mt-0.5 block text-xs text-muted-foreground">
-                              {project.clientName}
-                              {project.location ? ` - ${project.location}` : ''}
+                              {project.client || 'No client assigned'}
                             </span>
                           </button>
                         ))}
 
-                        {matchingProjects.length === 0 && (
+                        {!isLoadingProjects && matchingProjects.length === 0 && (
                           <p className="px-3 py-2 text-xs text-muted-foreground">
                             No available project found. Projects with existing cost
                             estimates are hidden.

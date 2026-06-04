@@ -462,6 +462,7 @@ export function CostEstimateSection({
   const [selectedProjectId, setSelectedProjectId] = useState(
     initialProjectId ?? UNASSIGNED_PROJECT_ID
   );
+  const isProjectLinkedEstimate = Boolean(initialProjectId);
   const estimateTopRef = useRef<HTMLDivElement | null>(null);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1413,6 +1414,7 @@ export function CostEstimateSection({
         disabled={isEstimateReadOnly}
         className="grid gap-4 disabled:opacity-75 sm:gap-5"
       >
+        {!isProjectLinkedEstimate && (
         <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center">
             <p className="text-sm font-medium text-foreground">
@@ -1433,6 +1435,8 @@ export function CostEstimateSection({
             </select>
           </div>
         </div>
+        )}
+
         {supersededVersions.length > 0 && (
           <div className="rounded-2xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
             Superseded versions:{' '}
