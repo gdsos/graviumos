@@ -962,11 +962,73 @@ export default function TimelinePage() {
   };
 
   const handleReviseTimeline = () => {
-    if (!hasActiveTimeline || workPackages.length === 0) return;
+    if (
+      !hasActiveTimeline ||
+      !linkedCostEstimate ||
+      !hasSelectedApprovedProjectEstimate
+    ) {
+      return;
+    }
+
+    const generatedTimeline = generateTimelineFromApprovedEstimate({
+      source: linkedCostEstimate,
+      startDate: timelineStartDate,
+      paymentPercentages: paymentPercentageValues,
+    });
+
+    const distributedPaymentGates = distributePaymentGatesAcrossTimeline(
+      generatedTimeline.paymentGates,
+      generatedTimeline.workPackages,
+      timelineStartDate
+    );
+
+    const receivedGateTypes = new Set(
+      paymentGates
+        .filter(paymentGate => paymentGate.status === 'received')
+        .map(paymentGate => paymentGate.type)
+    );
+
+    const preparedPaymentGates = distributedPaymentGates.map(paymentGate => {
+      if (!receivedGateTypes.has(paymentGate.type)) return paymentGate;
+
+      const existingReceivedGate = paymentGates.find(
+        currentPaymentGate =>
+          currentPaymentGate.type === paymentGate.type &&
+          currentPaymentGate.status === 'received'
+      );
+
+      return {
+        ...paymentGate,
+        status: 'received' as const,
+        receivedDate:
+          existingReceivedGate?.receivedDate ?? new Date().toISOString().slice(0, 10),
+      };
+    });
+
+    const preparedWorkPackages = generatedTimeline.workPackages.map(workPackage => {
+      const relatedPaymentGate = preparedPaymentGates.find(
+        paymentGate => paymentGate.id === workPackage.paymentGateId
+      );
+
+      if (
+        relatedPaymentGate?.status === 'received' &&
+        workPackage.status === 'blocked_by_payment'
+      ) {
+        return {
+          ...workPackage,
+          status: getNextStatusAfterPaymentUnlock(
+            workPackage,
+            generatedTimeline.workPackages
+          ),
+        };
+      }
+
+      return workPackage;
+    });
 
     setPendingTimelineDraft({
-      paymentGates,
-      workPackages,
+      paymentGates: preparedPaymentGates,
+      workPackages: preparedWorkPackages,
     });
     setIgnoredAlertIds([]);
     setShowCreateWizard(false);
@@ -1033,6 +1095,48 @@ export default function TimelinePage() {
     }
 
     setActiveTab('overview');
+  };
+
+  const handleUpdateWorkPackageDependencies = (
+    workPackageId: string,
+    dependencyIds: string[]
+  ) => {
+    setWorkPackages(currentWorkPackages => {
+      const nextDependencyIds = Array.from(
+        new Set(dependencyIds.filter(dependencyId => dependencyId !== workPackageId))
+      );
+
+      return currentWorkPackages.map(workPackage => {
+        if (workPackage.id !== workPackageId) return workPackage;
+
+        const hasIncompleteDependencies = nextDependencyIds.some(dependencyId => {
+          const dependency = currentWorkPackages.find(
+            candidate => candidate.id === dependencyId
+          );
+
+          return dependency?.status !== 'completed';
+        });
+
+        let nextStatus = workPackage.status;
+
+        if (
+          hasIncompleteDependencies &&
+          ['not_started', 'ready', 'blocked_by_dependency'].includes(workPackage.status)
+        ) {
+          nextStatus = 'blocked_by_dependency';
+        }
+
+        if (!hasIncompleteDependencies && workPackage.status === 'blocked_by_dependency') {
+          nextStatus = 'ready';
+        }
+
+        return {
+          ...workPackage,
+          dependsOnWorkPackageIds: nextDependencyIds,
+          status: nextStatus,
+        };
+      });
+    });
   };
 
   const handleStartWorkPackage = (workPackageId: string) => {
@@ -1938,6 +2042,7 @@ export default function TimelinePage() {
           onCompleteWork={handleCompleteWorkPackage}
           onMarkDelayed={handleMarkWorkPackageDelayed}
           onUpdateDelayReason={handleUpdateDelayReason}
+          onUpdateDependencies={handleUpdateWorkPackageDependencies}
         />
       );
     }

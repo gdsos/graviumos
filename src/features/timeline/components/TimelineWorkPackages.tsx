@@ -1,6 +1,10 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+
 import {
   AlertTriangle,
   CheckCircle2,
+  Link2,
   MessageSquareText,
   MoreHorizontal,
   PackageCheck,
@@ -26,6 +30,7 @@ interface TimelineWorkPackagesProps {
   onCompleteWork?: (workPackageId: string) => void;
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
+  onUpdateDependencies?: (workPackageId: string, dependencyIds: string[]) => void;
 }
 
 type WorkPackageAction = {
@@ -146,46 +151,152 @@ function getMobileActualLabel(workPackage: WorkPackage) {
   return 'Not Started';
 }
 
-function getPrimaryAction({
+function getWorkPackageDisplayName(workPackage: WorkPackage) {
+  const titleParts = getWorkPackageTitleParts(workPackage.title);
+
+  return titleParts.workName
+    ? `${titleParts.areaName} - ${titleParts.workName}`
+    : titleParts.areaName;
+}
+
+function getDependencyWorkPackages(
+  workPackage: WorkPackage,
+  workPackages: WorkPackage[]
+) {
+  return workPackage.dependsOnWorkPackageIds
+    .map(dependencyId =>
+      workPackages.find(candidate => candidate.id === dependencyId)
+    )
+    .filter((dependency): dependency is WorkPackage => Boolean(dependency));
+}
+
+function getDependentWorkPackages(
+  workPackage: WorkPackage,
+  workPackages: WorkPackage[]
+) {
+  return workPackages.filter(candidate =>
+    candidate.dependsOnWorkPackageIds.includes(workPackage.id)
+  );
+}
+
+function getDependencyPreview(
+  workPackage: WorkPackage,
+  workPackages: WorkPackage[]
+) {
+  const dependencies = getDependencyWorkPackages(workPackage, workPackages);
+
+  if (dependencies.length === 0) return 'No Dependencies';
+
+  return dependencies.map(getWorkPackageDisplayName).join(', ');
+}
+
+function canSelectAsDependency({
   workPackage,
-  onStartWork,
-  onResumeWork,
-  onCompleteWork,
+  candidate,
 }: {
   workPackage: WorkPackage;
-  onStartWork?: (workPackageId: string) => void;
-  onResumeWork?: (workPackageId: string) => void;
-  onCompleteWork?: (workPackageId: string) => void;
-}): WorkPackageAction | null {
-  if (
-    workPackage.status === 'blocked_by_payment' ||
-    workPackage.status === 'blocked_by_dependency' ||
-    workPackage.status === 'completed'
-  ) {
-    return null;
-  }
+  candidate: WorkPackage;
+}) {
+  if (candidate.id === workPackage.id) return false;
 
-  if (workPackage.status === 'paused') {
-    return {
-      label: 'Resume',
-      icon: RotateCcw,
-      onClick: () => onResumeWork?.(workPackage.id),
-    };
-  }
+  return !candidate.dependsOnWorkPackageIds.includes(workPackage.id);
+}
 
-  if (workPackage.status === 'in_progress') {
-    return {
-      label: 'Complete',
-      icon: CheckCircle2,
-      onClick: () => onCompleteWork?.(workPackage.id),
-    };
-  }
+function DependencyEditor({
+  workPackage,
+  workPackages,
+  onUpdateDependencies,
+  onClose,
+}: {
+  workPackage: WorkPackage;
+  workPackages: WorkPackage[];
+  onUpdateDependencies?: (workPackageId: string, dependencyIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const selectedDependencyIds = new Set(workPackage.dependsOnWorkPackageIds);
+  const availableDependencies = workPackages.filter(candidate =>
+    canSelectAsDependency({ workPackage, candidate })
+  );
 
-  return {
-    label: 'Start',
-    icon: PlayCircle,
-    onClick: () => onStartWork?.(workPackage.id),
+  const handleToggleDependency = (dependencyId: string) => {
+    if (!onUpdateDependencies) return;
+
+    const nextDependencyIds = selectedDependencyIds.has(dependencyId)
+      ? workPackage.dependsOnWorkPackageIds.filter(
+          currentDependencyId => currentDependencyId !== dependencyId
+        )
+      : [...workPackage.dependsOnWorkPackageIds, dependencyId];
+
+    onUpdateDependencies(workPackage.id, nextDependencyIds);
   };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-border bg-muted/30 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">
+            Edit Dependencies
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Choose the work packages that must finish before this package can start.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onClose}
+          className="w-full sm:w-auto"
+        >
+          Done
+        </Button>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {availableDependencies.length > 0 ? (
+          availableDependencies.map(candidate => {
+            const isSelected = selectedDependencyIds.has(candidate.id);
+
+            return (
+              <button
+                key={candidate.id}
+                type="button"
+                onClick={() => handleToggleDependency(candidate.id)}
+                className={`flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                  isSelected
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[10px] font-bold ${
+                    isSelected
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card'
+                  }`}
+                >
+                  {isSelected ? 'On' : ''}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {getWorkPackageDisplayName(candidate)}
+                  </span>
+                  <span className="mt-0.5 block text-xs">
+                    Status: {formatLabel(candidate.status)}
+                  </span>
+                </span>
+              </button>
+            );
+          })
+        ) : (
+          <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+            No other work packages are available for dependency linking.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function getSecondaryActions({
@@ -262,27 +373,250 @@ function getSecondaryActions({
   return actions;
 }
 
+type ActionMenuPosition = {
+  top: number;
+  left: number;
+};
+
+function isWorkPackageBlocked(workPackage: WorkPackage) {
+  return (
+    workPackage.status === 'blocked_by_payment' ||
+    workPackage.status === 'blocked_by_dependency'
+  );
+}
+
+function getStartPauseButtonConfig({
+  workPackage,
+  onStartWork,
+  onPauseWork,
+  onResumeWork,
+}: {
+  workPackage: WorkPackage;
+  onStartWork?: (workPackageId: string) => void;
+  onPauseWork?: (workPackageId: string) => void;
+  onResumeWork?: (workPackageId: string) => void;
+}) {
+  if (workPackage.status === 'paused') {
+    return {
+      label: 'Resume Work',
+      icon: RotateCcw,
+      onClick: () => onResumeWork?.(workPackage.id),
+      disabled: false,
+    };
+  }
+
+  if (workPackage.status === 'in_progress' || workPackage.status === 'delayed') {
+    return {
+      label: 'Pause Work',
+      icon: PauseCircle,
+      onClick: () => onPauseWork?.(workPackage.id),
+      disabled: false,
+    };
+  }
+
+  return {
+    label: 'Start Work',
+    icon: PlayCircle,
+    onClick: () => onStartWork?.(workPackage.id),
+    disabled:
+      isWorkPackageBlocked(workPackage) || workPackage.status === 'completed',
+  };
+}
+
+function getCompleteButtonConfig({
+  workPackage,
+  onCompleteWork,
+}: {
+  workPackage: WorkPackage;
+  onCompleteWork?: (workPackageId: string) => void;
+}) {
+  return {
+    label: 'Complete Work',
+    icon: CheckCircle2,
+    onClick: () => onCompleteWork?.(workPackage.id),
+    disabled:
+      isWorkPackageBlocked(workPackage) || workPackage.status === 'completed',
+  };
+}
+
+function WorkPackageActionMenu({
+  actions,
+  menuPosition,
+  onClose,
+}: {
+  actions: WorkPackageAction[];
+  menuPosition: ActionMenuPosition | null;
+  onClose: () => void;
+}) {
+  if (!menuPosition || typeof document === 'undefined') return null;
+
+  const menuWidth = 220;
+  const safeLeft =
+    typeof window === 'undefined'
+      ? menuPosition.left
+      : Math.min(menuPosition.left, window.innerWidth - menuWidth - 12);
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        aria-label="Close work package actions"
+        className="fixed inset-0 z-[9998] cursor-default bg-transparent"
+        onClick={onClose}
+      />
+
+      <div
+        className="fixed z-[9999] w-[220px] overflow-hidden rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl"
+        style={{
+          top: menuPosition.top,
+          left: Math.max(12, safeLeft),
+        }}
+      >
+        {actions.length > 0 ? (
+          actions.map(action => {
+            const Icon = action.icon;
+
+            return (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => {
+                  action.onClick?.();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-muted"
+              >
+                <Icon className="h-4 w-4" />
+                {action.label}
+              </button>
+            );
+          })
+        ) : (
+          <p className="px-3 py-2.5 text-sm text-muted-foreground">
+            No more actions
+          </p>
+        )}
+      </div>
+    </>,
+    document.body
+  );
+}
+
+function WorkPackageActionButtons({
+  workPackage,
+  secondaryActions,
+  onStartWork,
+  onPauseWork,
+  onResumeWork,
+  onCompleteWork,
+}: {
+  workPackage: WorkPackage;
+  secondaryActions: WorkPackageAction[];
+  onStartWork?: (workPackageId: string) => void;
+  onPauseWork?: (workPackageId: string) => void;
+  onResumeWork?: (workPackageId: string) => void;
+  onCompleteWork?: (workPackageId: string) => void;
+}) {
+  const [menuPosition, setMenuPosition] = useState<ActionMenuPosition | null>(null);
+  const startPauseAction = getStartPauseButtonConfig({
+    workPackage,
+    onStartWork,
+    onPauseWork,
+    onResumeWork,
+  });
+  const completeAction = getCompleteButtonConfig({
+    workPackage,
+    onCompleteWork,
+  });
+  const visibleMenuActions = secondaryActions.filter(
+    action =>
+      ![
+        'Start Work',
+        'Pause Work',
+        'Resume Work',
+        'Complete Work',
+      ].includes(action.label)
+  );
+  const StartPauseIcon = startPauseAction.icon;
+  const CompleteIcon = completeAction.icon;
+
+  return (
+    <div className="flex min-w-0 items-center justify-center gap-2">
+      <button
+        type="button"
+        aria-label={startPauseAction.label}
+        title={startPauseAction.label}
+        onClick={startPauseAction.onClick}
+        disabled={startPauseAction.disabled}
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <StartPauseIcon className="h-4 w-4" />
+      </button>
+
+      <button
+        type="button"
+        aria-label={completeAction.label}
+        title={completeAction.label}
+        onClick={completeAction.onClick}
+        disabled={completeAction.disabled}
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <CompleteIcon className="h-4 w-4" />
+      </button>
+
+      <button
+        type="button"
+        aria-label="More work package actions"
+        title="More Actions"
+        onClick={event => {
+          const rect = event.currentTarget.getBoundingClientRect();
+
+          setMenuPosition(current =>
+            current
+              ? null
+              : {
+                  top: rect.bottom + 8,
+                  left: rect.right - 220,
+                }
+          );
+        }}
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+
+      <WorkPackageActionMenu
+        actions={visibleMenuActions}
+        menuPosition={menuPosition}
+        onClose={() => setMenuPosition(null)}
+      />
+    </div>
+  );
+}
+
 function WorkPackageRow({
   workPackage,
+  workPackages,
+  editingDependencyId,
+  onEditDependencies,
+  onCloseDependencyEditor,
   onStartWork,
   onPauseWork,
   onResumeWork,
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onUpdateDependencies,
 }: TimelineWorkPackagesProps & {
   workPackage: WorkPackage;
+  editingDependencyId: string | null;
+  onEditDependencies: (workPackageId: string) => void;
+  onCloseDependencyEditor: () => void;
 }) {
   const vendorName = getVendorName(workPackage.vendorId);
   const latestPauseReason = getLatestPauseReason(workPackage);
   const titleParts = getWorkPackageTitleParts(workPackage.title);
-  const primaryAction = getPrimaryAction({
-    workPackage,
-    onStartWork,
-    onResumeWork,
-    onCompleteWork,
-  });
-  const secondaryActions = getSecondaryActions({
+const secondaryActions = getSecondaryActions({
     workPackage,
     workPackages: [],
     onStartWork,
@@ -292,7 +626,10 @@ function WorkPackageRow({
     onMarkDelayed,
     onUpdateDelayReason,
   });
-  const PrimaryIcon = primaryAction?.icon;
+  const dependencyPreview = getDependencyPreview(workPackage, workPackages);
+  const dependencyWorkPackages = getDependencyWorkPackages(workPackage, workPackages);
+  const dependentWorkPackages = getDependentWorkPackages(workPackage, workPackages);
+  const isDependencyEditorOpen = editingDependencyId === workPackage.id;
 
   return (
     <>
@@ -344,54 +681,55 @@ function WorkPackageRow({
           )}
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          {primaryAction && PrimaryIcon ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={primaryAction.onClick}
-              className="min-w-0 flex-1 gap-2"
-            >
-              <PrimaryIcon className="h-4 w-4" />
-              {primaryAction.label}
-            </Button>
-          ) : (
-            <p className="min-w-0 flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-xs text-muted-foreground">
-              No Action
-            </p>
-          )}
-
-          <details className="relative shrink-0">
-            <summary className="flex h-9 w-11 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground [&::-webkit-details-marker]:hidden">
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">More Actions</span>
-            </summary>
-
-            <div className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
-              {secondaryActions.length > 0 ? (
-                secondaryActions.map(action => {
-                  const Icon = action.icon;
-
-                  return (
-                    <button
-                      key={action.label}
-                      type="button"
-                      onClick={action.onClick}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                    >
-                      <Icon className="h-4 w-4" />
-                      {action.label}
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="px-3 py-2 text-sm text-muted-foreground">
-                  No actions available
-                </p>
-              )}
+        <div className="mt-3 rounded-xl border border-border bg-background/60 p-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Dependencies
+              </p>
+              <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground">
+                {dependencyPreview}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {dependentWorkPackages.length} dependent package(s)
+              </p>
             </div>
-          </details>
+
+            {onUpdateDependencies ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onEditDependencies(workPackage.id)}
+                className="shrink-0 gap-2"
+              >
+                <Link2 className="h-4 w-4" />
+                Edit
+              </Button>
+            ) : null}
+          </div>
+
+          {isDependencyEditorOpen && (
+            <DependencyEditor
+              workPackage={workPackage}
+              workPackages={workPackages}
+              onUpdateDependencies={onUpdateDependencies}
+              onClose={onCloseDependencyEditor}
+            />
+          )}
         </div>
+
+        <div className="mt-3">
+          <WorkPackageActionButtons
+            workPackage={workPackage}
+            secondaryActions={secondaryActions}
+            onStartWork={onStartWork}
+            onPauseWork={onPauseWork}
+            onResumeWork={onResumeWork}
+            onCompleteWork={onCompleteWork}
+          />
+        </div>
+
       </article>
 
       <div className="hidden min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_96px_176px] xl:items-center xl:gap-4 xl:px-4">
@@ -468,61 +806,43 @@ function WorkPackageRow({
           </div>
         </div>
 
-        <div className="block text-center">
-          <p className="text-sm text-muted-foreground">
-            {workPackage.dependsOnWorkPackageIds.length || 0}
+        <div className="block">
+          <button
+            type="button"
+            onClick={() => onEditDependencies(workPackage.id)}
+            disabled={!onUpdateDependencies}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-2 py-1.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Link2 className="h-4 w-4" />
+            {dependencyWorkPackages.length}
+          </button>
+          <p className="mt-1 truncate text-center text-xs text-muted-foreground">
+            {dependentWorkPackages.length} child package(s)
           </p>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 xl:justify-center">
-          {primaryAction && PrimaryIcon ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={primaryAction.onClick}
-              className="min-w-0 flex-1 gap-2 xl:max-w-[118px]"
-            >
-              <PrimaryIcon className="h-4 w-4" />
-              {primaryAction.label}
-            </Button>
-          ) : (
-            <p className="min-w-0 flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-xs text-muted-foreground xl:max-w-[118px]">
-              No Action
-            </p>
-          )}
-
-          <details className="relative shrink-0">
-            <summary className="flex h-9 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground [&::-webkit-details-marker]:hidden">
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">More Actions</span>
-            </summary>
-
-            <div className="absolute right-0 z-30 mt-2 w-48 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
-              {secondaryActions.length > 0 ? (
-                secondaryActions.map(action => {
-                  const Icon = action.icon;
-
-                  return (
-                    <button
-                      key={action.label}
-                      type="button"
-                      onClick={action.onClick}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                    >
-                      <Icon className="h-4 w-4" />
-                      {action.label}
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="px-3 py-2 text-sm text-muted-foreground">
-                  No actions available
-                </p>
-              )}
-            </div>
-          </details>
+        <div className="flex min-w-0 items-center justify-center">
+          <WorkPackageActionButtons
+            workPackage={workPackage}
+            secondaryActions={secondaryActions}
+            onStartWork={onStartWork}
+            onPauseWork={onPauseWork}
+            onResumeWork={onResumeWork}
+            onCompleteWork={onCompleteWork}
+          />
         </div>
       </div>
+
+      {isDependencyEditorOpen && (
+        <div className="hidden border-b border-border bg-muted/20 px-4 py-3 xl:block">
+          <DependencyEditor
+            workPackage={workPackage}
+            workPackages={workPackages}
+            onUpdateDependencies={onUpdateDependencies}
+            onClose={onCloseDependencyEditor}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -531,6 +851,10 @@ function WorkPackageGroup({
   title,
   description,
   workPackages,
+  allWorkPackages,
+  editingDependencyId,
+  onEditDependencies,
+  onCloseDependencyEditor,
   icon: Icon,
   badgeVariant,
   onStartWork,
@@ -539,10 +863,15 @@ function WorkPackageGroup({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onUpdateDependencies,
 }: {
   title: string;
   description: string;
   workPackages: WorkPackage[];
+  allWorkPackages: WorkPackage[];
+  editingDependencyId: string | null;
+  onEditDependencies: (workPackageId: string) => void;
+  onCloseDependencyEditor: () => void;
   icon: typeof ShieldAlert;
   badgeVariant: 'danger' | 'warning' | 'info' | 'success' | 'muted';
   onStartWork?: (workPackageId: string) => void;
@@ -551,6 +880,7 @@ function WorkPackageGroup({
   onCompleteWork?: (workPackageId: string) => void;
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
+  onUpdateDependencies?: (workPackageId: string, dependencyIds: string[]) => void;
 }) {
   if (workPackages.length === 0) return null;
 
@@ -585,13 +915,17 @@ function WorkPackageGroup({
               <WorkPackageRow
             key={workPackage.id}
             workPackage={workPackage}
-            workPackages={workPackages}
+            workPackages={allWorkPackages}
+            editingDependencyId={editingDependencyId}
+            onEditDependencies={onEditDependencies}
+            onCloseDependencyEditor={onCloseDependencyEditor}
             onStartWork={onStartWork}
             onPauseWork={onPauseWork}
             onResumeWork={onResumeWork}
             onCompleteWork={onCompleteWork}
             onMarkDelayed={onMarkDelayed}
             onUpdateDelayReason={onUpdateDelayReason}
+            onUpdateDependencies={onUpdateDependencies}
               />
             ))}
           </div>
@@ -609,7 +943,9 @@ export function TimelineWorkPackages({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onUpdateDependencies,
 }: TimelineWorkPackagesProps) {
+  const [editingDependencyId, setEditingDependencyId] = useState<string | null>(null);
   if (workPackages.length === 0) {
     return (
       <EmptyState
@@ -630,6 +966,10 @@ export function TimelineWorkPackages({
         title="Needs Attention"
         description="Blocked, delayed, or paused work that needs action before the timeline can move smoothly."
         workPackages={needsAttention}
+        allWorkPackages={workPackages}
+        editingDependencyId={editingDependencyId}
+        onEditDependencies={setEditingDependencyId}
+        onCloseDependencyEditor={() => setEditingDependencyId(null)}
         icon={ShieldAlert}
         badgeVariant="danger"
         onStartWork={onStartWork}
@@ -638,12 +978,17 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
+        onUpdateDependencies={onUpdateDependencies}
       />
 
       <WorkPackageGroup
         title="Active / Upcoming"
         description="Work that is ready, in progress, or not yet started."
         workPackages={activeOrUpcoming}
+        allWorkPackages={workPackages}
+        editingDependencyId={editingDependencyId}
+        onEditDependencies={setEditingDependencyId}
+        onCloseDependencyEditor={() => setEditingDependencyId(null)}
         icon={Sparkles}
         badgeVariant="info"
         onStartWork={onStartWork}
@@ -652,12 +997,17 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
+        onUpdateDependencies={onUpdateDependencies}
       />
 
       <WorkPackageGroup
         title="Completed"
         description="Finished work packages that are no longer blocking the current timeline."
         workPackages={completed}
+        allWorkPackages={workPackages}
+        editingDependencyId={editingDependencyId}
+        onEditDependencies={setEditingDependencyId}
+        onCloseDependencyEditor={() => setEditingDependencyId(null)}
         icon={CheckCircle2}
         badgeVariant="success"
         onStartWork={onStartWork}
@@ -666,6 +1016,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
+        onUpdateDependencies={onUpdateDependencies}
       />
     </div>
   );
