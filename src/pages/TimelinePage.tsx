@@ -768,6 +768,29 @@ export default function TimelinePage() {
     );
   };
 
+  const handleAutoAssignPaymentGateDates = () => {
+    setPaymentGates(currentPaymentGates =>
+      distributePaymentGatesAcrossTimeline(
+        currentPaymentGates,
+        workPackages,
+        timelineStartDate
+      )
+    );
+
+    setPendingTimelineDraft(currentDraft =>
+      currentDraft
+        ? {
+            ...currentDraft,
+            paymentGates: distributePaymentGatesAcrossTimeline(
+              currentDraft.paymentGates,
+              currentDraft.workPackages,
+              timelineStartDate
+            ),
+          }
+        : currentDraft
+    );
+  };
+
   const handleMarkPaymentReceived = (paymentGate: PaymentGate) => {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -1895,6 +1918,7 @@ export default function TimelinePage() {
             onMarkReceived={handleMarkPaymentReceived}
             onMarkPending={handleMarkPaymentPending}
             onUpdateDueDate={handleUpdatePaymentGateDate}
+            onAutoAssignDueDates={handleAutoAssignPaymentGateDates}
           />
 
           {renderAssistPreview()}
@@ -1925,6 +1949,7 @@ export default function TimelinePage() {
           onMarkReceived={handleMarkPaymentReceived}
           onMarkPending={handleMarkPaymentPending}
         onUpdateDueDate={handleUpdatePaymentGateDate}
+        onAutoAssignDueDates={handleAutoAssignPaymentGateDates}
         />
       );
     }
