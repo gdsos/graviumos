@@ -562,6 +562,8 @@ export default function TimelinePage() {
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [pendingTimelineDraft, setPendingTimelineDraft] =
     useState<GeneratedTimelineReviewDraft | null>(null);
+  const [shouldScrollToPendingTimelineReview, setShouldScrollToPendingTimelineReview] =
+    useState(false);
   const [isDeleteTimelineDialogOpen, setIsDeleteTimelineDialogOpen] =
     useState(false);
   const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
@@ -613,6 +615,7 @@ export default function TimelinePage() {
   const schedulePinchDistanceRef = useRef<number | null>(null);
   const schedulePinchZoomRef = useRef(1);
   const scheduleTotalDaysRef = useRef(1);
+  const pendingTimelineReviewRef = useRef<HTMLElement | null>(null);
   const [isContractSigned, setIsContractSigned] = useState(false);
   const [isBookingPaymentCollected, setIsBookingPaymentCollected] = useState(false);
   const [bookingPaymentPercent, setBookingPaymentPercent] = useState('35');
@@ -664,6 +667,23 @@ export default function TimelinePage() {
       document.removeEventListener('visibilitychange', handleRefreshTimelineVendors);
     };
   }, []);
+
+  useEffect(() => {
+    if (!shouldScrollToPendingTimelineReview || !pendingTimelineDraft) return;
+
+    const scrollToReview = () => {
+      pendingTimelineReviewRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+
+      setShouldScrollToPendingTimelineReview(false);
+    };
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(scrollToReview);
+    });
+  }, [pendingTimelineDraft, shouldScrollToPendingTimelineReview]);
 
   useEffect(() => {
     if (activeTab !== 'schedule') return;
@@ -1302,6 +1322,7 @@ export default function TimelinePage() {
     setIgnoredAlertIds([]);
     setShowCreateWizard(false);
     setShowEstimateSourcePicker(false);
+    setShouldScrollToPendingTimelineReview(true);
     setActiveTab('overview');
   };
 
@@ -1747,7 +1768,10 @@ export default function TimelinePage() {
         ?.estimatedEndDate ?? firstStartDate;
 
     return (
-      <section className="mb-6 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+      <section
+        ref={pendingTimelineReviewRef}
+        className="mb-6 scroll-mt-24 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
+      >
         <div className="border-b border-border px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
