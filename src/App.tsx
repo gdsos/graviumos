@@ -38,7 +38,7 @@ import PortalPayroll from './pages/portal/PortalPayroll';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
-  if (loading) return <AppLoader />;
+  if (loading && !user) return <AppLoader />;
   if (!user) return <Navigate to="/login/admin" replace />;
   if (profile && profile.role !== 'super_admin') return <Navigate to="/portal/overview" replace />;
   return <>{children}</>;
@@ -46,7 +46,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <AppLoader />;
+  if (loading && !user) return <AppLoader />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
