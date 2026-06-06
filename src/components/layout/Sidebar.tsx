@@ -183,12 +183,12 @@ export default function Sidebar({ collapsed, onToggle, isAdmin }: SidebarProps) 
         {/* Header */}
         <div
           onClick={onToggle}
-          className="flex h-15 cursor-pointer items-center justify-center px-3"
+          className="flex h-15 cursor-pointer items-center justify-start px-5"
         >
           {collapsed ? (
             <GraviumLogo variant="icon" className="h-7 w-auto object-contain" />
           ) : (
-            <div className="flex w-full items-center justify-center gap-2">
+            <div className="flex w-full items-center justify-start gap-2">
               <GraviumLogo variant="wordmark" className="h-7 w-auto object-contain" />
               <span className="font-semibold tracking-tight">OS</span>
             </div>
