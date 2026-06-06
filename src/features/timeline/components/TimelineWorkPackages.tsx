@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -17,11 +17,21 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { demoVendors } from '@/features/vendors/data';
 import type { WorkPackage } from '../types';
+
+type TimelineVendorOption = {
+  id: string;
+  name: string;
+  category?: string;
+  phone?: string;
+  status?: string;
+  availability?: string;
+};
 
 interface TimelineWorkPackagesProps {
   workPackages: WorkPackage[];
+  vendors?: TimelineVendorOption[];
+  onAssignVendor?: (workPackageId: string, vendorId?: string) => void;
   onStartWork?: (workPackageId: string) => void;
   onPauseWork?: (workPackageId: string) => void;
   onResumeWork?: (workPackageId: string) => void;
@@ -37,11 +47,12 @@ type WorkPackageAction = {
   onClick?: () => void;
 };
 
-function getVendorName(vendorId?: string) {
+function getVendorName(vendorId: string | undefined, vendors: TimelineVendorOption[] = []) {
   if (!vendorId) return undefined;
 
-  return demoVendors.find(vendor => vendor.id === vendorId)?.name;
+  return vendors.find(vendor => vendor.id === vendorId)?.name;
 }
+
 
 function formatLabel(value: string) {
   return value
@@ -608,6 +619,157 @@ function WorkPackageActionButtons({
   );
 }
 
+function VendorAssignmentPicker({
+  workPackage,
+  vendors = [],
+  onAssignVendor,
+}: {
+  workPackage: WorkPackage;
+  vendors?: TimelineVendorOption[];
+  onAssignVendor?: (workPackageId: string, vendorId?: string) => void;
+}) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 280,
+  });
+
+  const selectedVendor = vendors.find(vendor => vendor.id === workPackage.vendorId);
+  const displayName = selectedVendor?.name ?? workPackage.assigneeName ?? 'Assign Vendor';
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const matchingVendors = vendors
+    .filter(vendor => {
+      if (vendor.status && vendor.status !== 'active') return false;
+      if (!normalizedQuery) return true;
+
+      return [vendor.name, vendor.category, vendor.phone]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(normalizedQuery));
+    })
+    .slice(0, 8);
+
+  const openPicker = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+
+    if (rect) {
+      setMenuPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: Math.max(280, rect.width),
+      });
+    }
+
+    setIsOpen(true);
+  };
+
+  const handleSelectVendor = (vendor: TimelineVendorOption) => {
+    onAssignVendor?.(workPackage.id, vendor.id);
+    setQuery('');
+    setIsOpen(false);
+  };
+
+  const handleClearVendor = () => {
+    onAssignVendor?.(workPackage.id, undefined);
+    setQuery('');
+    setIsOpen(false);
+  };
+
+  if (!onAssignVendor) {
+    return (
+      <span className="truncate text-sm font-medium text-foreground">
+        {displayName}
+      </span>
+    );
+  }
+
+  return (
+    <div className="min-w-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => {
+          if (isOpen) {
+            setIsOpen(false);
+          } else {
+            openPicker();
+          }
+        }}
+        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+      >
+        <span className="truncate">{displayName}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">Change</span>
+      </button>
+
+      {isOpen && (
+        <div
+          className="fixed z-[220] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl"
+          style={{
+            top: menuPosition.top,
+            left: menuPosition.left,
+            width: menuPosition.width,
+          }}
+        >
+          <input
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="Search vendor"
+            className="mb-2 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground"
+            autoFocus
+          />
+
+          <div className="max-h-52 overflow-y-auto">
+            {matchingVendors.length > 0 ? (
+              matchingVendors.map(vendor => (
+                <button
+                  key={vendor.id}
+                  type="button"
+                  onClick={() => handleSelectVendor(vendor)}
+                  className="flex w-full min-w-0 flex-col rounded-lg px-3 py-2 text-left transition hover:bg-muted"
+                >
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {vendor.name}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {[vendor.category, vendor.phone].filter(Boolean).join(' - ') || 'Vendor'}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-sm text-muted-foreground">
+                No matching vendors
+              </p>
+            )}
+          </div>
+
+          <div className="mt-2 flex gap-2 border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+            >
+              Close
+            </button>
+
+            {workPackage.vendorId && (
+              <button
+                type="button"
+                onClick={handleClearVendor}
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WorkPackageRow({
   workPackage,
   workPackages,
@@ -621,13 +783,15 @@ function WorkPackageRow({
   onMarkDelayed,
   onUpdateDelayReason,
   onUpdatePrerequisites,
+  vendors,
+  onAssignVendor,
 }: TimelineWorkPackagesProps & {
   workPackage: WorkPackage;
   editingDependencyId: string | null;
   onEditPrerequisites: (workPackageId: string) => void;
   onCloseDependencyEditor: () => void;
 }) {
-  const vendorName = getVendorName(workPackage.vendorId);
+  const vendorName = getVendorName(workPackage.vendorId, vendors);
   const latestPauseReason = getLatestPauseReason(workPackage);
   const titleParts = getWorkPackageTitleParts(workPackage.title);
 const secondaryActions = getSecondaryActions({
@@ -770,6 +934,13 @@ const secondaryActions = getSecondaryActions({
           <p className="mt-1 truncate text-xs text-muted-foreground">
             Vendor: {vendorName ?? workPackage.assigneeName}
           </p>
+              <div className="mt-2">
+                <VendorAssignmentPicker
+                  workPackage={workPackage}
+                  vendors={vendors}
+                  onAssignVendor={onAssignVendor}
+                />
+              </div>
         </div>
 
         <div className="block">
@@ -886,6 +1057,8 @@ function WorkPackageGroup({
   onMarkDelayed,
   onUpdateDelayReason,
   onUpdatePrerequisites,
+  vendors,
+  onAssignVendor,
 }: {
   title: string;
   description: string;
@@ -902,6 +1075,8 @@ function WorkPackageGroup({
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
   onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
+  vendors?: TimelineVendorOption[];
+  onAssignVendor?: (workPackageId: string, vendorId?: string) => void;
 }) {
   if (workPackages.length === 0) return null;
 
@@ -942,6 +1117,8 @@ function WorkPackageGroup({
             onMarkDelayed={onMarkDelayed}
             onUpdateDelayReason={onUpdateDelayReason}
             onUpdatePrerequisites={onUpdatePrerequisites}
+            vendors={vendors}
+            onAssignVendor={onAssignVendor}
               />
             ))}
           </div>
@@ -960,6 +1137,8 @@ export function TimelineWorkPackages({
   onMarkDelayed,
   onUpdateDelayReason,
   onUpdatePrerequisites,
+  vendors,
+  onAssignVendor,
 }: TimelineWorkPackagesProps) {
   const [editingDependencyId, setEditingDependencyId] = useState<string | null>(null);
   if (workPackages.length === 0) {
@@ -994,6 +1173,8 @@ export function TimelineWorkPackages({
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
         onUpdatePrerequisites={onUpdatePrerequisites}
+        vendors={vendors}
+        onAssignVendor={onAssignVendor}
       />
 
       <WorkPackageGroup
@@ -1012,6 +1193,8 @@ export function TimelineWorkPackages({
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
         onUpdatePrerequisites={onUpdatePrerequisites}
+        vendors={vendors}
+        onAssignVendor={onAssignVendor}
       />
 
       <WorkPackageGroup
@@ -1030,6 +1213,8 @@ export function TimelineWorkPackages({
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
         onUpdatePrerequisites={onUpdatePrerequisites}
+        vendors={vendors}
+        onAssignVendor={onAssignVendor}
       />
     </div>
   );

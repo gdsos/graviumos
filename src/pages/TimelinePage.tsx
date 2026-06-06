@@ -34,8 +34,42 @@ import type {
 
 const TIMELINE_STORAGE_KEY = 'gravium-os-timeline';
 const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
+const VENDORS_STORAGE_KEY = 'gravium-os-vendors';
 
 type LinkedCostEstimateStatus = 'draft' | 'approved' | 'revision';
+
+type TimelineVendorRecord = {
+  id: string;
+  name: string;
+  category?: string;
+  phone?: string;
+  status?: string;
+  availability?: string;
+};
+
+function getStoredVendorRecords() {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const storedVendors = localStorage.getItem(VENDORS_STORAGE_KEY);
+
+    if (!storedVendors) return [];
+
+    const parsedVendors = JSON.parse(storedVendors);
+
+    if (!Array.isArray(parsedVendors)) return [];
+
+    return parsedVendors.filter(vendor => {
+      return (
+        vendor &&
+        typeof vendor.id === 'string' &&
+        typeof vendor.name === 'string'
+      );
+    }) as TimelineVendorRecord[];
+  } catch {
+    return [];
+  }
+}
 
 type StoredCostEstimateRecord = {
   id: string;
@@ -534,11 +568,22 @@ export default function TimelinePage() {
     () => storedTimeline?.timelineConfirmedAt ?? ''
   );
   const [showEstimateSourcePicker, setShowEstimateSourcePicker] = useState(false);
+  const [openPendingVendorPickerId, setOpenPendingVendorPickerId] = useState<string | null>(null);
+  const [pendingVendorQuery, setPendingVendorQuery] = useState('');
+  const [pendingVendorPickerPosition, setPendingVendorPickerPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 280,
+  });
+  const pendingVendorPickerButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [isPlanningControlsLocked, setIsPlanningControlsLocked] = useState(false);
   const [showPaymentGateControls, setShowPaymentGateControls] = useState(false);
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
   >(() => getStoredCostEstimateRecords());
+  const [vendorRecords, setVendorRecords] = useState<TimelineVendorRecord[]>(
+    () => getStoredVendorRecords()
+  );
   const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
     () => storedTimeline?.selectedTimelineProjectId ?? ''
   );
@@ -605,6 +650,20 @@ export default function TimelinePage() {
     timelineSourceEstimateVersion,
     workPackages,
   ]);
+
+  useEffect(() => {
+    const handleRefreshTimelineVendors = () => {
+      setVendorRecords(getStoredVendorRecords());
+    };
+
+    window.addEventListener('focus', handleRefreshTimelineVendors);
+    document.addEventListener('visibilitychange', handleRefreshTimelineVendors);
+
+    return () => {
+      window.removeEventListener('focus', handleRefreshTimelineVendors);
+      document.removeEventListener('visibilitychange', handleRefreshTimelineVendors);
+    };
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'schedule') return;
@@ -1290,6 +1349,146 @@ export default function TimelinePage() {
     });
   };
 
+  const handleAssignPendingWorkPackageVendor = (
+    workPackageId: string,
+    vendorId?: string
+  ) => {
+    const selectedVendor = vendorRecords.find(vendor => vendor.id === vendorId);
+
+    handleUpdatePendingWorkPackage(workPackageId, {
+      vendorId: selectedVendor?.id,
+      assigneeName: selectedVendor?.name ?? 'Assign Vendor',
+    });
+
+    setPendingVendorQuery('');
+    setOpenPendingVendorPickerId(null);
+  };
+
+  const openPendingVendorPicker = (workPackageId: string) => {
+    const button = pendingVendorPickerButtonRefs.current[workPackageId];
+    const rect = button?.getBoundingClientRect();
+
+    if (rect) {
+      setPendingVendorPickerPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: Math.max(280, rect.width),
+      });
+    }
+
+    setPendingVendorQuery('');
+    setOpenPendingVendorPickerId(workPackageId);
+  };
+
+  const renderPendingVendorPicker = (workPackage: WorkPackage) => {
+    const selectedVendor = vendorRecords.find(
+      vendor => vendor.id === workPackage.vendorId
+    );
+    const displayName =
+      selectedVendor?.name ?? workPackage.assigneeName ?? 'Assign Vendor';
+    const normalizedQuery = pendingVendorQuery.trim().toLowerCase();
+    const matchingVendors = vendorRecords
+      .filter(vendor => {
+        if (vendor.status && vendor.status !== 'active') return false;
+        if (!normalizedQuery) return true;
+
+        return [vendor.name, vendor.category, vendor.phone]
+          .filter(Boolean)
+          .some(value => String(value).toLowerCase().includes(normalizedQuery));
+      })
+      .slice(0, 8);
+
+    return (
+      <div className="relative min-w-0">
+        <button
+          ref={element => {
+            pendingVendorPickerButtonRefs.current[workPackage.id] = element;
+          }}
+          type="button"
+          onClick={() => {
+            if (openPendingVendorPickerId === workPackage.id) {
+              setOpenPendingVendorPickerId(null);
+            } else {
+              openPendingVendorPicker(workPackage.id);
+            }
+          }}
+          className="flex min-h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-left text-sm text-foreground transition hover:bg-muted"
+        >
+          <span className="truncate">{displayName}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">Change</span>
+        </button>
+
+        {openPendingVendorPickerId === workPackage.id && (
+          <div
+            className="fixed z-[220] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl"
+            style={{
+              top: pendingVendorPickerPosition.top,
+              left: pendingVendorPickerPosition.left,
+              width: pendingVendorPickerPosition.width,
+            }}
+          >
+            <input
+              value={pendingVendorQuery}
+              onChange={event => setPendingVendorQuery(event.target.value)}
+              placeholder="Search vendor"
+              className="mb-2 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground"
+              autoFocus
+            />
+
+            <div className="max-h-52 overflow-y-auto">
+              {matchingVendors.length > 0 ? (
+                matchingVendors.map(vendor => (
+                  <button
+                    key={vendor.id}
+                    type="button"
+                    onClick={() =>
+                      handleAssignPendingWorkPackageVendor(workPackage.id, vendor.id)
+                    }
+                    className="flex w-full min-w-0 flex-col rounded-lg px-3 py-2 text-left transition hover:bg-muted"
+                  >
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {vendor.name}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {[vendor.category, vendor.phone].filter(Boolean).join(' - ') ||
+                        'Vendor'}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  No matching vendors
+                </p>
+              )}
+            </div>
+
+            <div className="mt-2 flex gap-2 border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={() => setOpenPendingVendorPickerId(null)}
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              >
+                Close
+              </button>
+
+              {workPackage.vendorId && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAssignPendingWorkPackageVendor(workPackage.id, undefined)
+                  }
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const handleConfirmPendingTimeline = () => {
     if (!pendingTimelineDraft) return;
 
@@ -1329,6 +1528,22 @@ export default function TimelinePage() {
     }
 
     setActiveTab('overview');
+  };
+
+  const handleAssignWorkPackageVendor = (workPackageId: string, vendorId?: string) => {
+    const selectedVendor = vendorRecords.find(vendor => vendor.id === vendorId);
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage =>
+        workPackage.id === workPackageId
+          ? {
+              ...workPackage,
+              vendorId: selectedVendor?.id,
+              assigneeName: selectedVendor?.name ?? 'Assign Vendor',
+            }
+          : workPackage
+      )
+    );
   };
 
   const handleUpdateWorkPackageDependencies = (
@@ -1625,15 +1840,7 @@ export default function TimelinePage() {
                   <span className="text-xs font-medium text-muted-foreground">
                     Assigned To
                   </span>
-                  <input
-                    value={workPackage.assigneeName}
-                    onChange={event =>
-                      handleUpdatePendingWorkPackage(workPackage.id, {
-                        assigneeName: event.target.value,
-                      })
-                    }
-                    className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
-                  />
+                  {renderPendingVendorPicker(workPackage)}
                 </label>
               </div>
 
@@ -2374,7 +2581,9 @@ export default function TimelinePage() {
           onMarkDelayed={handleMarkWorkPackageDelayed}
           onUpdateDelayReason={handleUpdateDelayReason}
           onUpdatePrerequisites={handleUpdateWorkPackageDependencies}
-        />
+                    vendors={vendorRecords}
+            onAssignVendor={handleAssignWorkPackageVendor}
+/>
       );
     }
 
