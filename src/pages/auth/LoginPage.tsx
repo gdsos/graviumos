@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
 import { GraviumLogo } from '@/components/common/GraviumLogo';
 import { ThemeModeToggle } from '@/components/common/ThemeModeToggle';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface LoginPageProps {
   portalType: 'admin' | 'employee';
@@ -15,8 +16,15 @@ export default function LoginPage({ portalType }: LoginPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const { user, loading: authLoading } = useAuth();
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/portal/overview', { replace: true });
+    }
+  }, [authLoading, navigate, user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

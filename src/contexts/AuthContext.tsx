@@ -93,12 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        return;
+      }
+
       if (!session?.user) {
         return;
       }
 
       setSession(session);
       setUser(session.user);
+
+      if (event === 'USER_UPDATED') {
+        void fetchProfile(session.user.id);
+        return;
+      }
 
       void Promise.all([fetchProfile(session.user.id), fetchDepartments()]);
     });
