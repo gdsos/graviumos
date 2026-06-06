@@ -12,6 +12,7 @@ export const supabase = createClient(
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storageKey: 'gravium-os-auth-session',
+      storage: window.localStorage,
     },
   }
 );
