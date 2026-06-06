@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save,
+import { ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save,
   Trash2,
 } from 'lucide-react';
 
@@ -22,7 +22,6 @@ import { generateTimelineFromApprovedEstimate } from '@/features/timeline/genera
 import { IntelligentAssistPanel } from '@/features/timeline/components/IntelligentAssistPanel';
 import { NextActionsPanel } from '@/features/timeline/components/NextActionsPanel';
 import { PaymentGateBar } from '@/features/timeline/components/PaymentGateBar';
-import { TimelineSummaryCards } from '@/features/timeline/components/TimelineSummaryCards';
 import { TimelineWorkPackages } from '@/features/timeline/components/TimelineWorkPackages';
 
 import type {
@@ -104,8 +103,11 @@ function getApprovedCostEstimateRecords(records: StoredCostEstimateRecord[]) {
   return records.filter(record => record.projectId && record.status === 'approved');
 }
 
-function getWaitingCostEstimateRecords(records: StoredCostEstimateRecord[]) {
-  return records.filter(record => record.projectId && record.status !== 'approved');
+
+function formatWorkPackageStatusLabel(status: string) {
+  return status
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, character => character.toUpperCase());
 }
 
 function getEstimateStatusTitle(status?: LinkedCostEstimateStatus) {
@@ -161,16 +163,6 @@ type GeneratedTimelineReviewDraft = {
   workPackages: WorkPackage[];
 };
 
-const workPackageStatusOptions: WorkPackageStatus[] = [
-  'not_started',
-  'ready',
-  'in_progress',
-  'paused',
-  'blocked_by_payment',
-  'blocked_by_dependency',
-  'completed',
-  'delayed',
-];
 
 function getStoredTimelineState(): StoredTimelineState | null {
   if (typeof window === 'undefined') return null;
@@ -217,27 +209,34 @@ function formatINR(amount: number) {
 }
 
 
-function formatCompactDate(dateString: string) {
-  const [year, month, day] = dateString.split('-');
+function formatCompactDate(dateString?: string) {
+  if (!dateString) return 'Not set';
 
-  if (!year || !month || !day) return dateString;
+  const date = new Date(dateString);
 
-  return `${day}/${month}/${year}`;
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
 }
 
-function formatDate(dateString: string) {
+function formatDate(dateString?: string) {
+  if (!dateString) return 'Not set';
+
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) return dateString;
+
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-  }).format(new Date(`${dateString}T00:00:00`));
+  }).format(date);
 }
 
-function toTitleCase(value: string) {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, letter => letter.toUpperCase());
-}
 
 function getDayDifference(startDate: string, endDate: string) {
   const start = new Date(`${startDate}T00:00:00`);
@@ -255,6 +254,17 @@ const SCHEDULE_MAX_ZOOM = 3.2;
 
 function clampScheduleZoom(value: number) {
   return Math.min(SCHEDULE_MAX_ZOOM, Math.max(SCHEDULE_MIN_ZOOM, value));
+}
+
+function getScheduleBaseDayWidth(viewportWidth: number, totalDays: number) {
+  const visibleChartWidth = Math.max(0, viewportWidth - SCHEDULE_LEFT_COLUMN_WIDTH);
+  const usableChartWidth = Math.max(1, visibleChartWidth - SCHEDULE_CHART_LEFT_PADDING - 24);
+
+  if (visibleChartWidth <= 0 || totalDays <= 1) {
+    return SCHEDULE_BASE_DAY_WIDTH;
+  }
+
+  return usableChartWidth / Math.max(1, totalDays);
 }
 
 function formatScheduleTickDate(dateString: string) {
@@ -310,6 +320,7 @@ function getScheduleDateTicks(
       date: addDaysToDate(timelineStartDate, dayIndex),
       left: SCHEDULE_CHART_LEFT_PADDING + dayIndex * dayWidth,
       isMajor: dayIndex === 0 || dayIndex % Math.max(step, 7) === 0,
+      isEnd: dayIndex === totalDays - 1,
     });
   }
 
@@ -318,6 +329,7 @@ function getScheduleDateTicks(
       date: addDaysToDate(timelineStartDate, totalDays - 1),
       left: SCHEDULE_CHART_LEFT_PADDING + (totalDays - 1) * dayWidth,
       isMajor: true,
+      isEnd: true,
     });
   }
 
@@ -482,9 +494,6 @@ export default function TimelinePage() {
     useState<GeneratedTimelineReviewDraft | null>(null);
   const [isDeleteTimelineDialogOpen, setIsDeleteTimelineDialogOpen] =
     useState(false);
-  const [openPendingStatusMenuId, setOpenPendingStatusMenuId] = useState<
-    string | null
-  >(null);
   const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     () => storedTimeline?.timelineConfirmedAt ?? ''
   );
@@ -501,6 +510,7 @@ export default function TimelinePage() {
     new Date().toISOString().slice(0, 10)
   );
   const [scheduleZoom, setScheduleZoom] = useState(1);
+  const [scheduleViewportWidth, setScheduleViewportWidth] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingScheduleScrollLeftRef = useRef<number | null>(null);
   const scheduleDragStartXRef = useRef<number | null>(null);
@@ -508,6 +518,7 @@ export default function TimelinePage() {
   const scheduleIsDraggingRef = useRef(false);
   const schedulePinchDistanceRef = useRef<number | null>(null);
   const schedulePinchZoomRef = useRef(1);
+  const scheduleTotalDaysRef = useRef(1);
   const [isContractSigned, setIsContractSigned] = useState(false);
   const [isBookingPaymentCollected, setIsBookingPaymentCollected] = useState(false);
   const [bookingPaymentPercent, setBookingPaymentPercent] = useState('35');
@@ -538,6 +549,32 @@ export default function TimelinePage() {
     if (activeTab !== 'schedule') return;
 
     const scheduleElement = scheduleScrollRef.current;
+    if (!scheduleElement) return;
+
+    const updateScheduleViewportWidth = () => {
+      setScheduleViewportWidth(scheduleElement.clientWidth);
+    };
+
+    updateScheduleViewportWidth();
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(updateScheduleViewportWidth)
+        : null;
+
+    resizeObserver?.observe(scheduleElement);
+    window.addEventListener('resize', updateScheduleViewportWidth);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateScheduleViewportWidth);
+    };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'schedule') return;
+
+    const scheduleElement = scheduleScrollRef.current;
 
     if (!scheduleElement) return;
 
@@ -560,8 +597,13 @@ export default function TimelinePage() {
 
         if (nextZoom === currentZoom) return currentZoom;
 
-        const currentDayWidth = Math.round(SCHEDULE_BASE_DAY_WIDTH * currentZoom);
-        const nextDayWidth = Math.round(SCHEDULE_BASE_DAY_WIDTH * nextZoom);
+        const currentTotalDays = scheduleTotalDaysRef.current;
+        const baseDayWidth = getScheduleBaseDayWidth(
+          scheduleViewportWidth || scheduleElement.clientWidth,
+          currentTotalDays
+        );
+        const currentDayWidth = Math.max(1, baseDayWidth * currentZoom);
+        const nextDayWidth = Math.max(1, baseDayWidth * nextZoom);
         const zoomRatio = nextDayWidth / Math.max(1, currentDayWidth);
 
         const effectiveCursorX = Math.max(
@@ -577,7 +619,12 @@ export default function TimelinePage() {
           timelineAnchorBeforeZoom * zoomRatio -
           effectiveCursorX;
 
-        pendingScheduleScrollLeftRef.current = Math.max(0, nextScrollLeft);
+        pendingScheduleScrollLeftRef.current =
+          nextZoom <= 1 ? 0 : Math.max(0, nextScrollLeft);
+
+        if (nextZoom <= 1) {
+          scheduleElement.scrollLeft = 0;
+        }
 
         return nextZoom;
       });
@@ -590,7 +637,7 @@ export default function TimelinePage() {
     return () => {
       scheduleElement.removeEventListener('wheel', handleScheduleWheel);
     };
-  }, [activeTab]);
+  }, [activeTab, scheduleViewportWidth]);
 
   useLayoutEffect(() => {
     if (activeTab !== 'schedule') return;
@@ -636,10 +683,6 @@ export default function TimelinePage() {
 
   const approvedCostEstimateRecords = useMemo(
     () => getApprovedCostEstimateRecords(costEstimateRecords),
-    [costEstimateRecords]
-  );
-  const waitingCostEstimateRecords = useMemo(
-    () => getWaitingCostEstimateRecords(costEstimateRecords),
     [costEstimateRecords]
   );
   const linkedCostEstimate = useMemo(
@@ -927,14 +970,20 @@ export default function TimelinePage() {
   const handleSelectTimelineSource = (projectId?: string) => {
     if (!projectId) return;
 
+    const selectedRecord = approvedCostEstimateRecords.find(
+      record => record.projectId === projectId
+    );
+
+    if (!selectedRecord) return;
+
     const isChangingSource = selectedTimelineProjectId !== projectId;
 
     setSelectedTimelineProjectId(projectId);
+    setShowEstimateSourcePicker(false);
     setIsContractSigned(false);
     setIsBookingPaymentCollected(false);
     setPendingTimelineDraft(null);
     setTimelineConfirmedAt('');
-    setShowEstimateSourcePicker(false);
     setShowCreateWizard(false);
     setActiveTab('overview');
 
@@ -1339,7 +1388,7 @@ export default function TimelinePage() {
               key={workPackage.id}
               className="rounded-2xl border border-border bg-background p-3 sm:p-4"
             >
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_150px_150px_180px_180px] xl:items-end">
+              <div className="grid gap-3 lg:grid-cols-[minmax(360px,1fr)_180px_180px_minmax(220px,0.7fr)]">
                 <label className="grid gap-1">
                   <span className="text-xs font-medium text-muted-foreground">
                     Work Package
@@ -1401,57 +1450,6 @@ export default function TimelinePage() {
                     className="min-h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-foreground"
                   />
                 </label>
-
-                <label className="grid gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Status
-                  </span>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpenPendingStatusMenuId(current =>
-                          current === workPackage.id ? null : workPackage.id
-                        )
-                      }
-                      className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40 focus:border-foreground"
-                    >
-                      <span>{toTitleCase(workPackage.status)}</span>
-                      <ChevronDown
-                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                          openPendingStatusMenuId === workPackage.id
-                            ? 'rotate-180'
-                            : ''
-                        }`}
-                      />
-                    </button>
-
-                    {openPendingStatusMenuId === workPackage.id && (
-                      <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
-                        {workPackageStatusOptions.map(statusOption => (
-                          <button
-                            key={statusOption}
-                            type="button"
-                            onMouseDown={event => event.preventDefault()}
-                            onClick={() => {
-                              handleUpdatePendingWorkPackage(workPackage.id, {
-                                status: statusOption,
-                              });
-                              setOpenPendingStatusMenuId(null);
-                            }}
-                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                              statusOption === workPackage.status
-                                ? 'bg-muted text-foreground'
-                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                            }`}
-                          >
-                            {toTitleCase(statusOption)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </label>
               </div>
 
               {workPackage.description && (
@@ -1463,29 +1461,7 @@ export default function TimelinePage() {
           ))}
         </div>
 
-        <div className="border-t border-border px-4 py-4 sm:px-5">
-          <p className="mb-3 text-sm font-medium text-foreground">
-            Payment Gates Preview
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {pendingTimelineDraft.paymentGates.map(paymentGate => (
-              <div
-                key={paymentGate.id}
-                className="rounded-xl border border-border bg-background p-3"
-              >
-                <p className="text-sm font-medium text-foreground">
-                  {paymentGate.title}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatDate(paymentGate.dueDate)}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {formatINR(paymentGate.amount)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+        
       </section>
     );
   };
@@ -1514,14 +1490,14 @@ export default function TimelinePage() {
                       {workPackage.title}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {workPackage.estimatedStartDate} →{' '}
+                      {workPackage.estimatedStartDate} -{' '}
                       {workPackage.estimatedEndDate}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
                     <StatusBadge variant="danger">
-                      {workPackage.status.replaceAll('_', ' ')}
+                      {formatWorkPackageStatusLabel(workPackage.status)}
                     </StatusBadge>
 
                     {paymentGate && (
@@ -1543,100 +1519,263 @@ export default function TimelinePage() {
     </SectionCard>
   );
 
-  const renderProjectSnapshot = () => (
-    <SectionCard
-      title="Project Snapshot"
-      description="Timeline control view for the selected project."
-    >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-background p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Client
-          </p>
-          <p className="mt-2 truncate text-sm font-semibold text-foreground">
-            {activeTimelineProject.clientName}
-          </p>
-        </div>
+  const renderTimelineSourceSnapshot = () => {
+    const selectedSourceLabel = linkedCostEstimate
+      ? `${linkedCostEstimate.projectName} - v${linkedCostEstimate.version}`
+      : 'No approved estimate selected';
+    const selectedClientLabel =
+      linkedCostEstimate?.clientName ?? activeTimelineProject.clientName;
+    const selectedRevenue = linkedCostEstimate?.grandTotal ?? activeTimelineProject.revenue;
+    const timelineStatusLabel = hasActiveTimeline
+      ? 'Confirmed Planned Timeline'
+      : pendingTimelineDraft
+        ? 'Review Draft Timeline'
+        : hasSelectedApprovedProjectEstimate
+          ? 'Source Selected'
+          : 'Timeline Not Built';
+    const timelineStatusVariant = hasActiveTimeline
+      ? 'success'
+      : pendingTimelineDraft
+        ? 'warning'
+        : hasSelectedApprovedProjectEstimate
+          ? 'info'
+          : 'muted';
+    const dateRangeLabel = `${formatDate(timelineDateRange.startDate)} - ${formatDate(
+      timelineDateRange.endDate
+    )}`;
+    const sourceDescription = linkedCostEstimate
+      ? 'Timeline is linked to the approved estimate below. Change the source only when another approved estimate should drive planning.'
+      : 'Choose one approved estimate as the source before building the timeline.';
 
-        <div className="rounded-2xl border border-border bg-background p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Revenue
-          </p>
-          <p className="mt-2 text-sm font-semibold text-foreground">
-            {formatINR(activeTimelineProject.revenue)}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-background p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Expected
-          </p>
-          <p className="mt-2 text-sm font-semibold text-foreground">
-            {formatDate(activeTimelineProject.expectedHandoverDate)}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-background p-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Projected
-          </p>
-          <p className="mt-2 text-sm font-semibold text-foreground">
-            {formatDate(activeTimelineProject.currentProjectedHandoverDate)}
-          </p>
-        </div>
-      </div>
-    </SectionCard>
-  );
-
-  const renderAssistPreview = () => {
-    if (alerts.length === 0) return null;
+    const snapshotMetrics = [
+      {
+        label: 'Work',
+        value: `${summary.completedWorkPackages}/${summary.totalWorkPackages}`,
+        helper: 'completed',
+      },
+      {
+        label: 'Blocked',
+        value: String(summary.blockedWorkPackages),
+        helper: 'payment / prerequisite',
+      },
+      {
+        label: 'Payments',
+        value: `${summary.receivedPaymentGates}/${paymentGates.length}`,
+        helper: 'received',
+      },
+      {
+        label: 'Delayed',
+        value: String(summary.delayedWorkPackages),
+        helper: `${summary.projectedDelayDays} day(s)`,
+      },
+    ];
 
     return (
-      <SectionCard
-        title="Intelligent Assist Preview"
-        description={`${alerts.length} alert(s) found. Showing only the most important actions here. Open Assist for the full explanation.`}
-        actions={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setActiveTab('alerts')}
-          >
-            View All Alerts
-          </Button>
-        }
-      >
-        <div className="grid gap-3">
-          {alerts.slice(0, 2).map(alert => (
-            <div
-              key={alert.id}
-              className="rounded-2xl border border-border bg-background p-4"
+      <section className="mb-5 overflow-visible rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                Timeline Source & Snapshot
+              </p>
+              <StatusBadge variant={timelineStatusVariant}>
+                {timelineStatusLabel}
+              </StatusBadge>
+              {hasActiveTimeline && (
+                <StatusBadge variant="outline">Baseline Locked</StatusBadge>
+              )}
+            </div>
+
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {sourceDescription}
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshCostEstimateSources}
+              className="h-9 justify-center gap-2"
             >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {alert.title}
+              <RotateCcw className="h-4 w-4" />
+              Sync Estimate
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEstimateSourcePicker(current => !current)}
+              className="h-9 justify-center gap-2"
+              disabled={approvedCostEstimateRecords.length === 0}
+            >
+              {showEstimateSourcePicker ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              Change Source
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <div className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-border bg-background p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-base font-semibold text-foreground">
+                    {selectedSourceLabel}
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    {alert.description}
-                  </p>
+                  <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate?.status)}>
+                    {getEstimateStatusTitle(linkedCostEstimate?.status)}
+                  </StatusBadge>
                 </div>
 
-                <StatusBadge
-                  variant={
-                    alert.severity === 'danger'
-                      ? 'danger'
-                      : alert.severity === 'warning'
-                        ? 'warning'
-                        : 'info'
-                  }
-                >
-                  {alert.severity}
-                </StatusBadge>
+                <p className="mt-1 truncate text-sm text-muted-foreground">
+                  {selectedClientLabel}
+                </p>
+              </div>
+
+              <div className="shrink-0 text-left sm:text-right">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Estimate Value
+                </p>
+                <p className="mt-1 text-base font-semibold text-foreground">
+                  {formatINR(selectedRevenue)}
+                </p>
               </div>
             </div>
-          ))}
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-card/60 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Timeline Range</p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {dateRangeLabel}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card/60 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Estimate Updated</p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {linkedCostEstimate?.updatedAt
+                    ? formatDate(linkedCostEstimate.updatedAt)
+                    : 'Not selected'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {snapshotMetrics.map(metric => (
+              <div
+                key={metric.label}
+                className="rounded-2xl border border-border bg-background px-4 py-3"
+              >
+                <p className="text-xs text-muted-foreground">{metric.label}</p>
+                <p className="mt-1 text-xl font-semibold text-foreground">
+                  {metric.value}
+                </p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {metric.helper}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
-      </SectionCard>
+
+
+      </section>
+    );
+  };
+
+  const renderEstimateSourcePickerOverlay = () => {
+    if (!showEstimateSourcePicker) return null;
+
+    return (
+      <div className="fixed inset-0 z-[9990] flex items-end bg-background/70 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+        <button
+          type="button"
+          aria-label="Close source picker"
+          className="absolute inset-0 cursor-default"
+          onClick={() => setShowEstimateSourcePicker(false)}
+        />
+
+        <div className="relative z-[9991] max-h-[82vh] w-full overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-2xl sm:max-w-2xl">
+          <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-4 sm:px-5">
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-foreground">
+                Change Timeline Source
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Choose the approved estimate that should drive this timeline.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEstimateSourcePicker(false)}
+              className="shrink-0"
+            >
+              Close
+            </Button>
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto p-3 sm:p-4">
+            <div className="grid gap-2">
+              {approvedCostEstimateRecords.length > 0 ? (
+                approvedCostEstimateRecords.map(record => {
+                  const isSelected = record.projectId === selectedTimelineProjectId;
+
+                  return (
+                    <button
+                      key={record.id}
+                      type="button"
+                      onClick={() => handleSelectTimelineSource(record.projectId)}
+                      className={`flex min-w-0 flex-col gap-2 rounded-2xl border px-4 py-4 text-left transition ${
+                        isSelected
+                          ? 'border-emerald-500/60 bg-emerald-500/10 text-foreground'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <p className="truncate text-sm font-semibold">
+                          {record.projectName}
+                        </p>
+                        {isSelected ? (
+                          <StatusBadge variant="success">Selected</StatusBadge>
+                        ) : (
+                          <StatusBadge variant={getEstimateStatusVariant(record.status)}>
+                            {getEstimateStatusTitle(record.status)}
+                          </StatusBadge>
+                        )}
+                      </div>
+
+                      <div className="grid gap-1 text-xs sm:grid-cols-3">
+                        <span className="truncate">
+                          {record.clientName ?? 'No client'}
+                        </span>
+                        <span>Version {record.version}</span>
+                        <span className="font-medium text-foreground">
+                          {formatINR(record.grandTotal)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="rounded-2xl border border-dashed border-border bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
+                  No approved project-linked estimates are available yet.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -1644,11 +1783,20 @@ export default function TimelinePage() {
     const timelineStartDate = timelineDateRange.startDate;
     const timelineEndDate = timelineDateRange.endDate;
     const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
-    const dayWidth = Math.round(SCHEDULE_BASE_DAY_WIDTH * scheduleZoom);
-    const scheduleCanvasWidth = Math.max(
-      960,
-      SCHEDULE_CHART_LEFT_PADDING + totalDays * dayWidth + 80
+    scheduleTotalDaysRef.current = totalDays;
+    const baseDayWidth = getScheduleBaseDayWidth(scheduleViewportWidth, totalDays);
+    const dayWidth = Math.max(1, baseDayWidth * scheduleZoom);
+    const visibleChartWidth = Math.max(
+      1,
+      scheduleViewportWidth - SCHEDULE_LEFT_COLUMN_WIDTH
     );
+    const scheduleCanvasWidth =
+      scheduleZoom <= 1
+        ? visibleChartWidth
+        : Math.max(
+            visibleChartWidth,
+            SCHEDULE_CHART_LEFT_PADDING + totalDays * dayWidth + 48
+          );
     const scheduleFullWidth = SCHEDULE_LEFT_COLUMN_WIDTH + scheduleCanvasWidth;
     const dateTicks = getScheduleDateTicks(timelineStartDate, totalDays, dayWidth);
     const today = new Date().toISOString().slice(0, 10);
@@ -1663,7 +1811,18 @@ export default function TimelinePage() {
     const scheduleZoomPercent = Math.round(scheduleZoom * 100);
 
     const handleScheduleZoom = (nextZoom: number) => {
-      setScheduleZoom(clampScheduleZoom(nextZoom));
+      const normalizedZoom = clampScheduleZoom(nextZoom);
+      const shouldResetScroll = scheduleZoom <= 1 || normalizedZoom <= 1;
+
+      setScheduleZoom(normalizedZoom);
+
+      if (shouldResetScroll) {
+        window.requestAnimationFrame(() => {
+          if (scheduleScrollRef.current) {
+            scheduleScrollRef.current.scrollLeft = 0;
+          }
+        });
+      }
     };
 
     return (
@@ -1723,7 +1882,10 @@ export default function TimelinePage() {
         <div
           ref={scheduleScrollRef}
           className="min-w-0 cursor-grab select-none overflow-x-auto overflow-y-hidden overscroll-x-contain bg-background active:cursor-grabbing"
-          style={{ touchAction: 'pan-x' }}
+          style={{
+            touchAction: 'pan-x',
+            overflowX: scheduleZoom <= 1 ? 'hidden' : 'auto',
+          }}
           onPointerDown={event => {
             if (event.pointerType === 'touch' || event.button !== 0) return;
 
@@ -1863,7 +2025,11 @@ export default function TimelinePage() {
                     }`}
                     style={{ left: `${tick.left}px` }}
                   >
-                    <span className="absolute left-2 top-2 whitespace-nowrap text-[11px] font-semibold text-foreground">
+                    <span
+                      className={`absolute top-2 whitespace-nowrap text-[11px] font-semibold text-foreground ${
+                        tick.isEnd ? 'right-2 text-right' : 'left-2'
+                      }`}
+                    >
                       {formatScheduleTickDate(tick.date)}
                     </span>
                   </div>
@@ -2015,18 +2181,6 @@ export default function TimelinePage() {
             onGoToAlerts={() => setActiveTab('alerts')}
           />
 
-          <TimelineSummaryCards summary={summary} />
-
-          <PaymentGateBar
-            paymentGates={paymentGates}
-            onMarkReceived={handleMarkPaymentReceived}
-            onMarkPending={handleMarkPaymentPending}
-            onUpdateDueDate={handleUpdatePaymentGateDate}
-            onAutoAssignDueDates={handleAutoAssignPaymentGateDates}
-          />
-
-          {renderAssistPreview()}
-          {renderProjectSnapshot()}
           {renderCriticalWork()}
         </div>
       );
@@ -2042,7 +2196,7 @@ export default function TimelinePage() {
           onCompleteWork={handleCompleteWorkPackage}
           onMarkDelayed={handleMarkWorkPackageDelayed}
           onUpdateDelayReason={handleUpdateDelayReason}
-          onUpdateDependencies={handleUpdateWorkPackageDependencies}
+          onUpdatePrerequisites={handleUpdateWorkPackageDependencies}
         />
       );
     }
@@ -2113,162 +2267,8 @@ export default function TimelinePage() {
         }
       />
 
-      <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-foreground">
-                Approved Estimate Source
-              </p>
-              <StatusBadge variant="outline">
-                {approvedCostEstimateRecords.length} Approved
-              </StatusBadge>
-            </div>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Use one approved estimate as the source for timeline planning.
-            </p>
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshCostEstimateSources}
-            className="h-9 w-9 shrink-0 p-0"
-            aria-label="Refresh estimate sources"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {linkedCostEstimate ? (
-          <div className="mt-4 rounded-2xl border border-border bg-background p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {linkedCostEstimate.projectName}
-                  </p>
-                  <StatusBadge variant={getEstimateStatusVariant(linkedCostEstimate.status)}>
-                    {getEstimateStatusTitle(linkedCostEstimate.status)}
-                  </StatusBadge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {linkedCostEstimate.clientName ?? 'No client name'} - v{linkedCostEstimate.version}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {formatINR(linkedCostEstimate.grandTotal)}
-                </p>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowEstimateSourcePicker(current => !current)}
-                className="h-9 w-full justify-center gap-2 lg:w-auto lg:shrink-0"
-                disabled={approvedCostEstimateRecords.length === 0}
-              >
-                {showEstimateSourcePicker ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-                {showEstimateSourcePicker ? 'Hide Sources' : 'Change Source'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-dashed border-border bg-muted/30 p-4">
-            <p className="text-sm text-muted-foreground">
-              No approved source selected. Choose an approved estimate before building the timeline.
-            </p>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowEstimateSourcePicker(current => !current)}
-              className="mt-3 h-9 w-full justify-center gap-2 sm:w-auto"
-              disabled={approvedCostEstimateRecords.length === 0}
-            >
-              {showEstimateSourcePicker ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-              {showEstimateSourcePicker ? 'Hide Sources' : 'Choose Source'}
-            </Button>
-          </div>
-        )}
-
-        {showEstimateSourcePicker && (
-          approvedCostEstimateRecords.length > 0 ? (
-            <div className="mt-4 grid gap-2">
-              {approvedCostEstimateRecords.map(record => {
-                const isSelected = record.projectId === selectedTimelineProjectId;
-
-                return (
-                  <button
-                    key={record.id}
-                    type="button"
-                    onClick={() => handleSelectTimelineSource(record.projectId)}
-                    className={`rounded-xl border px-3 py-3 text-left transition ${
-                      isSelected
-                        ? 'border-emerald-500/40 bg-emerald-500/10'
-                        : 'border-border bg-background hover:bg-muted/50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {record.projectName}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {record.clientName ?? 'No client name'} - v{record.version} - {formatINR(record.grandTotal)}
-                        </p>
-                      </div>
-
-                      {isSelected && <StatusBadge variant="success">Selected</StatusBadge>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="mt-4 rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-              No approved cost estimates found. Approve an estimate first, then refresh this list.
-            </p>
-          )
-        )}
-
-        {waitingCostEstimateRecords.length > 0 && (
-          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-              Waiting For Approval
-            </p>
-            <div className="mt-3 grid gap-2">
-              {waitingCostEstimateRecords.map(record => (
-                <div
-                  key={record.id}
-                  className="flex flex-col gap-2 rounded-xl border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {record.projectName}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {record.clientName ?? 'No client name'} - v{record.version}
-                    </p>
-                  </div>
-
-                  <StatusBadge variant={getEstimateStatusVariant(record.status)}>
-                    {getEstimateStatusTitle(record.status)}
-                  </StatusBadge>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      {renderTimelineSourceSnapshot()}
+      {renderEstimateSourcePickerOverlay()}
 
       {hasSelectedApprovedProjectEstimate && !hasActiveTimeline && !pendingTimelineDraft && (
       <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
@@ -2598,26 +2598,7 @@ export default function TimelinePage() {
 
       {!showCreateWizard && hasActiveTimeline && (
         <>
-          <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-foreground">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge variant="success">Confirmed Planned Timeline</StatusBadge>
-                <StatusBadge variant="outline">Baseline Locked</StatusBadge>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarClock className="h-4 w-4 shrink-0" />
-                  {formatCompactDate(timelineDateRange.startDate)}
-                </span>
-                <span className="text-muted-foreground/70">-</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarClock className="h-4 w-4 shrink-0" />
-                  {formatCompactDate(timelineDateRange.endDate)}
-                </span>
-              </div>
-            </div>
-          </div>
+          
           <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
             <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
               {tabs.map(tab => {

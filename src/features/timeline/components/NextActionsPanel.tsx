@@ -28,6 +28,13 @@ function getPriorityVariant(priority: NextAction['priority']) {
   return 'muted';
 }
 
+function formatPriorityLabel(priority: NextAction['priority']) {
+  if (priority === 'critical') return 'Critical';
+  if (priority === 'high') return 'High';
+  if (priority === 'medium') return 'Medium';
+  return 'Low';
+}
+
 function getBlockedPaymentGate(paymentGates: PaymentGate[]) {
   return paymentGates.find(paymentGate => paymentGate.status !== 'received');
 }
@@ -140,7 +147,7 @@ export function NextActionsPanel({
 
       <div className="grid gap-3 p-3 sm:p-4">
         {visibleActions.length > 0 ? (
-          visibleActions.map((action, index) => {
+          visibleActions.map(action => {
             const Icon = action.icon;
 
             return (
@@ -156,7 +163,7 @@ export function NextActionsPanel({
                   <div className="min-w-0">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <StatusBadge variant={getPriorityVariant(action.priority)}>
-                        {index + 1}. {action.priority}
+                        {formatPriorityLabel(action.priority)}
                       </StatusBadge>
                     </div>
 

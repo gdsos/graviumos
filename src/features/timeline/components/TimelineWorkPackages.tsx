@@ -11,8 +11,6 @@ import {
   PauseCircle,
   PlayCircle,
   RotateCcw,
-  ShieldAlert,
-  Sparkles,
 } from 'lucide-react';
 
 import { EmptyState } from '@/components/common/EmptyState';
@@ -30,7 +28,7 @@ interface TimelineWorkPackagesProps {
   onCompleteWork?: (workPackageId: string) => void;
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
-  onUpdateDependencies?: (workPackageId: string, dependencyIds: string[]) => void;
+  onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
 }
 
 type WorkPackageAction = {
@@ -185,7 +183,7 @@ function getDependencyPreview(
 ) {
   const dependencies = getDependencyWorkPackages(workPackage, workPackages);
 
-  if (dependencies.length === 0) return 'No Dependencies';
+  if (dependencies.length === 0) return 'None';
 
   return dependencies.map(getWorkPackageDisplayName).join(', ');
 }
@@ -205,21 +203,21 @@ function canSelectAsDependency({
 function DependencyEditor({
   workPackage,
   workPackages,
-  onUpdateDependencies,
+  onUpdatePrerequisites,
   onClose,
 }: {
   workPackage: WorkPackage;
   workPackages: WorkPackage[];
-  onUpdateDependencies?: (workPackageId: string, dependencyIds: string[]) => void;
+  onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
   onClose: () => void;
 }) {
   const selectedDependencyIds = new Set(workPackage.dependsOnWorkPackageIds);
-  const availableDependencies = workPackages.filter(candidate =>
+  const availablePrerequisites = workPackages.filter(candidate =>
     canSelectAsDependency({ workPackage, candidate })
   );
 
   const handleToggleDependency = (dependencyId: string) => {
-    if (!onUpdateDependencies) return;
+    if (!onUpdatePrerequisites) return;
 
     const nextDependencyIds = selectedDependencyIds.has(dependencyId)
       ? workPackage.dependsOnWorkPackageIds.filter(
@@ -227,7 +225,7 @@ function DependencyEditor({
         )
       : [...workPackage.dependsOnWorkPackageIds, dependencyId];
 
-    onUpdateDependencies(workPackage.id, nextDependencyIds);
+    onUpdatePrerequisites(workPackage.id, nextDependencyIds);
   };
 
   return (
@@ -254,8 +252,8 @@ function DependencyEditor({
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {availableDependencies.length > 0 ? (
-          availableDependencies.map(candidate => {
+        {availablePrerequisites.length > 0 ? (
+          availablePrerequisites.map(candidate => {
             const isSelected = selectedDependencyIds.has(candidate.id);
 
             return (
@@ -385,6 +383,14 @@ function isWorkPackageBlocked(workPackage: WorkPackage) {
   );
 }
 
+function getActionDisabledReason(workPackage: WorkPackage) {
+  if (workPackage.status === 'blocked_by_payment') return 'Blocked By Payment';
+  if (workPackage.status === 'blocked_by_dependency') return 'Blocked By Dependency';
+  if (workPackage.status === 'completed') return 'Already Completed';
+
+  return '';
+}
+
 function getStartPauseButtonConfig({
   workPackage,
   onStartWork,
@@ -402,6 +408,7 @@ function getStartPauseButtonConfig({
       icon: RotateCcw,
       onClick: () => onResumeWork?.(workPackage.id),
       disabled: false,
+      disabledTitle: '',
     };
   }
 
@@ -411,15 +418,19 @@ function getStartPauseButtonConfig({
       icon: PauseCircle,
       onClick: () => onPauseWork?.(workPackage.id),
       disabled: false,
+      disabledTitle: '',
     };
   }
+
+  const disabled =
+    isWorkPackageBlocked(workPackage) || workPackage.status === 'completed';
 
   return {
     label: 'Start Work',
     icon: PlayCircle,
     onClick: () => onStartWork?.(workPackage.id),
-    disabled:
-      isWorkPackageBlocked(workPackage) || workPackage.status === 'completed',
+    disabled,
+    disabledTitle: disabled ? getActionDisabledReason(workPackage) : '',
   };
 }
 
@@ -430,12 +441,15 @@ function getCompleteButtonConfig({
   workPackage: WorkPackage;
   onCompleteWork?: (workPackageId: string) => void;
 }) {
+  const disabled =
+    isWorkPackageBlocked(workPackage) || workPackage.status === 'completed';
+
   return {
     label: 'Complete Work',
     icon: CheckCircle2,
     onClick: () => onCompleteWork?.(workPackage.id),
-    disabled:
-      isWorkPackageBlocked(workPackage) || workPackage.status === 'completed',
+    disabled,
+    disabledTitle: disabled ? getActionDisabledReason(workPackage) : '',
   };
 }
 
@@ -545,7 +559,7 @@ function WorkPackageActionButtons({
       <button
         type="button"
         aria-label={startPauseAction.label}
-        title={startPauseAction.label}
+        title={startPauseAction.disabledTitle || startPauseAction.label}
         onClick={startPauseAction.onClick}
         disabled={startPauseAction.disabled}
         className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
@@ -556,7 +570,7 @@ function WorkPackageActionButtons({
       <button
         type="button"
         aria-label={completeAction.label}
-        title={completeAction.label}
+        title={completeAction.disabledTitle || completeAction.label}
         onClick={completeAction.onClick}
         disabled={completeAction.disabled}
         className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
@@ -598,7 +612,7 @@ function WorkPackageRow({
   workPackage,
   workPackages,
   editingDependencyId,
-  onEditDependencies,
+  onEditPrerequisites,
   onCloseDependencyEditor,
   onStartWork,
   onPauseWork,
@@ -606,11 +620,11 @@ function WorkPackageRow({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
-  onUpdateDependencies,
+  onUpdatePrerequisites,
 }: TimelineWorkPackagesProps & {
   workPackage: WorkPackage;
   editingDependencyId: string | null;
-  onEditDependencies: (workPackageId: string) => void;
+  onEditPrerequisites: (workPackageId: string) => void;
   onCloseDependencyEditor: () => void;
 }) {
   const vendorName = getVendorName(workPackage.vendorId);
@@ -685,22 +699,22 @@ const secondaryActions = getSecondaryActions({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Dependencies
+                Prerequisites
               </p>
               <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground">
                 {dependencyPreview}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {dependentWorkPackages.length} dependent package(s)
+                {`Unlocks ${dependentWorkPackages.length} Package${dependentWorkPackages.length === 1 ? '' : 's'}`}
               </p>
             </div>
 
-            {onUpdateDependencies ? (
+            {onUpdatePrerequisites ? (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => onEditDependencies(workPackage.id)}
+                onClick={() => onEditPrerequisites(workPackage.id)}
                 className="shrink-0 gap-2"
               >
                 <Link2 className="h-4 w-4" />
@@ -713,7 +727,7 @@ const secondaryActions = getSecondaryActions({
             <DependencyEditor
               workPackage={workPackage}
               workPackages={workPackages}
-              onUpdateDependencies={onUpdateDependencies}
+              onUpdatePrerequisites={onUpdatePrerequisites}
               onClose={onCloseDependencyEditor}
             />
           )}
@@ -732,7 +746,7 @@ const secondaryActions = getSecondaryActions({
 
       </article>
 
-      <div className="hidden min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_96px_176px] xl:items-center xl:gap-4 xl:px-4">
+      <div className="hidden min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_156px_152px] xl:items-center xl:gap-4 xl:px-4">
         <div className="min-w-0">
           <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
             <p className="mr-1 truncate text-base font-semibold text-foreground">
@@ -807,18 +821,27 @@ const secondaryActions = getSecondaryActions({
         </div>
 
         <div className="block">
-          <button
-            type="button"
-            onClick={() => onEditDependencies(workPackage.id)}
-            disabled={!onUpdateDependencies}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-2 py-1.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Link2 className="h-4 w-4" />
-            {dependencyWorkPackages.length}
-          </button>
-          <p className="mt-1 truncate text-center text-xs text-muted-foreground">
-            {dependentWorkPackages.length} child package(s)
-          </p>
+          <div className="rounded-xl border border-border bg-background px-3 py-2 text-center">
+            <div className="flex items-center justify-center gap-2 text-sm font-medium text-foreground">
+              <Link2 className="h-4 w-4 text-muted-foreground" />
+              <span>
+                {dependencyWorkPackages.length > 0 ? dependencyWorkPackages.length : 'None'}
+              </span>
+            </div>
+            <p className="mt-1 whitespace-nowrap text-xs text-muted-foreground">
+              {`Unlocks ${dependentWorkPackages.length} Package${dependentWorkPackages.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
+
+          {onUpdatePrerequisites ? (
+            <button
+              type="button"
+              onClick={() => onEditPrerequisites(workPackage.id)}
+              className="mt-2 w-full rounded-lg border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              Edit
+            </button>
+          ) : null}
         </div>
 
         <div className="flex min-w-0 items-center justify-center">
@@ -838,7 +861,7 @@ const secondaryActions = getSecondaryActions({
           <DependencyEditor
             workPackage={workPackage}
             workPackages={workPackages}
-            onUpdateDependencies={onUpdateDependencies}
+            onUpdatePrerequisites={onUpdatePrerequisites}
             onClose={onCloseDependencyEditor}
           />
         </div>
@@ -853,9 +876,8 @@ function WorkPackageGroup({
   workPackages,
   allWorkPackages,
   editingDependencyId,
-  onEditDependencies,
+  onEditPrerequisites,
   onCloseDependencyEditor,
-  icon: Icon,
   badgeVariant,
   onStartWork,
   onPauseWork,
@@ -863,16 +885,15 @@ function WorkPackageGroup({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
-  onUpdateDependencies,
+  onUpdatePrerequisites,
 }: {
   title: string;
   description: string;
   workPackages: WorkPackage[];
   allWorkPackages: WorkPackage[];
   editingDependencyId: string | null;
-  onEditDependencies: (workPackageId: string) => void;
+  onEditPrerequisites: (workPackageId: string) => void;
   onCloseDependencyEditor: () => void;
-  icon: typeof ShieldAlert;
   badgeVariant: 'danger' | 'warning' | 'info' | 'success' | 'muted';
   onStartWork?: (workPackageId: string) => void;
   onPauseWork?: (workPackageId: string) => void;
@@ -880,7 +901,7 @@ function WorkPackageGroup({
   onCompleteWork?: (workPackageId: string) => void;
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
-  onUpdateDependencies?: (workPackageId: string, dependencyIds: string[]) => void;
+  onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
 }) {
   if (workPackages.length === 0) return null;
 
@@ -894,20 +915,15 @@ function WorkPackageGroup({
         </StatusBadge>
       }
     >
-      <div className="mb-3 flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-        <Icon className="h-4 w-4 shrink-0" />
-        <span>{description}</span>
-      </div>
-
       <div className="rounded-2xl border border-border bg-card">
         <div className="overflow-x-auto">
           <div className="min-w-full">
-            <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_96px_176px] xl:gap-4">
+            <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_156px_152px] xl:gap-4">
               <span>Work Package</span>
               <span>Planned</span>
               <span>Actual</span>
               <span>Pause / Delay</span>
-              <span className="text-center">Dependencies</span>
+              <span className="text-center">Prerequisites</span>
               <span className="text-center">Actions</span>
             </div>
 
@@ -917,7 +933,7 @@ function WorkPackageGroup({
             workPackage={workPackage}
             workPackages={allWorkPackages}
             editingDependencyId={editingDependencyId}
-            onEditDependencies={onEditDependencies}
+            onEditPrerequisites={onEditPrerequisites}
             onCloseDependencyEditor={onCloseDependencyEditor}
             onStartWork={onStartWork}
             onPauseWork={onPauseWork}
@@ -925,7 +941,7 @@ function WorkPackageGroup({
             onCompleteWork={onCompleteWork}
             onMarkDelayed={onMarkDelayed}
             onUpdateDelayReason={onUpdateDelayReason}
-            onUpdateDependencies={onUpdateDependencies}
+            onUpdatePrerequisites={onUpdatePrerequisites}
               />
             ))}
           </div>
@@ -943,7 +959,7 @@ export function TimelineWorkPackages({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
-  onUpdateDependencies,
+  onUpdatePrerequisites,
 }: TimelineWorkPackagesProps) {
   const [editingDependencyId, setEditingDependencyId] = useState<string | null>(null);
   if (workPackages.length === 0) {
@@ -968,9 +984,8 @@ export function TimelineWorkPackages({
         workPackages={needsAttention}
         allWorkPackages={workPackages}
         editingDependencyId={editingDependencyId}
-        onEditDependencies={setEditingDependencyId}
+        onEditPrerequisites={setEditingDependencyId}
         onCloseDependencyEditor={() => setEditingDependencyId(null)}
-        icon={ShieldAlert}
         badgeVariant="danger"
         onStartWork={onStartWork}
         onPauseWork={onPauseWork}
@@ -978,7 +993,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
-        onUpdateDependencies={onUpdateDependencies}
+        onUpdatePrerequisites={onUpdatePrerequisites}
       />
 
       <WorkPackageGroup
@@ -987,9 +1002,8 @@ export function TimelineWorkPackages({
         workPackages={activeOrUpcoming}
         allWorkPackages={workPackages}
         editingDependencyId={editingDependencyId}
-        onEditDependencies={setEditingDependencyId}
+        onEditPrerequisites={setEditingDependencyId}
         onCloseDependencyEditor={() => setEditingDependencyId(null)}
-        icon={Sparkles}
         badgeVariant="info"
         onStartWork={onStartWork}
         onPauseWork={onPauseWork}
@@ -997,7 +1011,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
-        onUpdateDependencies={onUpdateDependencies}
+        onUpdatePrerequisites={onUpdatePrerequisites}
       />
 
       <WorkPackageGroup
@@ -1006,9 +1020,8 @@ export function TimelineWorkPackages({
         workPackages={completed}
         allWorkPackages={workPackages}
         editingDependencyId={editingDependencyId}
-        onEditDependencies={setEditingDependencyId}
+        onEditPrerequisites={setEditingDependencyId}
         onCloseDependencyEditor={() => setEditingDependencyId(null)}
-        icon={CheckCircle2}
         badgeVariant="success"
         onStartWork={onStartWork}
         onPauseWork={onPauseWork}
@@ -1016,7 +1029,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
-        onUpdateDependencies={onUpdateDependencies}
+        onUpdatePrerequisites={onUpdatePrerequisites}
       />
     </div>
   );
