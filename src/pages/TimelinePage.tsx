@@ -146,6 +146,12 @@ type StoredTimelineState = {
   workPackages: WorkPackage[];
   timelineConfirmedAt?: string;
   selectedTimelineProjectId?: string;
+  sourceEstimateId?: string;
+  sourceEstimateVersion?: number;
+  sourceEstimateUpdatedAt?: string;
+  sourceEstimateProjectName?: string;
+  sourceEstimateClientName?: string;
+  sourceEstimateGrandTotal?: number;
 };
 
 type TimelineTab = 'overview' | 'work' | 'payments' | 'schedule' | 'alerts';
@@ -161,6 +167,12 @@ const tabs: Array<{ id: TimelineTab; label: string }> = [
 type GeneratedTimelineReviewDraft = {
   paymentGates: PaymentGate[];
   workPackages: WorkPackage[];
+  sourceEstimateId?: string;
+  sourceEstimateVersion?: number;
+  sourceEstimateUpdatedAt?: string;
+  sourceEstimateProjectName?: string;
+  sourceEstimateClientName?: string;
+  sourceEstimateGrandTotal?: number;
 };
 
 
@@ -191,6 +203,30 @@ function getStoredTimelineState(): StoredTimelineState | null {
           typeof parsedTimeline.selectedTimelineProjectId === 'string'
             ? parsedTimeline.selectedTimelineProjectId
             : '',
+        sourceEstimateId:
+          typeof parsedTimeline.sourceEstimateId === 'string'
+            ? parsedTimeline.sourceEstimateId
+            : '',
+        sourceEstimateVersion:
+          typeof parsedTimeline.sourceEstimateVersion === 'number'
+            ? parsedTimeline.sourceEstimateVersion
+            : 0,
+        sourceEstimateUpdatedAt:
+          typeof parsedTimeline.sourceEstimateUpdatedAt === 'string'
+            ? parsedTimeline.sourceEstimateUpdatedAt
+            : '',
+        sourceEstimateProjectName:
+          typeof parsedTimeline.sourceEstimateProjectName === 'string'
+            ? parsedTimeline.sourceEstimateProjectName
+            : '',
+        sourceEstimateClientName:
+          typeof parsedTimeline.sourceEstimateClientName === 'string'
+            ? parsedTimeline.sourceEstimateClientName
+            : '',
+        sourceEstimateGrandTotal:
+          typeof parsedTimeline.sourceEstimateGrandTotal === 'number'
+            ? parsedTimeline.sourceEstimateGrandTotal
+            : 0,
       };
     }
 
@@ -506,6 +542,19 @@ export default function TimelinePage() {
   const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
     () => storedTimeline?.selectedTimelineProjectId ?? ''
   );
+  const [timelineSourceEstimateId, setTimelineSourceEstimateId] = useState(
+    () => storedTimeline?.sourceEstimateId ?? ''
+  );
+  const [timelineSourceEstimateVersion, setTimelineSourceEstimateVersion] =
+    useState(() => storedTimeline?.sourceEstimateVersion ?? 0);
+  const [timelineSourceEstimateUpdatedAt, setTimelineSourceEstimateUpdatedAt] =
+    useState(() => storedTimeline?.sourceEstimateUpdatedAt ?? '');
+  const [timelineSourceEstimateProjectName, setTimelineSourceEstimateProjectName] =
+    useState(() => storedTimeline?.sourceEstimateProjectName ?? '');
+  const [timelineSourceEstimateClientName, setTimelineSourceEstimateClientName] =
+    useState(() => storedTimeline?.sourceEstimateClientName ?? '');
+  const [timelineSourceEstimateGrandTotal, setTimelineSourceEstimateGrandTotal] =
+    useState(() => storedTimeline?.sourceEstimateGrandTotal ?? 0);
   const [timelineStartDate, setTimelineStartDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -535,6 +584,12 @@ export default function TimelinePage() {
         workPackages,
         timelineConfirmedAt,
         selectedTimelineProjectId,
+        sourceEstimateId: timelineSourceEstimateId,
+        sourceEstimateVersion: timelineSourceEstimateVersion,
+        sourceEstimateUpdatedAt: timelineSourceEstimateUpdatedAt,
+        sourceEstimateProjectName: timelineSourceEstimateProjectName,
+        sourceEstimateClientName: timelineSourceEstimateClientName,
+        sourceEstimateGrandTotal: timelineSourceEstimateGrandTotal,
       })
     );
   }, [
@@ -542,6 +597,12 @@ export default function TimelinePage() {
     paymentGates,
     selectedTimelineProjectId,
     timelineConfirmedAt,
+    timelineSourceEstimateClientName,
+    timelineSourceEstimateGrandTotal,
+    timelineSourceEstimateId,
+    timelineSourceEstimateProjectName,
+    timelineSourceEstimateUpdatedAt,
+    timelineSourceEstimateVersion,
     workPackages,
   ]);
 
@@ -702,16 +763,50 @@ export default function TimelinePage() {
     }
   }, [approvedCostEstimateRecords, hasTimeline, selectedTimelineProjectId]);
 
+  const paymentGateAmountTotal = paymentGates.reduce(
+    (total, paymentGate) => total + paymentGate.amount,
+    0
+  );
+
   const activeTimelineProject = useMemo<TimelineProject>(
-    () => ({
-      ...emptyTimelineProject,
-      id: (linkedCostEstimate?.projectId ?? selectedTimelineProjectId) || emptyTimelineProject.id,
-      name: linkedCostEstimate?.projectName ?? emptyTimelineProject.name,
-      clientName: linkedCostEstimate?.clientName ?? emptyTimelineProject.clientName,
-      revenue: linkedCostEstimate?.grandTotal ?? 0,
-      startDate: timelineStartDate || emptyTimelineProject.startDate,
-    }),
-    [linkedCostEstimate, selectedTimelineProjectId, timelineStartDate]
+    () => {
+      const shouldUseConfirmedSource = hasTimeline && Boolean(selectedTimelineProjectId);
+      const confirmedRevenue =
+        timelineSourceEstimateGrandTotal > 0
+          ? timelineSourceEstimateGrandTotal
+          : paymentGateAmountTotal > 0
+            ? paymentGateAmountTotal
+            : linkedCostEstimate?.grandTotal ?? 0;
+
+      return {
+        ...emptyTimelineProject,
+        id:
+          (shouldUseConfirmedSource
+            ? selectedTimelineProjectId
+            : linkedCostEstimate?.projectId ?? selectedTimelineProjectId) ||
+          emptyTimelineProject.id,
+        name:
+          (shouldUseConfirmedSource
+            ? timelineSourceEstimateProjectName || linkedCostEstimate?.projectName
+            : linkedCostEstimate?.projectName) || emptyTimelineProject.name,
+        clientName:
+          (shouldUseConfirmedSource
+            ? timelineSourceEstimateClientName || linkedCostEstimate?.clientName
+            : linkedCostEstimate?.clientName) || emptyTimelineProject.clientName,
+        revenue: shouldUseConfirmedSource ? confirmedRevenue : linkedCostEstimate?.grandTotal ?? 0,
+        startDate: timelineStartDate || emptyTimelineProject.startDate,
+      };
+    },
+    [
+      hasTimeline,
+      linkedCostEstimate,
+      paymentGateAmountTotal,
+      selectedTimelineProjectId,
+      timelineSourceEstimateClientName,
+      timelineSourceEstimateGrandTotal,
+      timelineSourceEstimateProjectName,
+      timelineStartDate,
+    ]
   );
   const timelineDateRange = useMemo(() => {
     if (workPackages.length === 0) {
@@ -747,7 +842,24 @@ export default function TimelinePage() {
   const hasSelectedApprovedProjectEstimate = Boolean(
     linkedCostEstimate?.projectId && linkedCostEstimate.status === 'approved'
   );
-  const hasActiveTimeline = hasTimeline && hasSelectedApprovedProjectEstimate;
+  const hasActiveTimeline = hasTimeline && Boolean(selectedTimelineProjectId);
+  const hasTimelineSourceUnderRevision = Boolean(
+    hasActiveTimeline &&
+      linkedCostEstimate &&
+      linkedCostEstimate.status !== 'approved'
+  );
+  const hasTimelineSourceApprovedChange = Boolean(
+    hasActiveTimeline &&
+      linkedCostEstimate &&
+      linkedCostEstimate.status === 'approved' &&
+      (timelineSourceEstimateId
+        ? timelineSourceEstimateId !== linkedCostEstimate.id ||
+          timelineSourceEstimateVersion !== linkedCostEstimate.version ||
+          timelineSourceEstimateUpdatedAt !== linkedCostEstimate.updatedAt
+        : Math.round(paymentGateAmountTotal) !== Math.round(linkedCostEstimate.grandTotal))
+  );
+  const isTimelineLockedByEstimateChange =
+    hasTimelineSourceUnderRevision || hasTimelineSourceApprovedChange;
   const alerts = useMemo(() => {
     const sourceAlerts = hasActiveTimeline ? generatedAlerts : [];
 
@@ -922,6 +1034,12 @@ export default function TimelinePage() {
     const distributedTimeline = {
       paymentGates: distributedPaymentGates,
       workPackages: generatedTimeline.workPackages,
+      sourceEstimateId: linkedCostEstimate.id,
+      sourceEstimateVersion: linkedCostEstimate.version,
+      sourceEstimateUpdatedAt: linkedCostEstimate.updatedAt,
+      sourceEstimateProjectName: linkedCostEstimate.projectName,
+      sourceEstimateClientName: linkedCostEstimate.clientName ?? '',
+      sourceEstimateGrandTotal: linkedCostEstimate.grandTotal,
     };
 
     const today = new Date().toISOString().slice(0, 10);
@@ -994,33 +1112,74 @@ export default function TimelinePage() {
       setIgnoredAlertIds([]);
       setIsPlanningControlsLocked(false);
       setShowPaymentGateControls(false);
+      setTimelineSourceEstimateId('');
+      setTimelineSourceEstimateVersion(0);
+      setTimelineSourceEstimateUpdatedAt('');
+      setTimelineSourceEstimateProjectName('');
+      setTimelineSourceEstimateClientName('');
+      setTimelineSourceEstimateGrandTotal(0);
     }
   };
 
   const handleUseTimelineDraft = (generatedTimeline: {
     paymentGates: PaymentGate[];
     workPackages: WorkPackage[];
+    sourceEstimateId?: string;
+    sourceEstimateVersion?: number;
+    sourceEstimateUpdatedAt?: string;
+    sourceEstimateProjectName?: string;
+    sourceEstimateClientName?: string;
+    sourceEstimateGrandTotal?: number;
   }) => {
     setPaymentGates(generatedTimeline.paymentGates);
     setWorkPackages(generatedTimeline.workPackages);
     setIgnoredAlertIds([]);
     setHasTimeline(true);
     setTimelineConfirmedAt(new Date().toISOString());
+    setTimelineSourceEstimateId(
+      generatedTimeline.sourceEstimateId ?? linkedCostEstimate?.id ?? ''
+    );
+    setTimelineSourceEstimateVersion(
+      generatedTimeline.sourceEstimateVersion ?? linkedCostEstimate?.version ?? 0
+    );
+    setTimelineSourceEstimateUpdatedAt(
+      generatedTimeline.sourceEstimateUpdatedAt ?? linkedCostEstimate?.updatedAt ?? ''
+    );
+    setTimelineSourceEstimateProjectName(
+      generatedTimeline.sourceEstimateProjectName ?? linkedCostEstimate?.projectName ?? ''
+    );
+    setTimelineSourceEstimateClientName(
+      generatedTimeline.sourceEstimateClientName ?? linkedCostEstimate?.clientName ?? ''
+    );
+    setTimelineSourceEstimateGrandTotal(
+      generatedTimeline.sourceEstimateGrandTotal ?? linkedCostEstimate?.grandTotal ?? 0
+    );
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
 
   const handleReviseTimeline = () => {
-    if (
-      !hasActiveTimeline ||
-      !linkedCostEstimate ||
-      !hasSelectedApprovedProjectEstimate
-    ) {
+    if (!hasActiveTimeline) {
+      return;
+    }
+
+    const latestRecords = getStoredCostEstimateRecords();
+    setCostEstimateRecords(latestRecords);
+
+    const latestLinkedEstimate = getLinkedCostEstimate(
+      latestRecords,
+      selectedTimelineProjectId
+    );
+    const sourceEstimate =
+      latestLinkedEstimate?.status === 'approved' ? latestLinkedEstimate : linkedCostEstimate;
+
+    if (!sourceEstimate || sourceEstimate.status !== 'approved') {
+      window.alert('Approve the revised cost estimate before syncing the timeline.');
       return;
     }
 
     const generatedTimeline = generateTimelineFromApprovedEstimate({
-      source: linkedCostEstimate,
+      source: sourceEstimate,
       startDate: timelineStartDate,
       paymentPercentages: paymentPercentageValues,
     });
@@ -1078,6 +1237,12 @@ export default function TimelinePage() {
     setPendingTimelineDraft({
       paymentGates: preparedPaymentGates,
       workPackages: preparedWorkPackages,
+      sourceEstimateId: sourceEstimate.id,
+      sourceEstimateVersion: sourceEstimate.version,
+      sourceEstimateUpdatedAt: sourceEstimate.updatedAt,
+      sourceEstimateProjectName: sourceEstimate.projectName,
+      sourceEstimateClientName: sourceEstimate.clientName ?? '',
+      sourceEstimateGrandTotal: sourceEstimate.grandTotal,
     });
     setIgnoredAlertIds([]);
     setShowCreateWizard(false);
@@ -1101,6 +1266,12 @@ export default function TimelinePage() {
     setShowEstimateSourcePicker(false);
     setIsPlanningControlsLocked(false);
     setShowPaymentGateControls(false);
+      setTimelineSourceEstimateId('');
+      setTimelineSourceEstimateVersion(0);
+      setTimelineSourceEstimateUpdatedAt('');
+      setTimelineSourceEstimateProjectName('');
+      setTimelineSourceEstimateClientName('');
+      setTimelineSourceEstimateGrandTotal(0);
     setIsDeleteTimelineDialogOpen(false);
     setActiveTab('overview');
   };
@@ -1132,6 +1303,24 @@ export default function TimelinePage() {
     setIgnoredAlertIds([]);
     setHasTimeline(true);
     setTimelineConfirmedAt(new Date().toISOString());
+    setTimelineSourceEstimateId(
+      pendingTimelineDraft.sourceEstimateId ?? linkedCostEstimate?.id ?? ''
+    );
+    setTimelineSourceEstimateVersion(
+      pendingTimelineDraft.sourceEstimateVersion ?? linkedCostEstimate?.version ?? 0
+    );
+    setTimelineSourceEstimateUpdatedAt(
+      pendingTimelineDraft.sourceEstimateUpdatedAt ?? linkedCostEstimate?.updatedAt ?? ''
+    );
+    setTimelineSourceEstimateProjectName(
+      pendingTimelineDraft.sourceEstimateProjectName ?? linkedCostEstimate?.projectName ?? ''
+    );
+    setTimelineSourceEstimateClientName(
+      pendingTimelineDraft.sourceEstimateClientName ?? linkedCostEstimate?.clientName ?? ''
+    );
+    setTimelineSourceEstimateGrandTotal(
+      pendingTimelineDraft.sourceEstimateGrandTotal ?? linkedCostEstimate?.grandTotal ?? 0
+    );
     setShowCreateWizard(false);
     setActiveTab('overview');
   };
@@ -1525,7 +1714,9 @@ export default function TimelinePage() {
       : 'No approved estimate selected';
     const selectedClientLabel =
       linkedCostEstimate?.clientName ?? activeTimelineProject.clientName;
-    const selectedRevenue = linkedCostEstimate?.grandTotal ?? activeTimelineProject.revenue;
+    const selectedRevenue = hasActiveTimeline
+      ? activeTimelineProject.revenue
+      : linkedCostEstimate?.grandTotal ?? activeTimelineProject.revenue;
     const timelineStatusLabel = hasActiveTimeline
       ? 'Confirmed Planned Timeline'
       : pendingTimelineDraft
@@ -1592,17 +1783,7 @@ export default function TimelinePage() {
           </div>
 
           <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleRefreshCostEstimateSources}
-              className="h-9 justify-center gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Sync Estimate
-            </Button>
-
+            
             <Button
               type="button"
               variant="outline"
@@ -2269,6 +2450,35 @@ export default function TimelinePage() {
 
       {renderTimelineSourceSnapshot()}
       {renderEstimateSourcePickerOverlay()}
+      {isTimelineLockedByEstimateChange && (
+        <div className="sticky top-4 z-[120] mb-5 rounded-2xl border border-amber-500/30 bg-card p-4 text-sm text-card-foreground shadow-2xl">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge variant="warning">Timeline Locked</StatusBadge>
+                <p className="font-semibold">
+                  {hasTimelineSourceUnderRevision
+                    ? 'Cost estimate is under revision'
+                    : 'Approved estimate has changed'}
+                </p>
+              </div>
+              <p className="mt-1 leading-6 text-muted-foreground">
+                The confirmed timeline is kept as a locked baseline. Payment gates and work packages will not update until you approve the revised estimate and sync it into a review draft.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleReviseTimeline}
+              disabled={!linkedCostEstimate || linkedCostEstimate.status !== 'approved'}
+              className="h-9 shrink-0 justify-center gap-2 bg-foreground text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Sync Estimate
+            </Button>
+          </div>
+        </div>
+      )}
 
       {hasSelectedApprovedProjectEstimate && !hasActiveTimeline && !pendingTimelineDraft && (
       <div className="mb-5 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
