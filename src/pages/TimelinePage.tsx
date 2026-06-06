@@ -1081,10 +1081,6 @@ export default function TimelinePage() {
     setActiveTab('overview');
   };
 
-  const handleRefreshCostEstimateSources = () => {
-    setCostEstimateRecords(getStoredCostEstimateRecords());
-  };
-
   const handleSelectTimelineSource = (projectId?: string) => {
     if (!projectId) return;
 
