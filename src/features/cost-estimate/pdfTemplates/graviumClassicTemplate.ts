@@ -70,6 +70,20 @@ const DEFAULT_COST_ESTIMATE_TERMS = [
   'Taxes, statutory charges, and payment terms are subject to the final approved contract.',
 ];
 
+const PDF_RUPEE_FONT_FAMILY = 'GraviumRupeeFont';
+const PDF_RUPEE_FONT_REGULAR_URL = '/fonts/Montserrat-Regular.ttf';
+const PDF_RUPEE_FONT_MEDIUM_URL = '/fonts/Montserrat-Medium.ttf';
+const PDF_RUPEE_FONT_BOLD_URL = '/fonts/Montserrat-Bold.ttf';
+const RUPEE_SYMBOL = String.fromCharCode(0x20b9);
+
+let activePdfHasRupeeFont = false;
+let activePdfMoneyFontStyles = {
+  normal: false,
+  medium: false,
+  bold: false,
+};
+
+
 function getOrganizationSettings(): DocumentOrganizationSettings {
   if (typeof window === 'undefined') return DEFAULT_ORGANIZATION_SETTINGS;
 
@@ -146,10 +160,123 @@ function getDocumentTerms(documentType: 'cost-estimate') {
   }
 }
 
-function formatPdfMoney(amount: number) {
-  return `Rs. ${new Intl.NumberFormat('en-IN', {
+function formatPdfNumber(amount: number) {
+  return new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: 0,
-  }).format(Math.round(amount || 0))}`;
+  }).format(Math.round(amount || 0));
+}
+
+function formatPdfMoney(amount: number) {
+  const prefix = activePdfHasRupeeFont ? RUPEE_SYMBOL : 'Rs.';
+
+  return `${prefix} ${formatPdfNumber(amount)}`;
+}
+
+async function fetchFontAsBase64(path: string) {
+  if (typeof window === 'undefined') return undefined;
+
+  const response = await fetch(path);
+
+  if (!response.ok) return undefined;
+
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return window.btoa(binary);
+}
+
+async function registerRupeeFont(doc: jsPDF) {
+  activePdfHasRupeeFont = false;
+  activePdfMoneyFontStyles = {
+    normal: false,
+    medium: false,
+    bold: false,
+  };
+
+  const fontVariants = [
+    {
+      url: PDF_RUPEE_FONT_REGULAR_URL,
+      fileName: 'Montserrat-Regular.ttf',
+      style: 'normal' as const,
+    },
+    {
+      url: PDF_RUPEE_FONT_MEDIUM_URL,
+      fileName: 'Montserrat-Medium.ttf',
+      style: 'medium' as const,
+    },
+    {
+      url: PDF_RUPEE_FONT_BOLD_URL,
+      fileName: 'Montserrat-Bold.ttf',
+      style: 'bold' as const,
+    },
+  ];
+
+  for (const variant of fontVariants) {
+    try {
+      const fontBase64 = await fetchFontAsBase64(variant.url);
+
+      if (!fontBase64) continue;
+
+      doc.addFileToVFS(variant.fileName, fontBase64);
+      doc.addFont(variant.fileName, PDF_RUPEE_FONT_FAMILY, variant.style);
+
+      activePdfMoneyFontStyles[variant.style] = true;
+    } catch (error) {
+      console.error(`Failed to register ${variant.fileName}.`, error);
+    }
+  }
+
+  activePdfHasRupeeFont =
+    activePdfMoneyFontStyles.normal ||
+    activePdfMoneyFontStyles.medium ||
+    activePdfMoneyFontStyles.bold;
+}
+
+type MoneyFontStyle = 'normal' | 'medium' | 'bold';
+
+function getMoneyFontFamily() {
+  return activePdfHasRupeeFont ? PDF_RUPEE_FONT_FAMILY : 'helvetica';
+}
+
+function getMoneyFontStyle(style: MoneyFontStyle = 'normal') {
+  if (!activePdfHasRupeeFont) return style === 'bold' ? 'bold' : 'normal';
+
+  if (activePdfMoneyFontStyles[style]) return style;
+  if (activePdfMoneyFontStyles.normal) return 'normal';
+  if (activePdfMoneyFontStyles.medium) return 'medium';
+  if (activePdfMoneyFontStyles.bold) return 'bold';
+
+  return 'normal';
+}
+
+function setMoneyFont(doc: jsPDF, style: MoneyFontStyle = 'normal') {
+  try {
+    doc.setFont(getMoneyFontFamily(), getMoneyFontStyle(style));
+  } catch {
+    doc.setFont('helvetica', style === 'bold' ? 'bold' : 'normal');
+  }
+}
+
+function drawMoneyValue(
+  doc: jsPDF,
+  amount: number,
+  rightX: number,
+  baselineY: number,
+  color: Rgb = BRAND.black,
+  fontSize = 8.2,
+  style: MoneyFontStyle = 'normal'
+) {
+  doc.setTextColor(...color);
+  doc.setFontSize(fontSize);
+  setMoneyFont(doc, style);
+  doc.text(formatPdfMoney(amount), rightX, baselineY, { align: 'right' });
+  setFont(doc);
 }
 
 function sanitizeFileName(value: string) {
@@ -426,18 +553,18 @@ function drawSummaryAndSignatory(
   doc.text('Estimate Summary', summaryX + 16, y + 24);
 
   const summaryRows = [
-    ['Subtotal', formatPdfMoney(payload.summary.cogsSubtotal)],
+    ['Subtotal', payload.summary.cogsSubtotal],
     [
       `Service Charge (${payload.summary.serviceChargePercent}%)`,
-      formatPdfMoney(payload.summary.serviceChargeAmount),
+      payload.summary.serviceChargeAmount,
     ],
     [
       `Misc Charge (${payload.summary.miscChargePercent}%)`,
-      formatPdfMoney(payload.summary.miscChargeAmount),
+      payload.summary.miscChargeAmount,
     ],
-    ['Taxable Subtotal', formatPdfMoney(payload.summary.taxableSubtotal)],
-    [`GST (${payload.summary.gstPercent}%)`, formatPdfMoney(payload.summary.gstAmount)],
-    ['Grand Total', formatPdfMoney(payload.summary.estimatedGrossRevenue)],
+    ['Taxable Subtotal', payload.summary.taxableSubtotal],
+    [`GST (${payload.summary.gstPercent}%)`, payload.summary.gstAmount],
+    ['Grand Total', payload.summary.estimatedGrossRevenue],
   ];
 
   summaryRows.forEach(([label, value], index) => {
@@ -452,8 +579,16 @@ function drawSummaryAndSignatory(
     setFont(doc, isTotal ? 'bold' : 'normal');
     doc.setFontSize(isTotal ? 9.8 : 8.2);
     doc.setTextColor(...(isTotal ? BRAND.offWhite : BRAND.black));
-    doc.text(label, summaryX + 16, rowY, { maxWidth: 120 });
-    doc.text(value, summaryX + summaryWidth - 16, rowY, { align: 'right' });
+    doc.text(String(label), summaryX + 16, rowY, { maxWidth: 120 });
+    drawMoneyValue(
+      doc,
+      Number(value),
+      summaryX + summaryWidth - 16,
+      rowY,
+      isTotal ? BRAND.offWhite : BRAND.black,
+      isTotal ? 9.8 : 8.2,
+      isTotal ? 'bold' : 'medium'
+    );
   });
 
   doc.setFillColor(...BRAND.softSurface);
@@ -568,6 +703,9 @@ function drawFooter(doc: jsPDF) {
 
 export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateExportPayload) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+  await registerRupeeFont(doc);
+
   const settings = getOrganizationSettings();
   const terms = getDocumentTerms('cost-estimate');
   const preparedDate = getPreparedDate(payload.preparedAt);
@@ -633,8 +771,18 @@ export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateE
       3: { cellWidth: 164 },
       4: { cellWidth: 32, halign: 'right' },
       5: { cellWidth: 30 },
-      6: { cellWidth: 70, halign: 'right' },
-      7: { cellWidth: 86, halign: 'right' },
+      6: {
+        cellWidth: 70,
+        halign: 'right',
+        font: getMoneyFontFamily(),
+        fontStyle: getMoneyFontStyle('medium'),
+      },
+      7: {
+        cellWidth: 86,
+        halign: 'right',
+        font: getMoneyFontFamily(),
+        fontStyle: getMoneyFontStyle('medium'),
+      },
     },
     margin: { left: 36, right: 36 },
   });
