@@ -36,12 +36,19 @@ import type {
   VendorCategory,
   VendorStatus,
 } from '@/features/vendors/types';
+import { supabase, type VendorRecord } from '@/lib/supabase';
+import {
+  fetchProcurementCategories,
+  fetchVendorsMaster,
+  mapVendorRecordToVendor,
+  mapVendorToUpsertPayload,
+  type ProcurementOption,
+} from '@/lib/procurementMasters';
 
 type VendorModalState =
   | { mode: 'create'; vendor: null }
   | { mode: 'edit'; vendor: Vendor }
   | null;
-const VENDORS_STORAGE_KEY = 'gravium-os-vendors';
 const PROCUREMENT_CATEGORIES_STORAGE_KEY =
   'gravium-os-procurement-categories-demo';
 
@@ -466,25 +473,25 @@ function VendorDetailsPanel({
   );
 }
 
+function mergeDropdownOptions(...optionGroups: ProcurementCategoryOption[][]) {
+  const optionMap = new Map<string, string>();
+
+  optionGroups.flat().forEach(option => {
+    if (!option || !option.value) return;
+
+    optionMap.set(option.value, option.label || option.value);
+  });
+
+  return Array.from(optionMap, ([value, label]) => ({ value, label }));
+}
+
 export default function VendorsPage() {
   const [categoryOptions, setCategoryOptions] = useState(() =>
-    getStoredCategoryOptions()
+    getDefaultCategoryOptions()
   );
-  const [vendors, setVendors] = useState<Vendor[]>(() => {
-    if (typeof window === 'undefined') return [];
-
-    try {
-      const storedVendors = localStorage.getItem(VENDORS_STORAGE_KEY);
-
-      if (!storedVendors) return [];
-
-      const parsedVendors = JSON.parse(storedVendors) as Vendor[];
-
-      return Array.isArray(parsedVendors) ? parsedVendors : [];
-    } catch {
-      return [];
-    }
-  });
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [isLoadingMasters, setIsLoadingMasters] = useState(true);
+  const [dataError, setDataError] = useState('');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<VendorCategory | 'all'>('all');
   const [status, setStatus] = useState<VendorStatus | 'all'>('all');
@@ -497,16 +504,37 @@ export default function VendorsPage() {
     showOperationSuccess,
   } = useOperationFeedback();
 
-  useEffect(() => {
-    localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(vendors));
-  }, [vendors]);
+  const loadVendorMasters = async () => {
+    setIsLoadingMasters(true);
+    setDataError('');
+
+    try {
+      const [nextVendors, nextCategories] = await Promise.all([
+        fetchVendorsMaster(),
+        fetchProcurementCategories(),
+      ]);
+
+      setVendors(nextVendors);
+      setCategoryOptions(
+        mergeDropdownOptions(getDefaultCategoryOptions(), nextCategories)
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not load Supabase vendor masters.';
+
+      setDataError(message);
+      setVendors([]);
+      setCategoryOptions(getStoredCategoryOptions());
+    } finally {
+      setIsLoadingMasters(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem(
-      PROCUREMENT_CATEGORIES_STORAGE_KEY,
-      JSON.stringify(categoryOptions.filter(option => option.value !== 'all'))
-    );
-  }, [categoryOptions]);
+    void loadVendorMasters();
+  }, []);
 
   const categoryFilterOptions = useMemo(() => {
     const optionMap = new Map<string, string>();
@@ -527,6 +555,23 @@ export default function VendorsPage() {
   const formCategoryOptions = categoryFilterOptions.filter(
     option => option.value !== 'all'
   );
+
+  const upsertProcurementCategoryOption = async (option: ProcurementOption) => {
+    if (!option.value || option.value === 'all') return;
+
+    const { error } = await supabase
+      .from('procurement_categories')
+      .upsert(
+        {
+          id: `category-${option.value}`,
+          value: option.value,
+          label: option.label,
+        },
+        { onConflict: 'value' }
+      );
+
+    if (error) throw error;
+  };
 
   const registerCategoryOption = (value: string): VendorCategory => {
     const nextOption = createCategoryOption(value);
@@ -586,40 +631,83 @@ export default function VendorsPage() {
   const handleSubmitVendor = async (vendor: Vendor) => {
     const isEditingVendor = modalState?.mode === 'edit';
     showOperationLoading(isEditingVendor ? 'Saving Vendor' : 'Adding Vendor');
+    setDataError('');
 
-    setVendors(currentVendors => {
-      const exists = currentVendors.some(
-        currentVendor => currentVendor.id === vendor.id
+    try {
+      const categoryOption = createCategoryOption(vendor.category);
+
+      await upsertProcurementCategoryOption(categoryOption);
+
+      const { data, error } = await supabase
+        .from('vendors')
+        .upsert(mapVendorToUpsertPayload(vendor), { onConflict: 'id' })
+        .select('*')
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const savedVendor = data
+        ? mapVendorRecordToVendor(data as VendorRecord)
+        : vendor;
+
+      setVendors(currentVendors => {
+        const exists = currentVendors.some(
+          currentVendor => currentVendor.id === savedVendor.id
+        );
+
+        if (exists) {
+          return currentVendors.map(currentVendor =>
+            currentVendor.id === savedVendor.id ? savedVendor : currentVendor
+          );
+        }
+
+        return [savedVendor, ...currentVendors];
+      });
+
+      setSelectedVendor(current =>
+        current?.id === savedVendor.id ? savedVendor : current
       );
 
-      if (exists) {
-        return currentVendors.map(currentVendor =>
-          currentVendor.id === vendor.id ? vendor : currentVendor
-        );
-      }
+      setModalState(null);
+      await showOperationSuccess(isEditingVendor ? 'Vendor Saved' : 'Vendor Added');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Could not save vendor.';
 
-      return [vendor, ...currentVendors];
-    });
-
-    setModalState(null);
-    await showOperationSuccess(isEditingVendor ? 'Vendor Saved' : 'Vendor Added');
+      setDataError(message);
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
     showOperationLoading('Deleting Vendor');
+    setDataError('');
 
-    setVendors(currentVendors =>
-      currentVendors.filter(vendor => vendor.id !== deleteTarget.id)
-    );
+    try {
+      const { error } = await supabase
+        .from('vendors')
+        .delete()
+        .eq('id', deleteTarget.id);
 
-    if (selectedVendor?.id === deleteTarget.id) {
-      setSelectedVendor(null);
+      if (error) throw error;
+
+      setVendors(currentVendors =>
+        currentVendors.filter(vendor => vendor.id !== deleteTarget.id)
+      );
+
+      if (selectedVendor?.id === deleteTarget.id) {
+        setSelectedVendor(null);
+      }
+
+      setDeleteTarget(null);
+      await showOperationSuccess('Vendor Deleted');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Could not delete vendor.';
+
+      setDataError(message);
     }
-
-    setDeleteTarget(null);
-    await showOperationSuccess('Vendor Deleted');
   };
 
   return (
@@ -639,6 +727,12 @@ export default function VendorsPage() {
           </Button>
         }
       />
+
+      {(isLoadingMasters || dataError) && (
+        <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          {isLoadingMasters ? 'Loading vendor masters from Supabase...' : dataError}
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <SectionCard className="shadow-none">
@@ -795,7 +889,7 @@ export default function VendorsPage() {
               <span className="font-medium text-foreground">
                 {deleteTarget.name}
               </span>{' '}
-              from the local vendor list. This does not affect Supabase yet.
+              from the Vendors master. This change will be saved to Supabase.
             </p>
 
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
