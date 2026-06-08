@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, type Lead, type Profile, LEAD_SOURCES } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, ArrowRight, Settings, Mail, Phone, ChevronDown, Check } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -38,8 +37,8 @@ export default function Leads({
   const [showModal, setShowModal] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [convertModal, setConvertModal] = useState<Lead | null>(null);
+  const [conversionNotice, setConversionNotice] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
   const msDept = departments.find(d => d.code === 'MS');
 
@@ -142,9 +141,58 @@ export default function Leads({
     fetchLeads();
   };
 
-  const handleConvertToProject = () => {
-    if (convertModal) navigate('/admin/projects', { state: { fromLead: convertModal } });
+  const handleConvertToProject = async () => {
+    if (!convertModal) return;
+
+    setError('');
+
+    const { error: leadUpdateError } = await supabase
+      .from('leads')
+      .update({
+        status: 'Converted',
+        converted_project_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', convertModal.id);
+
+    if (leadUpdateError) {
+      setError(leadUpdateError.message);
+      return;
+    }
+
+    const { data: admins, error: adminError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'super_admin');
+
+    if (adminError) {
+      setError(adminError.message);
+      return;
+    }
+
+    const notifications = (admins || []).map(admin => ({
+      user_id: admin.id,
+      title: 'Project Creation Request',
+      message: `${convertModal.name} is ready for project approval.`,
+      type: 'project' as const,
+      is_read: false,
+      link: `/admin/projects?requestId=${convertModal.id}`,
+    }));
+
+    if (notifications.length > 0) {
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert(notifications);
+
+      if (notificationError) {
+        setError(notificationError.message);
+        return;
+      }
+    }
+
+    setConversionNotice('Project Creation request has been sent.');
     setConvertModal(null);
+    fetchLeads();
   };
 
   const canDelete = isAdmin() || (isDeptHead() && isMS());
@@ -165,6 +213,12 @@ export default function Leads({
           : 'mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8'
       }
     >
+      {conversionNotice && (
+        <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+          {conversionNotice}
+        </div>
+      )}
+
       {portalMode ? (
         <div className="mb-8 border-b border-border pb-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -531,14 +585,14 @@ export default function Leads({
               <h2 className="text-lg font-semibold text-foreground">Lead Converted</h2>
             </div>
             <div className="flex flex-col gap-4 p-5">
-              <p className="text-sm text-muted-foreground">The lead has been marked as converted. Create a project from this lead when the handoff is ready.</p>
+              <p className="text-sm text-muted-foreground">The lead has been marked as converted. Send a project creation request for Admin approval.</p>
               <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
                 <ModalActionButton onClick={() => setConvertModal(null)}>
                   Not Now
                 </ModalActionButton>
                 <ModalActionButton onClick={handleConvertToProject} variant="primary">
                   <Settings size={16} />
-                  Create Project
+                  Send Request
                 </ModalActionButton>
               </div>
             </div>

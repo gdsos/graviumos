@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronDown, ExternalLink, MoreHorizontal, Pencil, Plus, Sea
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase, type Project } from '../../lib/supabase';
+import { supabase, type Lead, type Project } from '../../lib/supabase';
 import type { ProjectWorkspaceMode } from './projectTypes';
 
 interface ProjectWorkspaceProps {
@@ -93,6 +93,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const { profile, isAdmin } = useAuth();
 
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectRequests, setProjectRequests] = useState<Lead[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>('All Statuses');
@@ -128,6 +129,28 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     setLoading(false);
   }
 
+  async function fetchProjectRequests() {
+    if (!canManageProjects) {
+      setProjectRequests([]);
+      return;
+    }
+
+    const { data, error: requestError } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('status', 'Converted')
+      .is('converted_project_id', null)
+      .order('updated_at', { ascending: false });
+
+    if (requestError) {
+      setError(requestError.message);
+      setProjectRequests([]);
+      return;
+    }
+
+    setProjectRequests((data || []) as Lead[]);
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -149,6 +172,19 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         setProjects((data || []) as Project[]);
       }
 
+      if (canManageProjects) {
+        const { data: requestData, error: requestError } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('status', 'Converted')
+          .is('converted_project_id', null)
+          .order('updated_at', { ascending: false });
+
+        if (!requestError) {
+          setProjectRequests((requestData || []) as Lead[]);
+        }
+      }
+
       setLoading(false);
     }
 
@@ -157,7 +193,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [canManageProjects]);
 
   const filteredProjects = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -355,6 +391,121 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     setSelectedProject(current => (current?.id === targetId ? null : current));
     setDeleteTarget(null);
     setFloatingMenu(null);
+  };
+
+
+  const deleteProjectRequestNotifications = async (lead: Lead) => {
+    const links = [
+      `/admin/projects?requestId=${lead.id}`,
+      '/admin/projects',
+    ];
+
+    const { error: exactDeleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'project')
+      .eq('title', 'Project Creation Request')
+      .in('link', links);
+
+    if (exactDeleteError) {
+      setError(exactDeleteError.message);
+      return false;
+    }
+
+    const { error: legacyDeleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'project')
+      .eq('title', 'Project Creation Request')
+      .ilike('message', `%${lead.name}%`);
+
+    if (legacyDeleteError) {
+      setError(legacyDeleteError.message);
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleApproveProjectRequest = async (lead: Lead) => {
+    if (!canManageProjects) return;
+
+    setError('');
+
+    const { data, error: createError } = await supabase
+      .from('projects')
+      .insert({
+        name: lead.name,
+        client: lead.name,
+        status: 'Active',
+        description: lead.notes || '',
+        start_date: null,
+        end_date: null,
+        revenue: 0,
+        estimated_cogs: 0,
+        design_fee_pct: 0,
+        created_from_lead_id: lead.id,
+        created_by: profile?.id || null,
+      })
+      .select();
+
+    if (createError) {
+      setError(createError.message);
+      return;
+    }
+
+    const createdProject = data?.[0] as Project | undefined;
+
+    if (!createdProject) {
+      await fetchProjects();
+      await fetchProjectRequests();
+      return;
+    }
+
+    const { error: leadUpdateError } = await supabase
+      .from('leads')
+      .update({
+        converted_project_id: createdProject.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', lead.id);
+
+    if (leadUpdateError) {
+      setError(leadUpdateError.message);
+      return;
+    }
+
+    await deleteProjectRequestNotifications(lead);
+
+    setProjects(current => [createdProject, ...current]);
+    setProjectRequests(current => current.filter(request => request.id !== lead.id));
+    setSelectedProject(createdProject);
+  };
+
+  const handleDeclineProjectRequest = async (lead: Lead) => {
+    if (!canManageProjects) return;
+
+    setError('');
+
+    const { error: leadUpdateError } = await supabase
+      .from('leads')
+      .update({
+        status: 'Qualified',
+        converted_project_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', lead.id);
+
+    if (leadUpdateError) {
+      setError(leadUpdateError.message);
+      return;
+    }
+
+    const notificationsDeleted = await deleteProjectRequestNotifications(lead);
+
+    if (!notificationsDeleted) return;
+
+    setProjectRequests(current => current.filter(request => request.id !== lead.id));
   };
 
   const projectModal = isProjectModalOpen && (
@@ -748,6 +899,61 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
           )}
         </div>
       </div>
+
+      {canManageProjects && projectRequests.length > 0 && (
+        <section className="mb-5 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className="border-b border-border px-4 py-3 sm:px-5">
+            <p className="text-sm font-semibold text-foreground">
+              Project Creation Requests
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Converted leads waiting for Admin approval.
+            </p>
+          </div>
+
+          <div className="divide-y divide-border">
+            {projectRequests.map(request => (
+              <div
+                key={request.id}
+                className="grid gap-3 bg-background px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {request.name}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {request.contact_phone || request.contact_email || 'No contact saved'}
+                  </p>
+                  {request.notes && (
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      {request.notes}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleDeclineProjectRequest(request)}
+                    className="h-10 justify-center whitespace-nowrap"
+                  >
+                    Decline
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={() => handleApproveProjectRequest(request)}
+                    className="h-10 justify-center whitespace-nowrap"
+                  >
+                    Approve and Create
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-border bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:p-5">
