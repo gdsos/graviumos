@@ -104,6 +104,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [pendingProjectRequest, setPendingProjectRequest] = useState<Lead | null>(null);
   const [modalError, setModalError] = useState('');
   const [isSavingProject, setIsSavingProject] = useState(false);
 
@@ -261,6 +262,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     if (!canManageProjects) return;
 
     setEditingProject(null);
+    setPendingProjectRequest(null);
     setProjectForm(EMPTY_PROJECT_FORM);
     setModalError('');
     setIsProjectModalOpen(true);
@@ -270,6 +272,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     if (!canManageProjects) return;
 
     setEditingProject(project);
+    setPendingProjectRequest(null);
     setProjectForm(getProjectFormFromRecord(project));
     setModalError('');
     setFloatingMenu(null);
@@ -281,6 +284,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
     setIsProjectModalOpen(false);
     setEditingProject(null);
+    setPendingProjectRequest(null);
     setProjectForm(EMPTY_PROJECT_FORM);
     setModalError('');
   };
@@ -293,6 +297,21 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       ...current,
       [key]: value,
     }));
+  };
+
+  const openApproveProjectRequestModal = (lead: Lead) => {
+    if (!canManageProjects) return;
+
+    setEditingProject(null);
+    setPendingProjectRequest(lead);
+    setProjectForm({
+      ...EMPTY_PROJECT_FORM,
+      name: '',
+      client: lead.name || '',
+      description: lead.notes || '',
+    });
+    setModalError('');
+    setIsProjectModalOpen(true);
   };
 
   const handleSaveProject = async () => {
@@ -322,6 +341,75 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       description,
       updated_at: new Date().toISOString(),
     };
+
+    if (pendingProjectRequest) {
+      const { data, error: createError } = await supabase
+        .from('projects')
+        .insert({
+          ...operationalPayload,
+          start_date: null,
+          end_date: null,
+          revenue: 0,
+          estimated_cogs: 0,
+          design_fee_pct: 0,
+          created_from_lead_id: pendingProjectRequest.id,
+          created_by: profile?.id || null,
+        })
+        .select()
+        .maybeSingle();
+
+      setIsSavingProject(false);
+
+      if (createError) {
+        setModalError(createError.message);
+        return;
+      }
+
+      const createdProject = data as Project | null;
+
+      if (!createdProject) {
+        setModalError('Project was not created. Please try again.');
+        return;
+      }
+
+      const { error: leadUpdateError } = await supabase
+        .from('leads')
+        .update({
+          converted_project_id: createdProject.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pendingProjectRequest.id);
+
+      if (leadUpdateError) {
+        setModalError(leadUpdateError.message);
+        return;
+      }
+
+      const notificationsDeleted = await deleteProjectRequestNotifications(pendingProjectRequest);
+
+      if (!notificationsDeleted) return;
+
+      const { data: persistedProject, error: persistedProjectError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', createdProject.id)
+        .maybeSingle();
+
+      if (persistedProjectError) {
+        setModalError(persistedProjectError.message);
+        return;
+      }
+
+      await fetchProjects();
+      await fetchProjectRequests();
+
+      setProjectRequests(current =>
+        current.filter(request => request.id !== pendingProjectRequest.id)
+      );
+      setSelectedProject((persistedProject as Project | null) || createdProject);
+      closeProjectModal();
+      return;
+    }
 
     const { data, error: saveError } = editingProject
       ? await supabase
@@ -376,6 +464,27 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     if (!canManageProjects || !deleteTarget) return;
 
     const targetId = deleteTarget.id;
+    const linkedLeadId = deleteTarget.created_from_lead_id || null;
+
+    setError('');
+
+    let linkedLead: Lead | null = null;
+
+    if (linkedLeadId) {
+      const { data: leadData, error: leadFetchError } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', linkedLeadId)
+        .maybeSingle();
+
+      if (leadFetchError) {
+        setError(leadFetchError.message);
+        return;
+      }
+
+      linkedLead = (leadData as Lead | null) || null;
+    }
+
     const { error: deleteError } = await supabase
       .from('projects')
       .delete()
@@ -387,12 +496,32 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       return;
     }
 
+    if (linkedLead) {
+      const { error: leadUpdateError } = await supabase
+        .from('leads')
+        .update({
+          status: 'Qualified',
+          converted_project_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', linkedLead.id);
+
+      if (leadUpdateError) {
+        setError(leadUpdateError.message);
+        return;
+      }
+
+      await deleteProjectRequestNotifications(linkedLead);
+    }
+
     setProjects(current => current.filter(project => project.id !== targetId));
     setSelectedProject(current => (current?.id === targetId ? null : current));
     setDeleteTarget(null);
     setFloatingMenu(null);
-  };
 
+    await fetchProjects();
+    await fetchProjectRequests();
+  };
 
   const deleteProjectRequestNotifications = async (lead: Lead) => {
     const links = [
@@ -428,58 +557,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   };
 
   const handleApproveProjectRequest = async (lead: Lead) => {
-    if (!canManageProjects) return;
-
-    setError('');
-
-    const { data, error: createError } = await supabase
-      .from('projects')
-      .insert({
-        name: lead.name,
-        client: lead.name,
-        status: 'Active',
-        description: lead.notes || '',
-        start_date: null,
-        end_date: null,
-        revenue: 0,
-        estimated_cogs: 0,
-        design_fee_pct: 0,
-        created_from_lead_id: lead.id,
-        created_by: profile?.id || null,
-      })
-      .select();
-
-    if (createError) {
-      setError(createError.message);
-      return;
-    }
-
-    const createdProject = data?.[0] as Project | undefined;
-
-    if (!createdProject) {
-      await fetchProjects();
-      await fetchProjectRequests();
-      return;
-    }
-
-    const { error: leadUpdateError } = await supabase
-      .from('leads')
-      .update({
-        converted_project_id: createdProject.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', lead.id);
-
-    if (leadUpdateError) {
-      setError(leadUpdateError.message);
-      return;
-    }
-
-    await deleteProjectRequestNotifications(lead);
-
-    setProjects(current => [createdProject, ...current]);
-    setProjectRequests(current => current.filter(request => request.id !== lead.id));
-    setSelectedProject(createdProject);
+    openApproveProjectRequestModal(lead);
   };
 
   const handleDeclineProjectRequest = async (lead: Lead) => {
@@ -514,8 +592,14 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border p-4 sm:p-6">
           <div>
             <p className="text-lg font-semibold text-foreground">
-              {editingProject ? 'Edit Project' : 'Create Project'}
+              {editingProject ? 'Edit Project' : pendingProjectRequest ? 'Approve Project Request' : 'Create Project'}
             </p>
+
+            {pendingProjectRequest && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Client details are filled from the lead request. Fill the project name before creating this project.
+              </p>
+            )}
           </div>
 
           <button

@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, type Lead, type Profile, LEAD_SOURCES } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Plus, Edit2, Trash2, ArrowRight, Settings, Mail, Phone, ChevronDown, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, ArrowRight, Mail, Phone, ChevronDown, Check } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { EmptyState } from '../../components/common/EmptyState';
 import { PageHeader } from '../../components/common/PageHeader';
@@ -36,8 +37,8 @@ export default function Leads({
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  const [convertModal, setConvertModal] = useState<Lead | null>(null);
   const [conversionNotice, setConversionNotice] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<LeadWithProfile | null>(null);
   const [error, setError] = useState('');
 
   const msDept = departments.find(d => d.code === 'MS');
@@ -105,60 +106,41 @@ export default function Leads({
     setShowModal(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    const payload = {
-      ...form,
-      assigned_to: form.assigned_to || null,
-      created_by: profile?.id,
-    };
+  const deleteProjectRequestNotifications = async (lead: Pick<Lead, 'id' | 'name'>) => {
+    const links = [
+      `/admin/projects?requestId=${lead.id}`,
+      '/admin/projects',
+    ];
 
-    let err;
-    if (editingLead) {
-      const { error: e } = await supabase.from('leads').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingLead.id);
-      err = e;
-    } else {
-      const { error: e } = await supabase.from('leads').insert(payload);
-      err = e;
+    const { error: exactDeleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'project')
+      .eq('title', 'Project Creation Request')
+      .in('link', links);
+
+    if (exactDeleteError) {
+      setError(exactDeleteError.message);
+      return false;
     }
 
-    if (err) { setError(err.message); return; }
+    const { error: legacyDeleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'project')
+      .eq('title', 'Project Creation Request')
+      .ilike('message', `%${lead.name}%`);
 
-    // If converted, show convert modal
-    if (form.status === 'Converted' && !editingLead?.converted_project_id) {
-      const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(1);
-      if (data?.[0]) setConvertModal(data[0] as Lead);
+    if (legacyDeleteError) {
+      setError(legacyDeleteError.message);
+      return false;
     }
 
-    setShowModal(false);
-    fetchLeads();
+    return true;
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this lead?')) return;
-    await supabase.from('leads').delete().eq('id', id);
-    fetchLeads();
-  };
-
-  const handleConvertToProject = async () => {
-    if (!convertModal) return;
-
-    setError('');
-
-    const { error: leadUpdateError } = await supabase
-      .from('leads')
-      .update({
-        status: 'Converted',
-        converted_project_id: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', convertModal.id);
-
-    if (leadUpdateError) {
-      setError(leadUpdateError.message);
-      return;
-    }
+  const createProjectRequestNotifications = async (lead: Lead) => {
+    await deleteProjectRequestNotifications(lead);
 
     const { data: admins, error: adminError } = await supabase
       .from('profiles')
@@ -167,16 +149,16 @@ export default function Leads({
 
     if (adminError) {
       setError(adminError.message);
-      return;
+      return false;
     }
 
     const notifications = (admins || []).map(admin => ({
       user_id: admin.id,
       title: 'Project Creation Request',
-      message: `${convertModal.name} is ready for project approval.`,
+      message: `${lead.name} is ready for project approval.`,
       type: 'project' as const,
       is_read: false,
-      link: `/admin/projects?requestId=${convertModal.id}`,
+      link: `/admin/projects?requestId=${lead.id}`,
     }));
 
     if (notifications.length > 0) {
@@ -186,12 +168,128 @@ export default function Leads({
 
       if (notificationError) {
         setError(notificationError.message);
-        return;
+        return false;
       }
     }
 
-    setConversionNotice('Project Creation request has been sent.');
-    setConvertModal(null);
+    return true;
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setConversionNotice('');
+
+    const payload = {
+      ...form,
+      assigned_to: form.assigned_to || null,
+      created_by: profile?.id,
+    };
+
+    let savedLead: Lead | null = null;
+    let err;
+
+    if (editingLead) {
+      const { data, error: updateError } = await supabase
+        .from('leads')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', editingLead.id)
+        .select()
+        .maybeSingle();
+
+      err = updateError;
+      savedLead = (data as Lead | null) || null;
+    } else {
+      const { data, error: insertError } = await supabase
+        .from('leads')
+        .insert(payload)
+        .select()
+        .maybeSingle();
+
+      err = insertError;
+      savedLead = (data as Lead | null) || null;
+    }
+
+    if (err) {
+      setError(err.message);
+      return;
+    }
+
+    if (savedLead) {
+      if (savedLead.status === 'Converted' && !savedLead.converted_project_id) {
+        const requestCreated = await createProjectRequestNotifications(savedLead);
+
+        if (!requestCreated) return;
+
+        setConversionNotice('Project Creation request has been sent.');
+      } else if (editingLead?.status === 'Converted' && savedLead.status !== 'Converted') {
+        const notificationsDeleted = await deleteProjectRequestNotifications(savedLead);
+
+        if (!notificationsDeleted) return;
+      }
+    }
+
+    setShowModal(false);
+    fetchLeads();
+  };
+
+  const openDeleteLeadModal = (lead: LeadWithProfile) => {
+    setDeleteTarget(lead);
+  };
+
+  const deleteLeadRelatedNotifications = async (lead: LeadWithProfile) => {
+    const links = [
+      `/admin/projects?requestId=${lead.id}`,
+      '/admin/projects',
+    ];
+
+    const { error: exactDeleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'project')
+      .eq('title', 'Project Creation Request')
+      .in('link', links);
+
+    if (exactDeleteError) {
+      setError(exactDeleteError.message);
+      return false;
+    }
+
+    const { error: legacyDeleteError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'project')
+      .eq('title', 'Project Creation Request')
+      .ilike('message', `%${lead.name}%`);
+
+    if (legacyDeleteError) {
+      setError(legacyDeleteError.message);
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleConfirmDeleteLead = async () => {
+    if (!deleteTarget) return;
+
+    setError('');
+
+    const notificationsDeleted = await deleteLeadRelatedNotifications(deleteTarget);
+
+    if (!notificationsDeleted) return;
+
+    const { error: deleteError } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', deleteTarget.id);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    setDeleteTarget(null);
     fetchLeads();
   };
 
@@ -376,7 +474,7 @@ export default function Leads({
 
                         {canDelete && (
                           <button
-                            onClick={() => handleDelete(lead.id)}
+                            onClick={() => openDeleteLeadModal(lead)}
                             className="p-2 rounded-md hover:bg-destructive/10 text-red-600 transition"
                           >
                             <Trash2 size={16} />
@@ -470,7 +568,7 @@ export default function Leads({
 
                           {canDelete && (
                             <button
-                              onClick={() => handleDelete(lead.id)}
+                              onClick={() => openDeleteLeadModal(lead)}
                               className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-red-600"
                             >
                               <Trash2 size={16} />
@@ -577,24 +675,26 @@ export default function Leads({
         </div>
       )}
 
-      {/* Convert to Project modal */}
-      {convertModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 px-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] pt-4 backdrop-blur-sm sm:p-4">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="text-lg font-semibold text-foreground">Lead Converted</h2>
-            </div>
-            <div className="flex flex-col gap-4 p-5">
-              <p className="text-sm text-muted-foreground">The lead has been marked as converted. Send a project creation request for Admin approval.</p>
-              <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
-                <ModalActionButton onClick={() => setConvertModal(null)}>
-                  Not Now
-                </ModalActionButton>
-                <ModalActionButton onClick={handleConvertToProject} variant="primary">
-                  <Settings size={16} />
-                  Send Request
-                </ModalActionButton>
-              </div>
+      {/* Delete Lead confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+            <h2 className="text-lg font-semibold text-foreground">
+              Delete lead?
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              This will remove {deleteTarget.name}. Related project request notifications will also be cleared.
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <ModalActionButton onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </ModalActionButton>
+
+              <ModalActionButton onClick={handleConfirmDeleteLead} variant="primary">
+                Delete Lead
+              </ModalActionButton>
             </div>
           </div>
         </div>
@@ -632,6 +732,23 @@ function ModalActionButton({
   );
 }
 
+function FormField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="grid gap-2 text-sm">
+      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 interface SuggestionSelectOption {
   value: string;
   label: string;
@@ -647,61 +764,78 @@ function SuggestionSelect({
   onChange: (value: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const selectedOption = options.find(option => option.value === value);
 
+  const openMenu = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+
+    if (!rect) return;
+
+    setMenuRect(rect);
+    setIsOpen(true);
+  };
+
+  const closeMenu = () => {
+    setIsOpen(false);
+    setMenuRect(null);
+  };
+
+  const menu =
+    isOpen && menuRect && typeof document !== 'undefined'
+      ? createPortal(
+          <div className="fixed inset-0 z-[90]" onMouseDown={closeMenu}>
+            <div
+              className="fixed max-h-60 overflow-y-auto rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl"
+              style={{
+                top: menuRect.bottom + 8,
+                left: menuRect.left,
+                width: menuRect.width,
+              }}
+              onMouseDown={event => event.stopPropagation()}
+            >
+              {options.map(option => {
+                const isSelected = option.value === value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      closeMenu();
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                      isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                    }`}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {isSelected && <Check className="h-4 w-4 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(current => !current)}
-        onBlur={() => {
-          window.setTimeout(() => setIsOpen(false), 120);
-        }}
+        onClick={isOpen ? closeMenu : openMenu}
         className="flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40 focus:border-foreground"
       >
         <span className={selectedOption ? 'truncate' : 'truncate text-muted-foreground'}>
           {selectedOption?.label || 'Select'}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-[80] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
-          {options.map(option => {
-            const isSelected = option.value === value;
-
-            return (
-              <button
-                key={option.value || 'empty-option'}
-                type="button"
-                onMouseDown={event => event.preventDefault()}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
-                  isSelected ? 'bg-muted text-foreground' : 'hover:bg-muted/70'
-                }`}
-              >
-                <span className="truncate">{option.label}</span>
-                {isSelected && <Check className="h-4 w-4 shrink-0 text-muted-foreground" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-foreground"
-        style={{ fontFamily: "'Neue Montreal', sans-serif" }}>
-        {label}
-      </label>
-      {children}
-    </div>
+      {menu}
+    </>
   );
 }
