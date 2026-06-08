@@ -24,6 +24,19 @@ import type {
   ItemStatus,
   ProcurementItem,
 } from '@/features/items/types';
+import { supabase, type ProcurementItemRecord } from '@/lib/supabase';
+import {
+  fetchProcurementCategories,
+  fetchProcurementItems,
+  fetchProcurementUnits,
+  getLocalProcurementCategoryOptions,
+  getLocalProcurementItems,
+  getLocalProcurementUnitOptions,
+  importLocalProcurementMastersToSupabase,
+  mapItemRecordToProcurementItem,
+  mapProcurementItemToUpsertPayload,
+  type ProcurementOption,
+} from '@/lib/procurementMasters';
 
 const ITEMS_STORAGE_KEY = 'gravium-os-items';
 const LEGACY_ITEMS_STORAGE_KEY = 'gravium-os-items-demo';
@@ -393,12 +406,24 @@ function getStoredItems() {
   }
 }
 
+function mergeDropdownOptions(...optionGroups: ProcurementOption[][]) {
+  const optionMap = new Map<string, string>();
+
+  optionGroups.flat().forEach(option => {
+    if (!option || !option.value) return;
+
+    optionMap.set(option.value, option.label || option.value);
+  });
+
+  return Array.from(optionMap, ([value, label]) => ({ value, label }));
+}
+
 export default function ItemsPage() {
-  const [items, setItems] = useState<ProcurementItem[]>(() => getStoredItems());
-  const [categoryOptions, setCategoryOptions] = useState(() =>
-    getStoredCategoryOptions()
-  );
-  const [unitOptions, setUnitOptions] = useState(() => getStoredUnitOptions());
+  const [items, setItems] = useState<ProcurementItem[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState(() => defaultCategoryOptions);
+  const [unitOptions, setUnitOptions] = useState(() => getDefaultUnitOptions());
+  const [isLoadingMasters, setIsLoadingMasters] = useState(true);
+  const [dataError, setDataError] = useState('');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [status, setStatus] = useState<ItemStatus | 'all'>('all');
@@ -413,26 +438,56 @@ export default function ItemsPage() {
     showOperationSuccess,
   } = useOperationFeedback();
 
+  const loadProcurementMasters = async () => {
+    setIsLoadingMasters(true);
+    setDataError('');
+
+    try {
+      let [nextItems, nextCategories, nextUnits] = await Promise.all([
+        fetchProcurementItems(),
+        fetchProcurementCategories(),
+        fetchProcurementUnits(),
+      ]);
+
+      const hasLocalMigrationData =
+        getLocalProcurementItems().length > 0 ||
+        getLocalProcurementCategoryOptions().length > 0 ||
+        getLocalProcurementUnitOptions().length > 0;
+
+      const shouldImportLocalData =
+        hasLocalMigrationData &&
+        (nextItems.length === 0 ||
+          nextCategories.length === 0 ||
+          nextUnits.length === 0);
+
+      if (shouldImportLocalData) {
+        await importLocalProcurementMastersToSupabase();
+
+        [nextItems, nextCategories, nextUnits] = await Promise.all([
+          fetchProcurementItems(),
+          fetchProcurementCategories(),
+          fetchProcurementUnits(),
+        ]);
+      }
+
+      setItems(nextItems);
+      setCategoryOptions(mergeDropdownOptions(defaultCategoryOptions, nextCategories));
+      setUnitOptions(mergeDropdownOptions(getDefaultUnitOptions(), nextUnits));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load Supabase item masters.';
+
+      setDataError(message);
+      setItems(getStoredItems());
+      setCategoryOptions(getStoredCategoryOptions());
+      setUnitOptions(getStoredUnitOptions());
+    } finally {
+      setIsLoadingMasters(false);
+    }
+  };
+
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    localStorage.setItem(
-      PROCUREMENT_CATEGORIES_STORAGE_KEY,
-      JSON.stringify(categoryOptions.filter(option => option.value !== 'all'))
-    );
-  }, [categoryOptions]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    localStorage.setItem(PROCUREMENT_UNITS_STORAGE_KEY, JSON.stringify(unitOptions));
-  }, [unitOptions]);
+    void loadProcurementMasters();
+  }, []);
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -470,6 +525,41 @@ export default function ItemsPage() {
   const formCategoryOptions = categoryFilterOptions.filter(
     option => option.value !== 'all'
   );
+
+  const upsertProcurementCategoryOption = async (option: ProcurementOption) => {
+    if (!option.value || option.value === 'all') return;
+
+    const { error } = await supabase
+      .from('procurement_categories')
+      .upsert(
+        {
+          id: `category-${option.value}`,
+          value: option.value,
+          label: option.label,
+        },
+        { onConflict: 'value' }
+      );
+
+    if (error) throw error;
+  };
+
+  const upsertProcurementUnitOption = async (option: ProcurementOption) => {
+    if (!option.value) return;
+
+    const { error } = await supabase
+      .from('procurement_units')
+      .upsert(
+        {
+          id: `unit-${option.value}`,
+          value: option.value,
+          label: option.label,
+          short_label: option.value,
+        },
+        { onConflict: 'value' }
+      );
+
+    if (error) throw error;
+  };
 
   const registerCategoryOption = (value: string) => {
     const nextOption = createCategoryOption(value);
@@ -564,7 +654,10 @@ export default function ItemsPage() {
 
     const isEditingItem = modalState?.mode === 'edit';
     showOperationLoading(isEditingItem ? 'Saving Item' : 'Adding Item');
+    setDataError('');
 
+    const categoryOption = createCategoryOption(formState.category);
+    const unitOption = createUnitOption(trimmedUnit);
     const itemCategory = registerCategoryOption(formState.category);
     const itemUnit = registerUnitOption(trimmedUnit);
 
@@ -581,33 +674,66 @@ export default function ItemsPage() {
       updatedAt: new Date().toISOString(),
     };
 
-    setItems(currentItems => {
-      const exists = currentItems.some(currentItem => currentItem.id === item.id);
+    try {
+      await upsertProcurementCategoryOption(categoryOption);
+      await upsertProcurementUnitOption(unitOption);
 
-      if (exists) {
-        return currentItems.map(currentItem =>
-          currentItem.id === item.id ? item : currentItem
-        );
-      }
+      const { data, error } = await supabase
+        .from('procurement_items')
+        .upsert(mapProcurementItemToUpsertPayload(item), { onConflict: 'id' })
+        .select('*')
+        .maybeSingle();
 
-      return [item, ...currentItems];
-    });
+      if (error) throw error;
 
-    closeModal();
-    await showOperationSuccess(isEditingItem ? 'Item Saved' : 'Item Added');
+      const savedItem = data
+        ? mapItemRecordToProcurementItem(data as ProcurementItemRecord)
+        : item;
+
+      setItems(currentItems => {
+        const exists = currentItems.some(currentItem => currentItem.id === savedItem.id);
+
+        if (exists) {
+          return currentItems.map(currentItem =>
+            currentItem.id === savedItem.id ? savedItem : currentItem
+          );
+        }
+
+        return [savedItem, ...currentItems];
+      });
+
+      closeModal();
+      await showOperationSuccess(isEditingItem ? 'Item Saved' : 'Item Added');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not save item.';
+      setDataError(message);
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
     showOperationLoading('Deleting Item');
+    setDataError('');
 
-    setItems(currentItems =>
-      currentItems.filter(item => item.id !== deleteTarget.id)
-    );
+    try {
+      const { error } = await supabase
+        .from('procurement_items')
+        .delete()
+        .eq('id', deleteTarget.id);
 
-    setDeleteTarget(null);
-    await showOperationSuccess('Item Deleted');
+      if (error) throw error;
+
+      setItems(currentItems =>
+        currentItems.filter(item => item.id !== deleteTarget.id)
+      );
+
+      setDeleteTarget(null);
+      await showOperationSuccess('Item Deleted');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not delete item.';
+      setDataError(message);
+    }
   };
 
   const purchaseRatePreview = Number(formState.purchaseRatePerUnit);
@@ -630,6 +756,12 @@ export default function ItemsPage() {
           </Button>
         }
       />
+
+      {(isLoadingMasters || dataError) && (
+        <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          {isLoadingMasters ? 'Loading item masters from Supabase...' : dataError}
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <SectionCard className="shadow-none">
@@ -1037,7 +1169,7 @@ export default function ItemsPage() {
               <span className="font-medium text-foreground">
                 {deleteTarget.name}
               </span>{' '}
-              from the local item list. This does not affect Supabase yet.
+              from the Items master. This change will be saved to Supabase.
             </p>
 
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
