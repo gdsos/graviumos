@@ -205,6 +205,62 @@ export interface ApprovalRequest {
   created_at: string;
 }
 
+export interface ProcurementCategoryRecord {
+  id: string;
+  value: string;
+  label: string;
+  is_default: boolean;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcurementUnitRecord {
+  id: string;
+  value: string;
+  label: string;
+  short_label: string;
+  is_default: boolean;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcurementItemRecord {
+  id: string;
+  name: string;
+  category: string;
+  default_unit_label: string;
+  purchase_rate_per_unit: number;
+  markup_percent: number;
+  selling_rate_per_unit: number;
+  default_description: string;
+  status: 'active' | 'inactive';
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VendorRecord {
+  id: string;
+  name: string;
+  category: string;
+  scope_of_work: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  location: string;
+  rating: number;
+  status: 'active' | 'inactive' | 'blacklisted';
+  availability: 'available' | 'busy' | 'on_hold';
+  assigned_project_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const formatINR = (amount: number): string => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
