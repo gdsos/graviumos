@@ -892,7 +892,16 @@ export default function CostEstimatesPage() {
           onCreateRevision={handleCreateRevisionFromEditor}
           onDeleteDraft={handleDeleteSelectedEstimate}
           onSaveAndClose={handleSaveAndCloseEstimate}
-        />
+                  projectOptions={projectOptions.map(project => ({
+            id: project.id,
+            name: project.name,
+            clientName: project.client || 'No client assigned',
+            hasCostEstimate: records.some(
+              record =>
+                record.projectId === project.id && record.id !== selectedRecordId
+            ),
+          }))}
+/>
 
         {pendingRevenueApproval && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">

@@ -374,20 +374,15 @@ export function VendorFormModal({
             </FormField>
 
             <FormField label="Phone" required>
-              <div className="grid grid-cols-[120px_1fr] gap-2">
-                <select
-                  value={form.phoneCountryCode}
-                  onChange={event =>
-                    updateForm('phoneCountryCode', event.target.value)
-                  }
-                  className={inputClass}
-                >
-                  {phoneCountryCodes.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-[128px_1fr] gap-2">
+                <div className="w-[128px] shrink-0">
+                  <DropdownField
+                    value={form.phoneCountryCode}
+                    options={phoneCountryCodes}
+                    onChange={value => updateForm('phoneCountryCode', value)}
+                    placeholder="Code"
+                  />
+                </div>
 
                 <input
                   value={form.phoneNumber}

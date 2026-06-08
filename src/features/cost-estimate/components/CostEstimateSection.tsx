@@ -30,7 +30,6 @@ import {
 import {
   defaultCostEstimateUnits,
   demoCostEstimateAreas,
-  demoCostEstimateProjects,
 } from '../data';
 
 import type {
@@ -387,6 +386,7 @@ interface CostEstimateSectionProps {
   initialAreas?: CostEstimateArea[];
   initialLineItems?: CostEstimateLineItem[];
   initialProjectId?: string;
+  projectOptions?: CostEstimateProject[];
   initialStatus?: 'draft' | 'approved' | 'revision';
   initialVersion?: number;
   initialServiceChargePercent?: number;
@@ -436,6 +436,7 @@ export function CostEstimateSection({
   initialAreas,
   initialLineItems,
   initialProjectId,
+  projectOptions = [],
   initialStatus,
   initialVersion,
   initialServiceChargePercent,
@@ -469,6 +470,7 @@ export function CostEstimateSection({
   const [selectedProjectId, setSelectedProjectId] = useState(
     initialProjectId ?? UNASSIGNED_PROJECT_ID
   );
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const isProjectLinkedEstimate = Boolean(initialProjectId);
   const estimateTopRef = useRef<HTMLDivElement | null>(null);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
@@ -705,7 +707,7 @@ export function CostEstimateSection({
 
   const shouldShowLineItemDetails = newLineItemName.trim().length > 0;
 
-  const availableProjectsForNewEstimate = demoCostEstimateProjects.filter(
+  const availableProjectsForNewEstimate = projectOptions.filter(
     project => !project.hasCostEstimate || project.id === selectedProjectId
   );
   const isEstimateApproved = status === 'approved';
@@ -1428,18 +1430,95 @@ export function CostEstimateSection({
               Estimate Project
             </p>
 
-            <select
-              value={selectedProjectId}
-              onChange={event => handleProjectSelectionChange(event.target.value)}
-              className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            <div
+              className={`relative ${isProjectSelectorOpen ? 'z-[120]' : 'z-0'}`}
+              onBlur={event => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setIsProjectSelectorOpen(false);
+                }
+              }}
             >
-              <option value={UNASSIGNED_PROJECT_ID}>Unassigned Draft</option>
-              {availableProjectsForNewEstimate.map(project => (
-                <option key={project.id} value={project.id}>
-                  {getProjectLabel(project)}
-                </option>
-              ))}
-            </select>
+              <button
+                type="button"
+                onClick={() => setIsProjectSelectorOpen(current => !current)}
+                className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40 focus:border-foreground"
+              >
+                <span className="truncate">
+                  {selectedProjectId === UNASSIGNED_PROJECT_ID
+                    ? 'Unassigned Draft'
+                    : getProjectLabel(
+                        availableProjectsForNewEstimate.find(
+                          project => project.id === selectedProjectId
+                        )
+                      )}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {isProjectSelectorOpen ? 'Close' : 'Change'}
+                </span>
+              </button>
+
+              {isProjectSelectorOpen && (
+                <div className="absolute left-0 top-full z-[130] mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+                  <button
+                    type="button"
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={() => {
+                      handleProjectSelectionChange(UNASSIGNED_PROJECT_ID);
+                      setIsProjectSelectorOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted ${
+                      selectedProjectId === UNASSIGNED_PROJECT_ID
+                        ? 'bg-muted text-foreground'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    <span className="truncate">Unassigned Draft</span>
+                    {selectedProjectId === UNASSIGNED_PROJECT_ID && (
+                      <span className="text-xs text-foreground">Selected</span>
+                    )}
+                  </button>
+
+                  {availableProjectsForNewEstimate.map(project => {
+                    const isSelected = project.id === selectedProjectId;
+
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onMouseDown={event => event.preventDefault()}
+                        onClick={() => {
+                          handleProjectSelectionChange(project.id);
+                          setIsProjectSelectorOpen(false);
+                        }}
+                        className={`flex w-full min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted ${
+                          isSelected ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">
+                            {project.name}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs">
+                            {project.clientName}
+                          </span>
+                        </span>
+                        {isSelected && (
+                          <span className="shrink-0 text-xs text-foreground">
+                            Selected
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {availableProjectsForNewEstimate.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      No available project found.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         )}
