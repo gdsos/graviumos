@@ -255,6 +255,10 @@ function getMoneyFontStyle(style: MoneyFontStyle = 'normal') {
   return 'normal';
 }
 
+function getMoneyAutoTableFontStyle(style: MoneyFontStyle = 'normal') {
+  return getMoneyFontStyle(style) as unknown as 'normal';
+}
+
 function setMoneyFont(doc: jsPDF, style: MoneyFontStyle = 'normal') {
   try {
     doc.setFont(getMoneyFontFamily(), getMoneyFontStyle(style));
@@ -775,13 +779,13 @@ export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateE
         cellWidth: 70,
         halign: 'right',
         font: getMoneyFontFamily(),
-        fontStyle: getMoneyFontStyle('medium'),
+        fontStyle: getMoneyAutoTableFontStyle('medium'),
       },
       7: {
         cellWidth: 86,
         halign: 'right',
         font: getMoneyFontFamily(),
-        fontStyle: getMoneyFontStyle('medium'),
+        fontStyle: getMoneyAutoTableFontStyle('medium'),
       },
     },
     margin: { left: 36, right: 36 },
