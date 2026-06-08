@@ -10,7 +10,7 @@ import {
   RefreshCcw,
   Save,
   Trash2,
-} from 'lucide-react';
+  FileText} from 'lucide-react';
 
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -1363,6 +1363,17 @@ export function CostEstimateSection({
       description="Prepare project-level estimates with area-wise scope, costs, pricing, GST, and approval-ready totals."
       actions={
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleExportCostEstimatePdf}
+            className="h-10 w-full justify-center gap-1.5 px-3 text-xs sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
+            aria-label="Export estimate as PDF"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>Export PDF</span>
+          </Button>
+
           {status === 'approved' ? (
             isHistoricalView ? null : (
               <Button
@@ -2597,7 +2608,8 @@ export function CostEstimateSection({
           className="h-10 w-full justify-center gap-1.5 px-2 text-xs sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
           aria-label="Export estimate as PDF"
         >
-          Export PDF
+          <FileText className="h-3.5 w-3.5" />
+          <span>Export PDF</span>
         </Button>
 
 
