@@ -40,6 +40,7 @@ import type {
   CostEstimateStatus,
   CostEstimateUnit,
 } from '../types';
+import { exportCostEstimatePdf } from '../export';
 
 function formatINR(amount: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -801,6 +802,34 @@ export function CostEstimateSection({
     miscChargePercent: numericMiscChargePercent,
     targetProjectRevenue: numericTargetProjectRevenue,
   });
+
+  const createExportPayload = () => {
+    const selectedProject =
+      selectedProjectId === UNASSIGNED_PROJECT_ID
+        ? undefined
+        : availableProjectsForNewEstimate.find(
+            project => project.id === selectedProjectId
+          );
+
+    return {
+      projectName:
+        selectedProjectId === UNASSIGNED_PROJECT_ID
+          ? 'Unassigned Draft'
+          : selectedProject?.name ?? 'Cost Estimate',
+      clientName: selectedProject?.clientName,
+      status: estimateStatusLabel,
+      version: estimateVersion,
+      areas,
+      lineItems,
+      summary,
+    };
+  };
+
+  const handleExportCostEstimatePdf = () => {
+    void exportCostEstimatePdf(createExportPayload()).catch(error => {
+      console.error('Cost estimate PDF export failed.', error);
+    });
+  };
 
   const handleSaveDraft = () => {
     const nextStatus = isRevisionDraft ? 'revision' : 'draft';
@@ -2560,6 +2589,18 @@ export function CostEstimateSection({
           <ArrowUp className="h-4 w-4" />
           <span className="sm:hidden">Top</span><span className="hidden sm:inline">Back to Top</span>
         </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleExportCostEstimatePdf}
+          className="h-10 w-full justify-center gap-1.5 px-2 text-xs sm:w-auto sm:gap-2 sm:px-4 sm:text-sm"
+          aria-label="Export estimate as PDF"
+        >
+          Export PDF
+        </Button>
+
+
 
         {status !== 'approved' && (
           <>
