@@ -45,6 +45,26 @@ type ProjectFinanceAccountRow = {
   status: string | null;
 };
 
+type ProjectFinancePaymentGateRow = {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  timeline_id: string | null;
+  timeline_gate_id: string | null;
+  gate_order: number | string;
+  title: string;
+  trigger_label: string;
+  required_amount: number | string | null;
+  collected_amount: number | string | null;
+  carry_forward_in_amount: number | string | null;
+  carry_forward_out_amount: number | string | null;
+  outstanding_amount: number | string | null;
+  status: 'pending' | 'partial' | 'paid' | 'overpaid' | 'cancelled' | string;
+  marked_paid_at: string | null;
+  source_gate_snapshot: Record<string, unknown>;
+};
+
+
 type SyncNotice = {
   state: 'success' | 'error' | 'info';
   heading: string;
@@ -239,6 +259,7 @@ function FinancialsInner() {
   const [activeTab, setActiveTab] = useState<FinanceTab>('project-accounts');
   const [projects, setProjects] = useState<Project[]>([]);
   const [financeAccounts, setFinanceAccounts] = useState<ProjectFinanceAccountRow[]>([]);
+  const [financePaymentGates, setFinancePaymentGates] = useState<ProjectFinancePaymentGateRow[]>([]);
   const [approvedEstimates, setApprovedEstimates] = useState<ApprovedEstimateRow[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
@@ -255,9 +276,10 @@ function FinancialsInner() {
     }
     setError('');
 
-    const [projectsRes, accountsRes, estimatesRes] = await Promise.all([
+    const [projectsRes, accountsRes, gatesRes, estimatesRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('project_finance_accounts').select('*').order('updated_at', { ascending: false }),
+      supabase.from('project_finance_payment_gates').select('*').order('gate_order', { ascending: true }),
       supabase
         .from('cost_estimates')
         .select('id, project_id, project_name, client_name, status, version, grand_total, updated_at')
@@ -277,6 +299,12 @@ function FinancialsInner() {
       return;
     }
 
+    if (gatesRes.error) {
+      setError(gatesRes.error.message);
+      setLoading(false);
+      return;
+    }
+
     if (estimatesRes.error) {
       setError(estimatesRes.error.message);
       setLoading(false);
@@ -287,6 +315,7 @@ function FinancialsInner() {
 
     setProjects(nextProjects);
     setFinanceAccounts((accountsRes.data ?? []) as ProjectFinanceAccountRow[]);
+    setFinancePaymentGates((gatesRes.data ?? []) as ProjectFinancePaymentGateRow[]);
     setApprovedEstimates((estimatesRes.data ?? []) as ApprovedEstimateRow[]);
 
     setSelectedProjectId(current => {
@@ -310,6 +339,13 @@ function FinancialsInner() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'project_finance_accounts' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_finance_payment_gates' },
         () => {
           void fetchFinanceData({ silent: true });
         }
@@ -426,6 +462,11 @@ function FinancialsInner() {
   const selectedServiceCharge = toNumber(selectedFinanceAccount?.service_charge_amount);
   const selectedMiscCharge = toNumber(selectedFinanceAccount?.misc_charge_amount);
   const selectedGst = toNumber(selectedFinanceAccount?.gst_amount);
+  const selectedPaymentGates = selectedFinanceAccount
+    ? financePaymentGates
+        .filter(gate => gate.finance_account_id === selectedFinanceAccount.id)
+        .sort((a, b) => toNumber(a.gate_order) - toNumber(b.gate_order))
+    : [];
 
   const handleSyncFinanceAccount = async () => {
     if (!selectedProject) return;
@@ -458,7 +499,7 @@ function FinancialsInner() {
       setNotice({
         state: 'success',
         heading: 'Finance Account Synced',
-        description: `${selectedProject.name} is now synced from approved estimate v${result.estimate.version}. Revenue ${formatINR(result.account.revenue_amount)} - Estimated COGS ${formatINR(result.account.estimated_cogs_amount)}.`,
+        description: `${selectedProject.name} is now synced from approved estimate v${result.estimate.version}. Revenue ${formatINR(result.account.revenue_amount)} - Estimated COGS ${formatINR(result.account.estimated_cogs_amount)}. ${result.paymentGates.length} payment gate${result.paymentGates.length === 1 ? '' : 's'} synced from Timeline.`,
       });
 
       await fetchFinanceData();
@@ -807,6 +848,114 @@ function FinancialsInner() {
                     value={formatINR(selectedGst)}
                     helper="Synced from estimate summary"
                   />
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedFinanceAccount && (
+            <div className="rounded-3xl border border-border bg-card p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Finance Payment Gates
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-foreground">
+                    Collection stages from Timeline
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Finance now tracks required, collected, and outstanding amount per gate.
+                  </p>
+                </div>
+
+                <StatusPill tone={selectedPaymentGates.length > 0 ? 'info' : 'muted'}>
+                  {selectedPaymentGates.length} Gate{selectedPaymentGates.length === 1 ? '' : 's'}
+                </StatusPill>
+              </div>
+
+              {selectedPaymentGates.length === 0 ? (
+                <div className="mt-5 rounded-2xl border border-dashed border-border bg-background p-5">
+                  <p className="text-sm font-semibold text-foreground">
+                    No Timeline payment gates synced yet.
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Confirm a Timeline with payment gates, then resync this Finance Account.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5 space-y-3">
+                  {selectedPaymentGates.map(gate => {
+                    const requiredAmount = toNumber(gate.required_amount);
+                    const collectedAmount = toNumber(gate.collected_amount);
+                    const outstandingAmount = toNumber(gate.outstanding_amount);
+                    const progress =
+                      requiredAmount > 0
+                        ? Math.min(100, Math.round((collectedAmount / requiredAmount) * 100))
+                        : 0;
+                    const statusTone =
+                      gate.status === 'paid' || gate.status === 'overpaid'
+                        ? 'success'
+                        : gate.status === 'partial'
+                          ? 'info'
+                          : 'warning';
+
+                    return (
+                      <div
+                        key={gate.id}
+                        className="rounded-2xl border border-border bg-background p-4"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-foreground">
+                                {gate.gate_order}. {gate.title}
+                              </p>
+                              <StatusPill tone={statusTone}>
+                                {gate.status}
+                              </StatusPill>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {gate.trigger_label || 'No trigger label'}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 text-right">
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Required
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">
+                                {formatINR(requiredAmount)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Collected
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                                {formatINR(collectedAmount)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Outstanding
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-300">
+                                {formatINR(outstandingAmount)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-emerald-600 dark:bg-emerald-400"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

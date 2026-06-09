@@ -1,6 +1,7 @@
 import {
   supabase,
   type ProjectFinanceAccount,
+  type ProjectFinancePaymentGate,
 } from './supabase';
 import {
   DEFAULT_GST_PERCENT,
@@ -72,6 +73,7 @@ export interface ProjectFinanceAccountSyncResult {
   account: ProjectFinanceAccount;
   estimate: ApprovedEstimateFinancePayload;
   summary: CostEstimateSummary;
+  paymentGates: ProjectFinancePaymentGate[];
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -188,6 +190,198 @@ export async function findApprovedEstimateForFinance(
   return null;
 }
 
+
+type TimelinePaymentGateStatus = 'pending' | 'received' | 'overdue' | string;
+
+interface TimelinePaymentGateSnapshot {
+  id: string;
+  projectId?: string;
+  type?: string;
+  title?: string;
+  description?: string;
+  percentage?: number;
+  amount?: number;
+  dueDate?: string;
+  receivedDate?: string;
+  status?: TimelinePaymentGateStatus;
+  blocksWorkPackageIds?: string[];
+}
+
+interface ProjectTimelineGateRow {
+  id: string;
+  project_id: string;
+  source_estimate_id: string | null;
+  source_estimate_version: number | string | null;
+  source_estimate_grand_total: number | string | null;
+  has_timeline: boolean | null;
+  timeline_confirmed_at: string | null;
+  payment_gates: unknown;
+}
+
+function isTimelinePaymentGate(value: unknown): value is TimelinePaymentGateSnapshot {
+  if (!isObjectRecord(value)) return false;
+
+  return typeof value.id === 'string';
+}
+
+function getFinanceGateStatus({
+  requiredAmount,
+  collectedAmount,
+  timelineStatus,
+}: {
+  requiredAmount: number;
+  collectedAmount: number;
+  timelineStatus?: TimelinePaymentGateStatus;
+}): ProjectFinancePaymentGate['status'] {
+  if (collectedAmount > requiredAmount) return 'overpaid';
+  if (requiredAmount > 0 && collectedAmount === requiredAmount) return 'paid';
+  if (collectedAmount > 0) return 'partial';
+  if (timelineStatus === 'received') return 'paid';
+
+  return 'pending';
+}
+
+function getFinanceGateRequiredAmount({
+  timelineGate,
+  revenueAmount,
+}: {
+  timelineGate: TimelinePaymentGateSnapshot;
+  revenueAmount: number;
+}) {
+  const directAmount = toNumber(timelineGate.amount);
+
+  if (directAmount > 0) return directAmount;
+
+  const percentage = toNumber(timelineGate.percentage);
+
+  if (percentage > 0 && revenueAmount > 0) {
+    return Math.round((revenueAmount * percentage) / 100);
+  }
+
+  return 0;
+}
+
+async function fetchProjectTimelineGateRow(projectId: string) {
+  const { data, error } = await supabase
+    .from('project_timelines')
+    .select('id, project_id, source_estimate_id, source_estimate_version, source_estimate_grand_total, has_timeline, timeline_confirmed_at, payment_gates')
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) return null;
+
+  return data as ProjectTimelineGateRow;
+}
+
+async function syncFinancePaymentGatesFromTimeline({
+  account,
+  estimate,
+  revenueAmount,
+}: {
+  account: ProjectFinanceAccount;
+  estimate: ApprovedEstimateFinancePayload;
+  revenueAmount: number;
+}) {
+  const timeline = await fetchProjectTimelineGateRow(estimate.projectId);
+
+  if (!timeline || !timeline.has_timeline || !Array.isArray(timeline.payment_gates)) {
+    return [] as ProjectFinancePaymentGate[];
+  }
+
+  const timelineGates = timeline.payment_gates.filter(isTimelinePaymentGate);
+
+  if (timelineGates.length === 0) {
+    return [] as ProjectFinancePaymentGate[];
+  }
+
+  const { data: existingGateRows, error: existingGateError } = await supabase
+    .from('project_finance_payment_gates')
+    .select('*')
+    .eq('finance_account_id', account.id);
+
+  if (existingGateError) throw existingGateError;
+
+  const existingGates = ((existingGateRows ?? []) as ProjectFinancePaymentGate[]);
+  const existingGateByOrder = new Map(
+    existingGates.map(gate => [gate.gate_order, gate])
+  );
+
+  const gateRows = timelineGates.map((timelineGate, index) => {
+    const gateOrder = index + 1;
+    const existingGate = existingGateByOrder.get(gateOrder);
+    const requiredAmount = getFinanceGateRequiredAmount({
+      timelineGate,
+      revenueAmount,
+    });
+    const collectedAmount =
+      existingGate
+        ? toNumber(existingGate.collected_amount)
+        : timelineGate.status === 'received'
+          ? requiredAmount
+          : 0;
+    const carryForwardInAmount = existingGate
+      ? toNumber(existingGate.carry_forward_in_amount)
+      : 0;
+    const carryForwardOutAmount = existingGate
+      ? toNumber(existingGate.carry_forward_out_amount)
+      : 0;
+    const outstandingAmount = Math.max(
+      0,
+      Math.round(requiredAmount + carryForwardInAmount - collectedAmount - carryForwardOutAmount)
+    );
+    const status = getFinanceGateStatus({
+      requiredAmount,
+      collectedAmount,
+      timelineStatus: timelineGate.status,
+    });
+
+    return {
+      finance_account_id: account.id,
+      project_id: estimate.projectId,
+      timeline_id: timeline.id,
+      timeline_gate_id: timelineGate.id,
+      gate_order: gateOrder,
+      title: timelineGate.title?.trim() || `Payment Gate ${gateOrder}`,
+      trigger_label:
+        timelineGate.description?.trim() ||
+        (timelineGate.percentage ? `Collect ${timelineGate.percentage}%` : ''),
+      required_amount: requiredAmount,
+      collected_amount: collectedAmount,
+      carry_forward_in_amount: carryForwardInAmount,
+      carry_forward_out_amount: carryForwardOutAmount,
+      outstanding_amount: outstandingAmount,
+      status,
+      marked_paid_at:
+        status === 'paid' || status === 'overpaid'
+          ? existingGate?.marked_paid_at ?? timelineGate.receivedDate ?? null
+          : null,
+      marked_paid_by: existingGate?.marked_paid_by ?? null,
+      source_gate_snapshot: {
+        timelineId: timeline.id,
+        timelineSourceEstimateId: timeline.source_estimate_id,
+        timelineSourceEstimateVersion: timeline.source_estimate_version,
+        timelineConfirmedAt: timeline.timeline_confirmed_at,
+        timelineGate,
+      },
+    };
+  });
+
+  const { data, error } = await supabase
+    .from('project_finance_payment_gates')
+    .upsert(gateRows, { onConflict: 'finance_account_id,gate_order' })
+    .select('*')
+    .order('gate_order', { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []) as ProjectFinancePaymentGate[];
+}
+
+
 export function calculateApprovedEstimateFinanceSummary(
   estimate: ApprovedEstimateFinancePayload
 ) {
@@ -254,6 +448,12 @@ export async function syncProjectFinanceAccountFromApprovedEstimate(
 
   if (error) throw error;
 
+  const syncedPaymentGates = await syncFinancePaymentGatesFromTimeline({
+    account: data as ProjectFinanceAccount,
+    estimate,
+    revenueAmount,
+  });
+
   if (input.syncLegacyProjectFields) {
     const { error: projectUpdateError } = await supabase
       .from('projects')
@@ -271,5 +471,6 @@ export async function syncProjectFinanceAccountFromApprovedEstimate(
     account: data as ProjectFinanceAccount,
     estimate,
     summary,
+    paymentGates: syncedPaymentGates,
   };
 }
