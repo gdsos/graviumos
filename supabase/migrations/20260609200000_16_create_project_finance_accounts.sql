@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS public.project_finance_payment_gates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   finance_account_id uuid NOT NULL REFERENCES public.project_finance_accounts(id) ON DELETE CASCADE,
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  timeline_id text REFERENCES public.project_timelines(id) ON DELETE SET NULL,
+  timeline_id uuid REFERENCES public.project_timelines(id) ON DELETE SET NULL,
 
   timeline_gate_id text,
   gate_order integer NOT NULL DEFAULT 1,
