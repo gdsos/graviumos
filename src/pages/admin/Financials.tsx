@@ -120,9 +120,9 @@ function MetricCard({
 }) {
   const toneClass =
     tone === 'success'
-      ? 'text-emerald-300'
+      ? 'text-emerald-600 dark:text-emerald-400'
       : tone === 'warning'
-        ? 'text-amber-300'
+        ? 'text-amber-600 dark:text-amber-300'
         : tone === 'muted'
           ? 'text-muted-foreground'
           : 'text-foreground';
@@ -414,6 +414,10 @@ function FinancialsInner() {
       !validFinanceAccounts.some(account => account.project_id === estimate.project_id)
   ).length;
 
+  const selectedEstimateVersion =
+    selectedFinanceAccount?.source_estimate_version ??
+    selectedApprovedEstimate?.version ??
+    null;
   const selectedRevenue = toNumber(selectedFinanceAccount?.revenue_amount);
   const selectedEstimatedCogs = toNumber(selectedFinanceAccount?.estimated_cogs_amount);
   const selectedMargin =
@@ -781,7 +785,7 @@ function FinancialsInner() {
                   <MetricCard
                     label="Last Synced"
                     value={formatDateTime(selectedFinanceAccount.last_synced_at)}
-                    helper={`Estimate v${selectedFinanceAccount.source_estimate_version ?? '?'}`}
+                    helper={selectedEstimateVersion ? `Estimate v${selectedEstimateVersion}` : 'Estimate version unavailable'}
                   />
                 </div>
               )}
