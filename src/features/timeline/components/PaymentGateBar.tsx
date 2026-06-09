@@ -11,10 +11,26 @@ import { DateInput } from '@/components/common/DateInput';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { PaymentGate } from '../types';
 
+type FinancePaymentGateDisplayStatus =
+  | 'pending'
+  | 'partial'
+  | 'paid'
+  | 'overpaid'
+  | 'cancelled'
+  | 'received'
+  | 'overdue'
+  | string;
+
+type FinancePaymentGateDisplay = {
+  status: FinancePaymentGateDisplayStatus;
+  requiredAmount: number;
+  collectedAmount: number;
+  outstandingAmount: number;
+};
+
 interface PaymentGateBarProps {
   paymentGates: PaymentGate[];
-  onMarkReceived?: (paymentGate: PaymentGate) => void;
-  onMarkPending?: (paymentGate: PaymentGate) => void;
+  financePaymentStatuses?: Record<string, FinancePaymentGateDisplay>;
   onUpdateDueDate?: (paymentGateId: string, dueDate: string) => void;
   onAutoAssignDueDates?: () => void;
 }
@@ -27,7 +43,9 @@ function formatINR(amount: number) {
   }).format(amount);
 }
 
-function formatDate(dateString: string) {
+function formatDate(dateString?: string) {
+  if (!dateString) return 'Not set';
+
   const date = new Date(dateString);
 
   if (Number.isNaN(date.getTime())) return dateString;
@@ -39,16 +57,22 @@ function formatDate(dateString: string) {
   }).format(date);
 }
 
-function formatPaymentStatus(status: PaymentGate['status']) {
-  if (status === 'received') return 'Received';
+function formatPaymentStatus(status?: FinancePaymentGateDisplayStatus) {
+  if (status === 'paid' || status === 'received') return 'Paid';
+  if (status === 'partial') return 'Partial';
+  if (status === 'overpaid') return 'Overpaid';
+  if (status === 'cancelled') return 'Cancelled';
   if (status === 'overdue') return 'Overdue';
+
   return 'Pending';
 }
 
-function getPaymentVariant(status: PaymentGate['status']) {
-  if (status === 'received') return 'success';
-  if (status === 'overdue') return 'danger';
-  return 'warning';
+function getPaymentVariant(status?: FinancePaymentGateDisplayStatus) {
+  if (status === 'paid' || status === 'received') return 'success';
+  if (status === 'overdue' || status === 'cancelled') return 'danger';
+  if (status === 'partial' || status === 'overpaid') return 'warning';
+
+  return 'outline';
 }
 
 function getGateAccent(index: number) {
@@ -64,8 +88,7 @@ function getGateAccent(index: number) {
 
 export function PaymentGateBar({
   paymentGates,
-  onMarkReceived,
-  onMarkPending,
+  financePaymentStatuses = {},
   onUpdateDueDate,
   onAutoAssignDueDates,
 }: PaymentGateBarProps) {
@@ -79,13 +102,11 @@ export function PaymentGateBar({
             <h2 className="text-base font-semibold text-foreground">
               Payment Gates
             </h2>
-            <StatusBadge variant="outline">
-              Timeline Linked
-            </StatusBadge>
+            <StatusBadge variant="outline">Finance Linked</StatusBadge>
           </div>
 
           <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Payment gates control collection stages and keep linked work blocked until the required payment is received.
+            Payment gates show scheduled collection stages. Collection status is managed from Finance.
           </p>
         </div>
 
@@ -95,7 +116,7 @@ export function PaymentGateBar({
               <button
                 type="button"
                 onClick={onAutoAssignDueDates}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:w-fit"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted sm:w-auto"
               >
                 <CalendarClock className="h-4 w-4" />
                 Auto Assign Dates
@@ -105,109 +126,85 @@ export function PaymentGateBar({
             <button
               type="button"
               onClick={() => setShowGateDateControls(current => !current)}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 sm:w-fit"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-foreground px-3 py-2 text-sm font-medium text-background transition hover:opacity-90 sm:w-auto"
             >
               <Pencil className="h-4 w-4" />
-              {showGateDateControls ? 'Done Editing' : 'Edit Gate Dates'}
+              {showGateDateControls ? 'Hide Gate Dates' : 'Edit Gate Dates'}
             </button>
           </div>
         ) : null}
       </div>
 
       {showGateDateControls && onUpdateDueDate ? (
-        <div className="border-b border-border bg-muted/20 px-4 py-4 sm:px-5">
-          <div className="mb-3 flex flex-col gap-1">
-            <p className="text-sm font-semibold text-foreground">
-              Gate Date Setup
-            </p>
-            <p className="text-xs leading-5 text-muted-foreground">
-              Adjust the planned collection date for each gate. These dates update the Schedule markers.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {paymentGates.map((paymentGate, index) => (
-              <div
-                key={`edit-${paymentGate.id}`}
-                className="rounded-2xl border border-border bg-card p-3"
-              >
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {paymentGate.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatINR(paymentGate.amount)}
-                    </p>
-                  </div>
-                </div>
-
+        <div className="border-b border-border bg-background/70 px-4 py-4 sm:px-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {paymentGates.map(paymentGate => (
+              <label key={paymentGate.id} className="grid gap-1">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {paymentGate.title}
+                </span>
                 <DateInput
-                  value={paymentGate.dueDate}
+                  value={paymentGate.dueDate ?? ''}
                   onChange={value => onUpdateDueDate(paymentGate.id, value)}
-                  placeholder="Select gate date"
+                  placeholder="Select due date"
                   popoverMode="fixed"
                 />
-              </div>
+              </label>
             ))}
           </div>
         </div>
       ) : null}
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
+      <div className="grid gap-4 p-4 lg:grid-cols-2 xl:grid-cols-4">
         {paymentGates.map((paymentGate, index) => {
-          const isReceived = paymentGate.status === 'received';
-          const Icon = isReceived ? CheckCircle2 : LockKeyhole;
+          const financeStatus = financePaymentStatuses[paymentGate.id];
+          const displayStatus = financeStatus?.status ?? paymentGate.status;
+          const isCollected =
+            displayStatus === 'paid' || displayStatus === 'received';
+          const Icon = isCollected ? CheckCircle2 : CircleDashed;
+          const accent = getGateAccent(index);
 
           return (
             <article
               key={paymentGate.id}
-              className="relative flex min-w-0 h-full flex-col overflow-hidden rounded-2xl border border-border bg-background p-4"
+              className="relative flex min-h-full flex-col overflow-hidden rounded-2xl border border-border bg-background p-4"
             >
               <div
-                className={`pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${getGateAccent(
-                  index
-                )}`}
+                className={`pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`}
               />
 
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground">
-                    {isReceived ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <CircleDashed className="h-4 w-4" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      Gate {index + 1}
-                    </p>
-                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
-                      {paymentGate.title}
-                    </p>
-                    {paymentGate.description && (
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        {paymentGate.description}
-                      </p>
-                    )}
-                  </div>
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+                  <Icon className="h-5 w-5 text-muted-foreground" />
                 </div>
 
-                <StatusBadge variant={getPaymentVariant(paymentGate.status)}>
-                  {formatPaymentStatus(paymentGate.status)}
-                </StatusBadge>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Gate {index + 1}
+                      </p>
+                      <h3 className="mt-1 text-base font-semibold text-foreground">
+                        {paymentGate.title}
+                      </h3>
+                    </div>
+
+                    <StatusBadge variant={getPaymentVariant(displayStatus)}>
+                      {formatPaymentStatus(displayStatus)}
+                    </StatusBadge>
+                  </div>
+
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                    {paymentGate.description}
+                  </p>
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-border bg-card/60 p-3">
+              <div className="mt-5 rounded-2xl border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-4">
                   <span className="text-xs text-muted-foreground">Amount</span>
                   <span className="text-right text-sm font-semibold text-foreground">
-                    {formatINR(paymentGate.amount)}
+                    {formatINR(financeStatus?.requiredAmount ?? paymentGate.amount)}
                   </span>
                 </div>
 
@@ -227,25 +224,44 @@ export function PaymentGateBar({
               </div>
 
               <div className="mt-auto pt-4">
-                {isReceived && onMarkPending ? (
-                  <button
-                    type="button"
-                    onClick={() => onMarkPending(paymentGate)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-                  >
-                    <Icon className="h-4 w-4" />
-                    Unmark Received
-                  </button>
-                ) : !isReceived && onMarkReceived ? (
-                  <button
-                    type="button"
-                    onClick={() => onMarkReceived(paymentGate)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                  >
-                    <Icon className="h-4 w-4" />
-                    Mark Received
-                  </button>
-                ) : null}
+                <div className="rounded-2xl border border-border bg-background p-3">
+                  <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+                    <span className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Finance Status</span>
+                    </span>
+
+                    <StatusBadge variant={getPaymentVariant(displayStatus)}>
+                      {formatPaymentStatus(displayStatus)}
+                    </StatusBadge>
+                  </div>
+
+                  {financeStatus ? (
+                    <div className="mt-3 grid grid-cols-2 divide-x divide-border text-xs">
+                      <div className="min-w-0 pr-3">
+                        <p className="font-semibold text-muted-foreground">
+                          Collected
+                        </p>
+                        <p className="mt-1 truncate text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                          {formatINR(financeStatus.collectedAmount)}
+                        </p>
+                      </div>
+
+                      <div className="min-w-0 pl-3 text-right">
+                        <p className="font-semibold text-muted-foreground">
+                          Outstanding
+                        </p>
+                        <p className="mt-1 truncate text-sm font-semibold text-amber-600 dark:text-amber-300">
+                          {formatINR(financeStatus.outstandingAmount)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      Waiting for Finance sync. Payment marking is handled from Finance.
+                    </p>
+                  )}
+                </div>
               </div>
             </article>
           );

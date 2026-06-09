@@ -252,6 +252,36 @@ type ProjectTimelinePersistencePayload = {
   sourceEstimateGrandTotal: number;
 };
 
+type FinanceTimelinePaymentGateRow = {
+  id: string;
+  project_id: string;
+  timeline_gate_id: string | null;
+  status: string | null;
+  required_amount: number | string | null;
+  collected_amount: number | string | null;
+  outstanding_amount: number | string | null;
+  marked_paid_at: string | null;
+  updated_at: string | null;
+};
+
+type TimelineInputDialogMode = 'pause' | 'mark_delayed' | 'update_delay';
+
+type TimelineInputDialogState = {
+  mode: TimelineInputDialogMode;
+  workPackageId: string;
+  title: string;
+  description: string;
+  label: string;
+  value: string;
+  confirmLabel: string;
+};
+
+type TimelineNoticeDialogState = {
+  title: string;
+  description: string;
+};
+
+
 function mapProjectTimelineRowToStoredState(row: ProjectTimelineRow): StoredTimelineState {
   return {
     hasTimeline: row.has_timeline,
@@ -708,7 +738,6 @@ export default function TimelinePage() {
     useState(false);
   const [isDeleteTimelineDialogOpen, setIsDeleteTimelineDialogOpen] =
     useState(false);
-    const [paymentGatePendingUnmark, setPaymentGatePendingUnmark] = useState<PaymentGate | null>(null);
 const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     () => storedTimeline?.timelineConfirmedAt ?? ''
   );
@@ -764,6 +793,13 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   const [stageTwoPaymentPercent, setStageTwoPaymentPercent] = useState('25');
   const [handoverPaymentPercent, setHandoverPaymentPercent] = useState('10');
   const [isTimelineStateHydrated, setIsTimelineStateHydrated] = useState(false);
+  const [financePaymentGateRows, setFinancePaymentGateRows] = useState<
+    FinanceTimelinePaymentGateRow[]
+  >([]);
+  const [timelineInputDialog, setTimelineInputDialog] =
+    useState<TimelineInputDialogState | null>(null);
+  const [timelineNoticeDialog, setTimelineNoticeDialog] =
+    useState<TimelineNoticeDialogState | null>(null);
 
   const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     setHasTimeline(nextTimelineState.hasTimeline);
@@ -778,6 +814,88 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     setTimelineSourceEstimateClientName(nextTimelineState.sourceEstimateClientName ?? '');
     setTimelineSourceEstimateGrandTotal(nextTimelineState.sourceEstimateGrandTotal ?? 0);
   };
+
+  const financePaymentStatusByTimelineGateId = useMemo(() => {
+    const statusMap: Record<
+      string,
+      {
+        status: string;
+        requiredAmount: number;
+        collectedAmount: number;
+        outstandingAmount: number;
+      }
+    > = {};
+
+    financePaymentGateRows.forEach(paymentGate => {
+      if (!paymentGate.timeline_gate_id) return;
+
+      statusMap[paymentGate.timeline_gate_id] = {
+        status: paymentGate.status ?? 'pending',
+        requiredAmount: toTimelineNumber(paymentGate.required_amount),
+        collectedAmount: toTimelineNumber(paymentGate.collected_amount),
+        outstandingAmount: toTimelineNumber(paymentGate.outstanding_amount),
+      };
+    });
+
+    return statusMap;
+  }, [financePaymentGateRows]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchFinancePaymentGateRows() {
+      if (!selectedTimelineProjectId) {
+        setFinancePaymentGateRows([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('project_finance_payment_gates')
+        .select('id, project_id, timeline_gate_id, status, required_amount, collected_amount, outstanding_amount, marked_paid_at, updated_at')
+        .eq('project_id', selectedTimelineProjectId)
+        .order('gate_order', { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error('Could not fetch Finance payment gate status for Timeline.', error);
+        setFinancePaymentGateRows([]);
+        return;
+      }
+
+      setFinancePaymentGateRows((data ?? []) as FinanceTimelinePaymentGateRow[]);
+    }
+
+    void fetchFinancePaymentGateRows();
+
+    if (!selectedTimelineProjectId) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const channel = supabase
+      .channel(`timeline-finance-payment-gates-${selectedTimelineProjectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_finance_payment_gates',
+          filter: `project_id=eq.${selectedTimelineProjectId}`,
+        },
+        () => {
+          void fetchFinancePaymentGateRows();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedTimelineProjectId]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -1308,78 +1426,13 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     );
   };
 
-  const handleMarkPaymentReceived = (paymentGate: PaymentGate) => {
-    const today = new Date().toISOString().slice(0, 10);
-
-    setPaymentGates(currentPaymentGates =>
-      markPaymentGateReceived(currentPaymentGates, paymentGate.id, today)
-    );
-
-    setWorkPackages(currentWorkPackages =>
-      currentWorkPackages.map(workPackage => {
-        if (workPackage.paymentGateId !== paymentGate.id) return workPackage;
-        if (workPackage.status !== 'blocked_by_payment') return workPackage;
-
-        return {
-          ...workPackage,
-          status: getNextStatusAfterPaymentUnlock(
-            workPackage,
-            currentWorkPackages
-          ),
-          notes: workPackage.notes
-            ? `${workPackage.notes} Payment gate received on ${today}.`
-            : `Payment gate received on ${today}.`,
-        };
-      })
-    );
-  };
-
-  const executeMarkPaymentPending = (paymentGate: PaymentGate) => {
-setPaymentGates(currentPaymentGates =>
-      currentPaymentGates.map(currentPaymentGate =>
-        currentPaymentGate.id === paymentGate.id
-          ? {
-              ...currentPaymentGate,
-              status: 'pending',
-              receivedDate: undefined,
-            }
-          : currentPaymentGate
-      )
-    );
-
-    setWorkPackages(currentWorkPackages =>
-      currentWorkPackages.map(workPackage =>
-        workPackage.paymentGateId === paymentGate.id
-          ? {
-              ...workPackage,
-              status: 'blocked_by_payment',
-              notes: workPackage.notes
-                ? `${workPackage.notes} Payment was unmarked and work was blocked again.`
-                : 'Payment was unmarked and work was blocked again.',
-            }
-          : workPackage
-      )
-    );
-
-  };
-
-  const handleMarkPaymentPending = (paymentGate: PaymentGate) => {
-    setPaymentGatePendingUnmark(paymentGate);
-  };
-
-  const handleConfirmMarkPaymentPending = () => {
-    if (!paymentGatePendingUnmark) return;
-
-    executeMarkPaymentPending(paymentGatePendingUnmark);
-    setPaymentGatePendingUnmark(null);
-  };
-
   const handleApplySuggestion = (alert: TimelineAlert) => {
-    window.alert(
-      `Timeline shift assistant will be added later. Suggested shift: ${
+    setTimelineNoticeDialog({
+      title: 'Timeline Assist',
+      description: `Timeline shift assistant will be added later. Suggested shift: ${
         alert.suggestedShiftDays ?? 0
-      } day(s).`
-    );
+      } day(s).`,
+    });
   };
 
   const handleIgnoreAlert = (alert: TimelineAlert) => {
@@ -1538,7 +1591,10 @@ setPaymentGates(currentPaymentGates =>
       latestLinkedEstimate?.status === 'approved' ? latestLinkedEstimate : linkedCostEstimate;
 
     if (!sourceEstimate || sourceEstimate.status !== 'approved') {
-      window.alert('Approve the revised cost estimate before syncing the timeline.');
+      setTimelineNoticeDialog({
+        title: 'Approved Estimate Required',
+        description: 'Approve the revised cost estimate before syncing the timeline.',
+      });
       return;
     }
 
@@ -1907,58 +1963,52 @@ setPaymentGates(currentPaymentGates =>
   };
 
   const handleStartWorkPackage = (workPackageId: string) => {
+    const currentWorkPackage = workPackages.find(
+      workPackage => workPackage.id === workPackageId
+    );
+
+    if (!currentWorkPackage) return;
+
+    if (
+      currentWorkPackage.status === 'blocked_by_payment' ||
+      currentWorkPackage.status === 'blocked_by_dependency'
+    ) {
+      setTimelineNoticeDialog({
+        title: 'Work Package Blocked',
+        description:
+          'This work package is blocked. Clear the payment or dependency blocker before starting work.',
+      });
+      return;
+    }
+
     const today = getTodayDateString();
 
     setWorkPackages(currentWorkPackages =>
-      currentWorkPackages.map(workPackage => {
-        if (workPackage.id !== workPackageId) return workPackage;
-
-        if (
-          workPackage.status === 'blocked_by_payment' ||
-          workPackage.status === 'blocked_by_dependency'
-        ) {
-          window.alert('This work package is blocked. Clear the blocker before starting work.');
-          return workPackage;
-        }
-
-        return {
-          ...workPackage,
-          actualStartDate: workPackage.actualStartDate ?? today,
-          actualEndDate: undefined,
-          actualDurationDays: undefined,
-          status: 'in_progress',
-          notes: appendTimelineNote(workPackage.notes, `Work started on ${today}.`),
-        };
-      })
+      currentWorkPackages.map(workPackage =>
+        workPackage.id === workPackageId
+          ? {
+              ...workPackage,
+              actualStartDate: workPackage.actualStartDate ?? today,
+              actualEndDate: undefined,
+              actualDurationDays: undefined,
+              status: 'in_progress',
+              notes: appendTimelineNote(workPackage.notes, `Work started on ${today}.`),
+            }
+          : workPackage
+      )
     );
   };
 
   const handlePauseWorkPackage = (workPackageId: string) => {
-    const reason = window.prompt('Why is this work being paused?')?.trim();
-    if (!reason) return;
-
-    const today = getTodayDateString();
-
-    setWorkPackages(currentWorkPackages =>
-      currentWorkPackages.map(workPackage => {
-        if (workPackage.id !== workPackageId) return workPackage;
-
-        return {
-          ...workPackage,
-          status: 'paused',
-          pausePeriods: [
-            ...workPackage.pausePeriods,
-            {
-              id: `pause-${workPackage.id}-${Date.now()}`,
-              pauseStart: today,
-              reason,
-              createdBy: 'Admin',
-            },
-          ],
-          notes: appendTimelineNote(workPackage.notes, `Paused on ${today}: ${reason}`),
-        };
-      })
-    );
+    setTimelineInputDialog({
+      mode: 'pause',
+      workPackageId,
+      title: 'Pause Work Package',
+      description: 'Add the reason for pausing this work package.',
+      label: 'Pause reason',
+      value: '',
+      confirmLabel: 'Pause Work',
+    });
   };
 
   const handleResumeWorkPackage = (workPackageId: string) => {
@@ -2007,26 +2057,15 @@ setPaymentGates(currentPaymentGates =>
   };
 
   const handleMarkWorkPackageDelayed = (workPackageId: string) => {
-    const reason = window.prompt('Add the delay reason for this work package:')?.trim();
-    if (!reason) return;
-
-    const today = getTodayDateString();
-
-    setWorkPackages(currentWorkPackages =>
-      currentWorkPackages.map(workPackage =>
-        workPackage.id === workPackageId
-          ? {
-              ...workPackage,
-              status: 'delayed',
-              overrideReason: reason,
-              notes: appendTimelineNote(
-                workPackage.notes,
-                `Marked delayed on ${today}: ${reason}`
-              ),
-            }
-          : workPackage
-      )
-    );
+    setTimelineInputDialog({
+      mode: 'mark_delayed',
+      workPackageId,
+      title: 'Mark Work Package Delayed',
+      description: 'Add the delay reason for this work package.',
+      label: 'Delay reason',
+      value: '',
+      confirmLabel: 'Mark Delayed',
+    });
   };
 
   const handleUpdateDelayReason = (workPackageId: string) => {
@@ -2034,25 +2073,84 @@ setPaymentGates(currentPaymentGates =>
       workPackage => workPackage.id === workPackageId
     );
 
-    const reason = window.prompt(
-      'Update delay reason:',
-      currentWorkPackage?.overrideReason ?? ''
-    )?.trim();
+    setTimelineInputDialog({
+      mode: 'update_delay',
+      workPackageId,
+      title: 'Update Delay Reason',
+      description: 'Update the current delay reason for this work package.',
+      label: 'Delay reason',
+      value: currentWorkPackage?.overrideReason ?? '',
+      confirmLabel: 'Save Reason',
+    });
+  };
+
+  const handleConfirmTimelineInputDialog = () => {
+    if (!timelineInputDialog) return;
+
+    const reason = timelineInputDialog.value.trim();
 
     if (!reason) return;
 
-    setWorkPackages(currentWorkPackages =>
-      currentWorkPackages.map(workPackage =>
-        workPackage.id === workPackageId
-          ? {
-              ...workPackage,
-              status:
-                workPackage.status === 'completed' ? workPackage.status : 'delayed',
-              overrideReason: reason,
-            }
-          : workPackage
-      )
-    );
+    const today = getTodayDateString();
+    const { mode, workPackageId } = timelineInputDialog;
+
+    if (mode === 'pause') {
+      setWorkPackages(currentWorkPackages =>
+        currentWorkPackages.map(workPackage => {
+          if (workPackage.id !== workPackageId) return workPackage;
+
+          return {
+            ...workPackage,
+            status: 'paused',
+            pausePeriods: [
+              ...workPackage.pausePeriods,
+              {
+                id: `pause-${workPackage.id}-${Date.now()}`,
+                pauseStart: today,
+                reason,
+                createdBy: 'Admin',
+              },
+            ],
+            notes: appendTimelineNote(workPackage.notes, `Paused on ${today}: ${reason}`),
+          };
+        })
+      );
+    }
+
+    if (mode === 'mark_delayed') {
+      setWorkPackages(currentWorkPackages =>
+        currentWorkPackages.map(workPackage =>
+          workPackage.id === workPackageId
+            ? {
+                ...workPackage,
+                status: 'delayed',
+                overrideReason: reason,
+                notes: appendTimelineNote(
+                  workPackage.notes,
+                  `Marked delayed on ${today}: ${reason}`
+                ),
+              }
+            : workPackage
+        )
+      );
+    }
+
+    if (mode === 'update_delay') {
+      setWorkPackages(currentWorkPackages =>
+        currentWorkPackages.map(workPackage =>
+          workPackage.id === workPackageId
+            ? {
+                ...workPackage,
+                status:
+                  workPackage.status === 'completed' ? workPackage.status : 'delayed',
+                overrideReason: reason,
+              }
+            : workPackage
+        )
+      );
+    }
+
+    setTimelineInputDialog(null);
   };
 
   const renderGeneratedTimelineReview = () => {
@@ -2912,10 +3010,9 @@ setPaymentGates(currentPaymentGates =>
       return (
         <PaymentGateBar
           paymentGates={paymentGates}
-          onMarkReceived={handleMarkPaymentReceived}
-          onMarkPending={handleMarkPaymentPending}
-        onUpdateDueDate={handleUpdatePaymentGateDate}
-        onAutoAssignDueDates={handleAutoAssignPaymentGateDates}
+          financePaymentStatuses={financePaymentStatusByTimelineGateId}
+          onUpdateDueDate={handleUpdatePaymentGateDate}
+          onAutoAssignDueDates={handleAutoAssignPaymentGateDates}
         />
       );
     }
@@ -3270,33 +3367,80 @@ setPaymentGates(currentPaymentGates =>
 
       {renderGeneratedTimelineReview()}
 
-      {paymentGatePendingUnmark && (
-        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
-          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
-            <h2 className="text-lg font-semibold text-foreground">
-              Unmark payment?
-            </h2>
+      {timelineNoticeDialog && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {timelineNoticeDialog.title}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {timelineNoticeDialog.description}
+              </p>
+            </div>
 
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Related work packages will be blocked by payment again. This keeps the timeline
-              linked to the payment gate until the collection is marked as received again.
-            </p>
+            <div className="mt-6 flex justify-end">
+              <Button
+                type="button"
+                onClick={() => setTimelineNoticeDialog(null)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {timelineInputDialog && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {timelineInputDialog.title}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {timelineInputDialog.description}
+              </p>
+            </div>
+
+            <label className="mt-5 grid gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {timelineInputDialog.label}
+              </span>
+              <textarea
+                value={timelineInputDialog.value}
+                onChange={event =>
+                  setTimelineInputDialog(current =>
+                    current
+                      ? {
+                          ...current,
+                          value: event.target.value,
+                        }
+                      : current
+                  )
+                }
+                rows={4}
+                autoFocus
+                className="min-h-28 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                placeholder="Enter reason..."
+              />
+            </label>
 
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setPaymentGatePendingUnmark(null)}
+                onClick={() => setTimelineInputDialog(null)}
               >
-                Keep Received
+                Cancel
               </Button>
 
               <Button
                 type="button"
-                variant="destructive"
-                onClick={handleConfirmMarkPaymentPending}
+                onClick={handleConfirmTimelineInputDialog}
+                disabled={!timelineInputDialog.value.trim()}
               >
-                Unmark Payment
+                {timelineInputDialog.confirmLabel}
               </Button>
             </div>
           </div>
