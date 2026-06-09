@@ -7,6 +7,7 @@ import type {
   CostEstimateLineItem,
   CostEstimateSummary,
 } from '../types';
+import { fetchDocumentExportSettings } from '@/lib/documentExportSettings';
 
 type Rgb = [number, number, number];
 
@@ -49,27 +50,6 @@ const BRAND = {
   softSurface: [250, 248, 245] as Rgb,
 };
 
-const DOCUMENT_SETTINGS_STORAGE_KEY = 'gravium-os-document-settings';
-const DOCUMENT_TERMS_STORAGE_KEY = 'gravium-os-document-terms';
-
-const DEFAULT_ORGANIZATION_SETTINGS: DocumentOrganizationSettings = {
-  organizationName: 'GRAVIUM DESIGN STUDIO LLP',
-  addressLines: ['<Address Line 1>', '<Address Line 2>'],
-  email: '<Email>',
-  phone: '<Phone>',
-  logoPath: '/brand/Organization-Logo.png',
-  fallbackLogoPath: '/Organization-Logo.png',
-  signaturePath: '/brand/Authorized-Signature.png',
-  invertLogoOnDark: true,
-};
-
-const DEFAULT_COST_ESTIMATE_TERMS = [
-  'This estimate is prepared based on the currently approved design scope and available site information.',
-  'Material, finish, brand, site condition, or scope changes may revise the final estimate.',
-  'Work will begin only after written approval, contract confirmation, and agreed advance payment.',
-  'Taxes, statutory charges, and payment terms are subject to the final approved contract.',
-];
-
 const PDF_RUPEE_FONT_FAMILY = 'GraviumRupeeFont';
 const PDF_RUPEE_FONT_REGULAR_URL = '/fonts/Montserrat-Regular.ttf';
 const PDF_RUPEE_FONT_MEDIUM_URL = '/fonts/Montserrat-Medium.ttf';
@@ -83,82 +63,6 @@ let activePdfMoneyFontStyles = {
   bold: false,
 };
 
-
-function getOrganizationSettings(): DocumentOrganizationSettings {
-  if (typeof window === 'undefined') return DEFAULT_ORGANIZATION_SETTINGS;
-
-  try {
-    const storedSettings = window.localStorage.getItem(DOCUMENT_SETTINGS_STORAGE_KEY);
-
-    if (!storedSettings) return DEFAULT_ORGANIZATION_SETTINGS;
-
-    const parsedSettings = JSON.parse(storedSettings) as Partial<DocumentOrganizationSettings>;
-
-    return {
-      organizationName:
-        typeof parsedSettings.organizationName === 'string' &&
-        parsedSettings.organizationName.trim()
-          ? parsedSettings.organizationName.trim()
-          : DEFAULT_ORGANIZATION_SETTINGS.organizationName,
-      addressLines: Array.isArray(parsedSettings.addressLines)
-        ? parsedSettings.addressLines
-            .filter(line => typeof line === 'string' && line.trim())
-            .map(line => line.trim())
-        : DEFAULT_ORGANIZATION_SETTINGS.addressLines,
-      email:
-        typeof parsedSettings.email === 'string' && parsedSettings.email.trim()
-          ? parsedSettings.email.trim()
-          : DEFAULT_ORGANIZATION_SETTINGS.email,
-      phone:
-        typeof parsedSettings.phone === 'string' && parsedSettings.phone.trim()
-          ? parsedSettings.phone.trim()
-          : DEFAULT_ORGANIZATION_SETTINGS.phone,
-      logoPath:
-        typeof parsedSettings.logoPath === 'string' && parsedSettings.logoPath.trim()
-          ? parsedSettings.logoPath.trim()
-          : DEFAULT_ORGANIZATION_SETTINGS.logoPath,
-      fallbackLogoPath:
-        typeof parsedSettings.fallbackLogoPath === 'string' &&
-        parsedSettings.fallbackLogoPath.trim()
-          ? parsedSettings.fallbackLogoPath.trim()
-          : DEFAULT_ORGANIZATION_SETTINGS.fallbackLogoPath,
-      signaturePath:
-        typeof parsedSettings.signaturePath === 'string' &&
-        parsedSettings.signaturePath.trim()
-          ? parsedSettings.signaturePath.trim()
-          : DEFAULT_ORGANIZATION_SETTINGS.signaturePath,
-      invertLogoOnDark:
-        typeof parsedSettings.invertLogoOnDark === 'boolean'
-          ? parsedSettings.invertLogoOnDark
-          : DEFAULT_ORGANIZATION_SETTINGS.invertLogoOnDark,
-    };
-  } catch {
-    return DEFAULT_ORGANIZATION_SETTINGS;
-  }
-}
-
-function getDocumentTerms(documentType: 'cost-estimate') {
-  if (typeof window === 'undefined') return DEFAULT_COST_ESTIMATE_TERMS;
-
-  try {
-    const storedTerms = window.localStorage.getItem(DOCUMENT_TERMS_STORAGE_KEY);
-
-    if (!storedTerms) return DEFAULT_COST_ESTIMATE_TERMS;
-
-    const parsedTerms = JSON.parse(storedTerms) as Record<string, unknown>;
-    const terms = parsedTerms[documentType];
-
-    if (!Array.isArray(terms)) return DEFAULT_COST_ESTIMATE_TERMS;
-
-    const normalizedTerms = terms
-      .filter(term => typeof term === 'string' && term.trim())
-      .map(term => term.trim());
-
-    return normalizedTerms.length > 0 ? normalizedTerms : DEFAULT_COST_ESTIMATE_TERMS;
-  } catch {
-    return DEFAULT_COST_ESTIMATE_TERMS;
-  }
-}
 
 function formatPdfNumber(amount: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -710,8 +614,10 @@ export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateE
 
   await registerRupeeFont(doc);
 
-  const settings = getOrganizationSettings();
-  const terms = getDocumentTerms('cost-estimate');
+  const {
+    organizationSettings: settings,
+    costEstimateTerms: terms,
+  } = await fetchDocumentExportSettings();
   const preparedDate = getPreparedDate(payload.preparedAt);
   const logo = await loadPngImage(
     [settings.logoPath, settings.fallbackLogoPath],

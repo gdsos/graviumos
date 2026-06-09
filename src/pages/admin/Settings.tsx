@@ -3,6 +3,14 @@ import { AlertTriangle, CheckCircle, Copy, Eye, RefreshCw, Save } from 'lucide-r
 import { supabase, type OrgSettings } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader } from '../../components/common/PageHeader';
+import {
+  DEFAULT_COST_ESTIMATE_TERMS,
+  DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS,
+  fetchDocumentExportSettings,
+  importLocalDocumentExportSettingsToSupabase,
+  saveDocumentExportSettings,
+  type DocumentExportSettings,
+} from '../../lib/documentExportSettings';
 
 // ??? Helpers ??????????????????????????????????????????????????????????????????
 
@@ -201,9 +209,6 @@ interface DocumentSettingsForm {
   invertLogoOnDark: boolean;
 }
 
-const DOCUMENT_SETTINGS_STORAGE_KEY = 'gravium-os-document-settings';
-const DOCUMENT_TERMS_STORAGE_KEY = 'gravium-os-document-terms';
-
 const defaultDocumentSettings: DocumentSettingsForm = {
   addressLine1: '',
   addressLine2: '',
@@ -211,18 +216,13 @@ const defaultDocumentSettings: DocumentSettingsForm = {
   addressLine4: '',
   email: '',
   phone: '',
-  logoPath: '/brand/Organization-Logo.png',
-  fallbackLogoPath: '/Organization-Logo.png',
-  signaturePath: '/brand/Authorized-Signature.png',
-  invertLogoOnDark: true,
+  logoPath: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.logoPath,
+  fallbackLogoPath: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.fallbackLogoPath,
+  signaturePath: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.signaturePath,
+  invertLogoOnDark: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.invertLogoOnDark,
 };
 
-const defaultCostEstimateTerms = [
-  'This estimate is prepared based on the currently approved design scope and available site information.',
-  'Material, finish, brand, site condition, or scope changes may revise the final estimate.',
-  'Work will begin only after written approval, contract confirmation, and agreed advance payment.',
-  'Taxes, statutory charges, and payment terms are subject to the final approved contract.',
-];
+const defaultCostEstimateTerms = DEFAULT_COST_ESTIMATE_TERMS;
 
 const defaultForm: SettingsForm = {
   org_name: '',
@@ -247,6 +247,58 @@ function settingsToForm(s: OrgSettings): SettingsForm {
     profit_first_opex_pct: String(s.profit_first_opex_pct ?? 65),
     profit_first_tax_pct: String(s.profit_first_tax_pct ?? 15),
     profit_first_owner_pay_pct: String(s.profit_first_owner_pay_pct ?? 15),
+  };
+}
+
+function documentExportSettingsToForm(
+  settings: DocumentExportSettings
+): DocumentSettingsForm {
+  const addressLines = settings.organizationSettings.addressLines;
+
+  return {
+    addressLine1: addressLines[0] ?? '',
+    addressLine2: addressLines[1] ?? '',
+    addressLine3: addressLines[2] ?? '',
+    addressLine4: addressLines[3] ?? '',
+    email: settings.organizationSettings.email,
+    phone: settings.organizationSettings.phone,
+    logoPath: settings.organizationSettings.logoPath,
+    fallbackLogoPath: settings.organizationSettings.fallbackLogoPath,
+    signaturePath: settings.organizationSettings.signaturePath,
+    invertLogoOnDark: settings.organizationSettings.invertLogoOnDark,
+  };
+}
+
+function buildDocumentExportSettingsPayload(
+  organizationName: string,
+  documentSettings: DocumentSettingsForm,
+  costEstimateTerms: string
+): DocumentExportSettings {
+  return {
+    organizationSettings: {
+      organizationName: organizationName.trim() || 'GRAVIUM DESIGN STUDIO LLP',
+      addressLines: [
+        documentSettings.addressLine1.trim(),
+        documentSettings.addressLine2.trim(),
+        documentSettings.addressLine3.trim(),
+        documentSettings.addressLine4.trim(),
+      ].filter(Boolean),
+      email: documentSettings.email.trim(),
+      phone: documentSettings.phone.trim(),
+      logoPath:
+        documentSettings.logoPath.trim() || defaultDocumentSettings.logoPath,
+      fallbackLogoPath:
+        documentSettings.fallbackLogoPath.trim() ||
+        defaultDocumentSettings.fallbackLogoPath,
+      signaturePath:
+        documentSettings.signaturePath.trim() ||
+        defaultDocumentSettings.signaturePath,
+      invertLogoOnDark: documentSettings.invertLogoOnDark,
+    },
+    costEstimateTerms: costEstimateTerms
+      .split('\n')
+      .map(term => term.trim())
+      .filter(Boolean),
   };
 }
 
@@ -296,139 +348,65 @@ export default function Settings() {
   }, [fetchSettings]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    let isMounted = true;
 
-    try {
-      const storedDocumentSettings = window.localStorage.getItem(
-        DOCUMENT_SETTINGS_STORAGE_KEY
-      );
+    async function loadDocumentExportSettings() {
+      try {
+        const importedSettings =
+          await importLocalDocumentExportSettingsToSupabase();
+        const nextSettings =
+          importedSettings ?? (await fetchDocumentExportSettings());
 
-      if (storedDocumentSettings) {
-        const parsedSettings = JSON.parse(storedDocumentSettings) as Partial<{
-          addressLines: string[];
-          email: string;
-          phone: string;
-          logoPath: string;
-          fallbackLogoPath: string;
-          signaturePath: string;
-          invertLogoOnDark: boolean;
-        }>;
+        if (!isMounted) return;
 
-        setDocumentSettings({
-          addressLine1:
-            Array.isArray(parsedSettings.addressLines) &&
-            typeof parsedSettings.addressLines[0] === 'string'
-              ? parsedSettings.addressLines[0]
-              : defaultDocumentSettings.addressLine1,
-          addressLine2:
-            Array.isArray(parsedSettings.addressLines) &&
-            typeof parsedSettings.addressLines[1] === 'string'
-              ? parsedSettings.addressLines[1]
-              : defaultDocumentSettings.addressLine2,
-          addressLine3:
-            Array.isArray(parsedSettings.addressLines) &&
-            typeof parsedSettings.addressLines[2] === 'string'
-              ? parsedSettings.addressLines[2]
-              : defaultDocumentSettings.addressLine3,
-          addressLine4:
-            Array.isArray(parsedSettings.addressLines) &&
-            typeof parsedSettings.addressLines[3] === 'string'
-              ? parsedSettings.addressLines[3]
-              : defaultDocumentSettings.addressLine4,
-          email:
-            typeof parsedSettings.email === 'string'
-              ? parsedSettings.email
-              : defaultDocumentSettings.email,
-          phone:
-            typeof parsedSettings.phone === 'string'
-              ? parsedSettings.phone
-              : defaultDocumentSettings.phone,
-          logoPath:
-            typeof parsedSettings.logoPath === 'string'
-              ? parsedSettings.logoPath
-              : defaultDocumentSettings.logoPath,
-          fallbackLogoPath:
-            typeof parsedSettings.fallbackLogoPath === 'string'
-              ? parsedSettings.fallbackLogoPath
-              : defaultDocumentSettings.fallbackLogoPath,
-          signaturePath:
-            typeof parsedSettings.signaturePath === 'string'
-              ? parsedSettings.signaturePath
-              : defaultDocumentSettings.signaturePath,
-          invertLogoOnDark:
-            typeof parsedSettings.invertLogoOnDark === 'boolean'
-              ? parsedSettings.invertLogoOnDark
-              : defaultDocumentSettings.invertLogoOnDark,
-        });
-      }
+        setDocumentSettings(documentExportSettingsToForm(nextSettings));
+        setCostEstimateTerms(nextSettings.costEstimateTerms.join('\n'));
+      } catch (loadError) {
+        console.error('Could not load document export settings.', loadError);
 
-      const storedDocumentTerms = window.localStorage.getItem(
-        DOCUMENT_TERMS_STORAGE_KEY
-      );
+        if (!isMounted) return;
 
-      if (storedDocumentTerms) {
-        const parsedTerms = JSON.parse(storedDocumentTerms) as Record<string, unknown>;
-        const costEstimate = parsedTerms['cost-estimate'];
-
-        if (Array.isArray(costEstimate)) {
-          const normalizedTerms = costEstimate
-            .filter(term => typeof term === 'string' && term.trim())
-            .map(term => term.trim());
-
-          if (normalizedTerms.length > 0) {
-            setCostEstimateTerms(normalizedTerms.join('\n'));
-          }
+        setDocumentSettings(defaultDocumentSettings);
+        setCostEstimateTerms(defaultCostEstimateTerms.join('\n'));
+      } finally {
+        if (isMounted) {
+          setHasLoadedDocumentSettings(true);
         }
       }
-    } catch {
-      setDocumentSettings(defaultDocumentSettings);
-      setCostEstimateTerms(defaultCostEstimateTerms.join('\n'));
-    } finally {
-      setHasLoadedDocumentSettings(true);
     }
+
+    void loadDocumentExportSettings();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
 
 
   // —— Derived values ————————————————————————————————————————————————————————
 
-  // Auto-save document export settings locally.
+  // Auto-save document export settings to Supabase after local edits settle.
   useEffect(() => {
-    if (!hasLoadedDocumentSettings || typeof window === 'undefined') return;
+    if (!hasLoadedDocumentSettings || !canEdit) return;
 
-    window.localStorage.setItem(
-      DOCUMENT_SETTINGS_STORAGE_KEY,
-      JSON.stringify({
-        organizationName: form.org_name.trim() || 'GRAVIUM DESIGN STUDIO LLP',
-        addressLines: [
-          documentSettings.addressLine1.trim(),
-          documentSettings.addressLine2.trim(),
-          documentSettings.addressLine3.trim(),
-          documentSettings.addressLine4.trim(),
-        ].filter(Boolean),
-        email: documentSettings.email.trim(),
-        phone: documentSettings.phone.trim(),
-        logoPath:
-          documentSettings.logoPath.trim() || defaultDocumentSettings.logoPath,
-        fallbackLogoPath:
-          documentSettings.fallbackLogoPath.trim() ||
-          defaultDocumentSettings.fallbackLogoPath,
-        signaturePath:
-          documentSettings.signaturePath.trim() ||
-          defaultDocumentSettings.signaturePath,
-        invertLogoOnDark: documentSettings.invertLogoOnDark,
-      })
-    );
+    const saveTimeout = window.setTimeout(() => {
+      void saveDocumentExportSettings(
+        buildDocumentExportSettingsPayload(
+          form.org_name,
+          documentSettings,
+          costEstimateTerms
+        )
+      ).catch(saveError => {
+        console.error('Could not auto-save document export settings.', saveError);
+      });
+    }, 700);
 
-    window.localStorage.setItem(
-      DOCUMENT_TERMS_STORAGE_KEY,
-      JSON.stringify({
-        'cost-estimate': costEstimateTerms
-          .split('\n')
-          .map(term => term.trim())
-          .filter(Boolean),
-      })
-    );
+    return () => {
+      window.clearTimeout(saveTimeout);
+    };
   }, [
+    canEdit,
     costEstimateTerms,
     documentSettings,
     form.org_name,
@@ -485,40 +463,22 @@ export default function Settings() {
       return;
     }
 
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        DOCUMENT_SETTINGS_STORAGE_KEY,
-        JSON.stringify({
-          organizationName: form.org_name.trim() || 'GRAVIUM DESIGN STUDIO LLP',
-          addressLines: [
-            documentSettings.addressLine1.trim(),
-            documentSettings.addressLine2.trim(),
-            documentSettings.addressLine3.trim(),
-            documentSettings.addressLine4.trim(),
-          ].filter(Boolean),
-          email: documentSettings.email.trim(),
-          phone: documentSettings.phone.trim(),
-          logoPath:
-            documentSettings.logoPath.trim() || defaultDocumentSettings.logoPath,
-          fallbackLogoPath:
-            documentSettings.fallbackLogoPath.trim() ||
-            defaultDocumentSettings.fallbackLogoPath,
-          signaturePath:
-            documentSettings.signaturePath.trim() ||
-            defaultDocumentSettings.signaturePath,
-          invertLogoOnDark: documentSettings.invertLogoOnDark,
-        })
+    try {
+      await saveDocumentExportSettings(
+        buildDocumentExportSettingsPayload(
+          form.org_name,
+          documentSettings,
+          costEstimateTerms
+        )
       );
+    } catch (documentSettingsError) {
+      const message =
+        documentSettingsError instanceof Error
+          ? documentSettingsError.message
+          : 'Could not save document export settings.';
 
-      window.localStorage.setItem(
-        DOCUMENT_TERMS_STORAGE_KEY,
-        JSON.stringify({
-          'cost-estimate': costEstimateTerms
-            .split('\n')
-            .map(term => term.trim())
-            .filter(Boolean),
-        })
-      );
+      setError(message);
+      return;
     }
 
     setSuccess('Settings saved successfully.');
