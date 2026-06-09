@@ -129,6 +129,8 @@ function createId(prefix: string) {
 }
 
 const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
+const COST_ESTIMATE_SUPABASE_IMPORT_KEY =
+  'gravium-os-cost-estimates-supabase-imported';
 
 type CostEstimateRecordRow = {
   id: string;
@@ -248,15 +250,28 @@ async function saveEstimateRecordToSupabase(record: EstimateCardRecord) {
     .upsert(mapEstimateRecordToSupabaseRow(record), { onConflict: 'id' });
 
   if (error) throw error;
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(COST_ESTIMATE_SUPABASE_IMPORT_KEY, 'true');
+  }
 }
 
 async function deleteEstimateRecordFromSupabase(recordId: string) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('cost_estimates')
     .delete()
-    .eq('id', recordId);
+    .eq('id', recordId)
+    .select('id');
 
   if (error) throw error;
+
+  if (!data || data.length === 0) {
+    throw new Error('Cost estimate was not deleted from Supabase. Check delete permission or record id.');
+  }
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(COST_ESTIMATE_SUPABASE_IMPORT_KEY, 'true');
+  }
 }
 
 export default function CostEstimatesPage() {
@@ -323,12 +338,25 @@ export default function CostEstimatesPage() {
         .map(mapCostEstimateRowToRecord)
         .filter(isEstimateCardRecord);
 
+      const hasCompletedSupabaseImport =
+        typeof window !== 'undefined' &&
+        window.localStorage.getItem(COST_ESTIMATE_SUPABASE_IMPORT_KEY) === 'true';
+
       if (remoteRecords.length > 0) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(COST_ESTIMATE_SUPABASE_IMPORT_KEY, 'true');
+        }
+
         setRecords(remoteRecords);
         return;
       }
 
-      if (localRecords.length === 0) {
+      if (hasCompletedSupabaseImport || localRecords.length === 0) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(COST_ESTIMATE_STORAGE_KEY, '[]');
+          window.localStorage.setItem(COST_ESTIMATE_SUPABASE_IMPORT_KEY, 'true');
+        }
+
         setRecords([]);
         return;
       }
@@ -343,6 +371,10 @@ export default function CostEstimatesPage() {
       if (importError) {
         console.error('Could not import local cost estimates to Supabase.', importError);
         return;
+      }
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(COST_ESTIMATE_SUPABASE_IMPORT_KEY, 'true');
       }
 
       if (isMounted) {
@@ -949,7 +981,6 @@ export default function CostEstimatesPage() {
 
       if (currentRecord?.status === 'revision' && currentRecord.approvedSnapshot) {
         const snapshot = currentRecord.approvedSnapshot;
-
         const restoredRecord: EstimateCardRecord = {
           ...currentRecord,
           grandTotal: snapshot.grandTotal,
