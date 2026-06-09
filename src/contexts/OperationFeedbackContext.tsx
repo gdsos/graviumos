@@ -76,16 +76,10 @@ function OperationFeedbackOverlay({ state }: { state: OperationState }) {
               />
             </svg>
 
-            <div
-              aria-hidden="true"
-              className="absolute inset-3 rounded-[1.25rem] border border-white/12"
-              style={{ animation: 'gravium_operation_breathe 1.6s ease-in-out infinite' }}
-            />
-
             <img
-              src="/brand/gravium-crown-icon.svg"
+              src="/brand/gravium-icon-dark.png"
               alt=""
-              className="relative z-10 h-9 w-9 object-contain"
+              className="relative z-10 h-9 w-9 object-contain brightness-0 invert"
             />
           </div>
         ) : (
