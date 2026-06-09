@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravium-os-cache-v8-push-crown-icon";
+const CACHE_NAME = "gravium-os-cache-v10-offline-page-polish";
 
 const PRECACHE_URLS = [
   "/",
@@ -65,11 +65,7 @@ self.addEventListener("fetch", event => {
 
           return response;
         })
-        .catch(() =>
-          caches.match(request).then(cachedResponse =>
-            cachedResponse || caches.match("/offline.html")
-          )
-        )
+        .catch(() => caches.match("/offline.html", { ignoreSearch: true }))
     );
 
     return;

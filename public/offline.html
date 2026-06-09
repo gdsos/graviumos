@@ -9,14 +9,16 @@
       :root {
         color-scheme: dark;
         --bg: #050506;
-        --card: rgba(20, 20, 21, 0.86);
+        --panel: rgba(18, 18, 18, 0.78);
+        --panel-soft: rgba(245, 245, 245, 0.045);
         --line: rgba(245, 245, 245, 0.12);
-        --line-strong: rgba(245, 245, 245, 0.2);
+        --line-strong: rgba(245, 245, 245, 0.18);
         --text: #f5f5f5;
-        --muted: rgba(245, 245, 245, 0.68);
-        --quiet: rgba(245, 245, 245, 0.46);
-        --wood: #603b2a;
+        --muted: rgba(245, 245, 245, 0.64);
+        --quiet: rgba(245, 245, 245, 0.42);
+        --wood: #603d2a;
         --olive: #555d3a;
+        --amber: #ffd479;
       }
 
       * {
@@ -33,9 +35,9 @@
         min-height: 100vh;
         overflow-x: hidden;
         background:
-          radial-gradient(circle at 18% 16%, rgba(96, 59, 42, 0.24), transparent 28rem),
-          radial-gradient(circle at 82% 84%, rgba(85, 93, 58, 0.2), transparent 30rem),
-          linear-gradient(135deg, #050506 0%, #0c0c0d 48%, #050506 100%);
+          radial-gradient(circle at 24% 18%, rgba(96, 61, 42, 0.22), transparent 28rem),
+          radial-gradient(circle at 84% 82%, rgba(85, 93, 58, 0.18), transparent 30rem),
+          linear-gradient(135deg, #050506 0%, #0b0b0b 48%, #050506 100%);
         color: var(--text);
         font-family:
           "Neue Montreal",
@@ -54,10 +56,10 @@
         inset: 0;
         pointer-events: none;
         background-image:
-          linear-gradient(rgba(245, 245, 245, 0.045) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(245, 245, 245, 0.045) 1px, transparent 1px);
+          linear-gradient(rgba(245, 245, 245, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(245, 245, 245, 0.035) 1px, transparent 1px);
         background-size: 46px 46px;
-        mask-image: radial-gradient(circle at center, black, transparent 72%);
+        mask-image: radial-gradient(circle at center, black, transparent 74%);
       }
 
       .page {
@@ -65,16 +67,17 @@
         display: grid;
         min-height: 100vh;
         place-items: center;
-        padding: 22px;
+        padding: 18px;
       }
 
       .card {
-        width: min(620px, 100%);
+        width: min(520px, 100%);
+        overflow: hidden;
         border: 1px solid var(--line);
-        border-radius: 34px;
+        border-radius: 30px;
         background:
-          linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.026)),
-          var(--card);
+          linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.024)),
+          var(--panel);
         box-shadow:
           0 26px 90px rgba(0, 0, 0, 0.42),
           inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -87,18 +90,12 @@
         justify-content: space-between;
         gap: 16px;
         border-bottom: 1px solid var(--line);
-        padding: 20px 22px;
-      }
-
-      .brand {
-        display: flex;
-        align-items: center;
-        min-width: 0;
+        padding: 18px 20px;
       }
 
       .brand img {
         display: block;
-        width: 128px;
+        width: 116px;
         height: auto;
         object-fit: contain;
       }
@@ -110,19 +107,19 @@
         border: 1px solid rgba(255, 212, 121, 0.22);
         border-radius: 999px;
         background: rgba(255, 212, 121, 0.08);
-        padding: 8px 12px;
+        padding: 7px 11px;
         color: rgba(255, 226, 167, 0.94);
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         white-space: nowrap;
       }
 
       .dot {
         position: relative;
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
         border-radius: 999px;
-        background: #ffd479;
+        background: var(--amber);
       }
 
       .dot::after {
@@ -135,29 +132,29 @@
       }
 
       .body {
-        padding: clamp(28px, 6vw, 56px);
+        padding: clamp(28px, 5vw, 42px);
       }
 
       .eyebrow {
         color: var(--quiet);
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 800;
-        letter-spacing: 0.16em;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
       }
 
       h1 {
-        margin: 14px 0 0;
-        font-size: clamp(42px, 8vw, 76px);
-        line-height: 0.96;
-        letter-spacing: -0.06em;
+        margin: 12px 0 0;
+        font-size: clamp(32px, 6vw, 46px);
+        line-height: 1.02;
+        letter-spacing: -0.045em;
       }
 
       p {
-        margin: 20px 0 0;
-        max-width: 470px;
+        margin: 16px 0 0;
+        max-width: 390px;
         color: var(--muted);
-        font-size: 16px;
+        font-size: 15px;
         line-height: 1.65;
       }
 
@@ -165,57 +162,50 @@
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-top: 30px;
+        margin-top: 26px;
       }
 
-      button,
-      a {
+      button {
         font: inherit;
       }
 
       .btn {
         display: inline-flex;
-        min-height: 44px;
+        min-height: 42px;
         align-items: center;
         justify-content: center;
         border-radius: 999px;
+        border: 1px solid rgba(245, 245, 245, 0.14);
+        background: rgba(245, 245, 245, 0.06);
         padding: 0 18px;
-        text-decoration: none;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
         transition:
           transform 0.18s ease,
           background 0.18s ease,
           border-color 0.18s ease;
-        cursor: pointer;
       }
 
       .btn:hover {
         transform: translateY(-1px);
-      }
-
-      .btn-primary {
-        border: 1px solid rgba(245, 245, 245, 0.94);
-        background: #f5f5f5;
-        color: #000000;
-        font-weight: 800;
-      }
-
-      .btn-secondary {
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.04);
-        color: var(--text);
+        border-color: rgba(245, 245, 245, 0.24);
+        background: rgba(245, 245, 245, 0.1);
       }
 
       .meta {
-        margin-top: 30px;
+        margin-top: 26px;
         border-top: 1px solid var(--line);
-        padding-top: 16px;
+        padding-top: 14px;
         color: var(--quiet);
         font-size: 12px;
-        line-height: 1.5;
+        line-height: 1.6;
       }
 
       .meta strong {
-        color: var(--text);
+        color: rgba(245, 245, 245, 0.82);
+        font-weight: 600;
       }
 
       @keyframes pulse {
@@ -232,9 +222,7 @@
 
       @media (max-width: 560px) {
         .page {
-          min-height: 100vh;
           padding: 12px;
-          place-items: center;
         }
 
         .card {
@@ -246,41 +234,28 @@
         }
 
         .brand img {
-          width: 112px;
-        }
-
-        .status {
-          padding: 7px 10px;
-          font-size: 11px;
+          width: 108px;
         }
 
         .body {
-          padding: 30px 22px 24px;
+          padding: 28px 22px 24px;
         }
 
         h1 {
-          font-size: clamp(40px, 12vw, 54px);
-          line-height: 1;
+          font-size: 34px;
         }
 
         p {
-          margin-top: 18px;
-          font-size: 15px;
+          font-size: 14px;
         }
 
         .actions {
           display: grid;
           grid-template-columns: 1fr;
-          margin-top: 26px;
         }
 
         .btn {
           width: 100%;
-        }
-
-        .meta {
-          margin-top: 24px;
-          padding-top: 14px;
         }
       }
     </style>
@@ -302,21 +277,19 @@
 
         <div class="body">
           <div class="eyebrow">Network unavailable</div>
-          <h1 id="offline-title">You are offline.</h1>
+          <h1 id="offline-title">Connection paused.</h1>
           <p>
-            Keep this tab open. Gravium OS will continue when your connection is restored.
+            Gravium OS is waiting for the network to return. This page will check automatically.
           </p>
 
           <div class="actions">
-            <button class="btn btn-primary" type="button" onclick="window.location.reload()">
-              Check Again
+            <button class="btn" type="button" id="check-button">
+              Check Connection
             </button>
-            <a class="btn btn-secondary" href="/">
-              Return Home
-            </a>
           </div>
 
           <div class="meta">
+            Status: <strong id="status-text">Checking every 5 seconds</strong><br />
             Last checked: <strong id="last-checked">just now</strong>
           </div>
         </div>
@@ -325,7 +298,12 @@
 
     <script>
       const checkedEl = document.getElementById("last-checked");
+      const statusTextEl = document.getElementById("status-text");
       const statusPill = document.getElementById("status-pill");
+      const checkButton = document.getElementById("check-button");
+
+      const params = new URLSearchParams(window.location.search);
+      const returnPath = params.get("from") || "/";
 
       function updateCheckedTime() {
         checkedEl.textContent = new Date().toLocaleTimeString([], {
@@ -334,15 +312,43 @@
         });
       }
 
-      window.addEventListener("online", () => {
-        statusPill.innerHTML = "Connection restored";
+      async function checkConnection() {
         updateCheckedTime();
-        setTimeout(() => window.location.reload(), 900);
+        statusTextEl.textContent = "Checking connection...";
+
+        try {
+          const response = await fetch("/", {
+            method: "HEAD",
+            cache: "no-store",
+          });
+
+          if (!response.ok) {
+            throw new Error("Network not ready");
+          }
+
+          statusPill.innerHTML = "Connection restored";
+          statusTextEl.textContent = "Connection restored. Returning to Gravium OS...";
+
+          window.setTimeout(() => {
+            window.location.replace(returnPath);
+          }, 650);
+        } catch (error) {
+          statusTextEl.textContent = "Still offline. Checking again shortly.";
+        }
+      }
+
+      checkButton.addEventListener("click", checkConnection);
+
+      window.addEventListener("online", checkConnection);
+      window.addEventListener("offline", () => {
+        updateCheckedTime();
+        statusPill.innerHTML = '<span class="dot" aria-hidden="true"></span>Offline';
+        statusTextEl.textContent = "Still offline. Checking every 5 seconds.";
       });
 
-      window.addEventListener("offline", updateCheckedTime);
-      setInterval(updateCheckedTime, 15000);
+      window.setInterval(checkConnection, 5000);
       updateCheckedTime();
+      checkConnection();
     </script>
   </body>
 </html>

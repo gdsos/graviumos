@@ -201,6 +201,7 @@ html.dark {
   #app-loader {
     position: fixed;
     inset: 0;
+    overflow: hidden;
     background: #0b0b0f;
     display: flex;
     align-items: center;
@@ -210,21 +211,5 @@ html.dark {
     color: white;
     font-family: var(--font-primary);
   }
-
-  #app-loader::after {
-    content: "";
-    width: 32px;
-    height: 32px;
-    margin-top: 16px;
-    border: 3px solid rgba(255, 255, 255, 0.2);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 }
+
