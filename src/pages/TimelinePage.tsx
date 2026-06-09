@@ -708,7 +708,8 @@ export default function TimelinePage() {
     useState(false);
   const [isDeleteTimelineDialogOpen, setIsDeleteTimelineDialogOpen] =
     useState(false);
-  const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
+    const [paymentGatePendingUnmark, setPaymentGatePendingUnmark] = useState<PaymentGate | null>(null);
+const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     () => storedTimeline?.timelineConfirmedAt ?? ''
   );
   const [showEstimateSourcePicker, setShowEstimateSourcePicker] = useState(false);
@@ -1333,14 +1334,8 @@ export default function TimelinePage() {
     );
   };
 
-  const handleMarkPaymentPending = (paymentGate: PaymentGate) => {
-    const confirmed = window.confirm(
-      'Unmark this payment? Related work packages will be blocked by payment again.'
-    );
-
-    if (!confirmed) return;
-
-    setPaymentGates(currentPaymentGates =>
+  const executeMarkPaymentPending = (paymentGate: PaymentGate) => {
+setPaymentGates(currentPaymentGates =>
       currentPaymentGates.map(currentPaymentGate =>
         currentPaymentGate.id === paymentGate.id
           ? {
@@ -1365,6 +1360,18 @@ export default function TimelinePage() {
           : workPackage
       )
     );
+
+  };
+
+  const handleMarkPaymentPending = (paymentGate: PaymentGate) => {
+    setPaymentGatePendingUnmark(paymentGate);
+  };
+
+  const handleConfirmMarkPaymentPending = () => {
+    if (!paymentGatePendingUnmark) return;
+
+    executeMarkPaymentPending(paymentGatePendingUnmark);
+    setPaymentGatePendingUnmark(null);
   };
 
   const handleApplySuggestion = (alert: TimelineAlert) => {
@@ -2167,7 +2174,7 @@ export default function TimelinePage() {
           ))}
         </div>
 
-        
+
       </section>
     );
   };
@@ -2300,7 +2307,7 @@ export default function TimelinePage() {
           </div>
 
           <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-            
+
             <Button
               type="button"
               variant="outline"
@@ -3263,6 +3270,39 @@ export default function TimelinePage() {
 
       {renderGeneratedTimelineReview()}
 
+      {paymentGatePendingUnmark && (
+        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+            <h2 className="text-lg font-semibold text-foreground">
+              Unmark payment?
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Related work packages will be blocked by payment again. This keeps the timeline
+              linked to the payment gate until the collection is marked as received again.
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPaymentGatePendingUnmark(null)}
+              >
+                Keep Received
+              </Button>
+
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmMarkPaymentPending}
+              >
+                Unmark Payment
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isDeleteTimelineDialogOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
@@ -3327,7 +3367,7 @@ export default function TimelinePage() {
 
       {!showCreateWizard && hasActiveTimeline && (
         <>
-          
+
           <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
             <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
               {tabs.map(tab => {
