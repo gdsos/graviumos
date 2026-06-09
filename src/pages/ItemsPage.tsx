@@ -107,18 +107,22 @@ function getStoredCategoryOptions() {
 }
 
 function getDefaultUnitOptions() {
-  return defaultCostEstimateUnits.map(unit => ({
-    value: unit.shortLabel,
-    label: unit.shortLabel,
-  }));
+  return defaultCostEstimateUnits.map(unit => {
+    const value = normalizeUnitValue(unit.shortLabel);
+
+    return {
+      value,
+      label: formatUnitLabel(value),
+    };
+  });
 }
 
 function createUnitOption(value: string) {
-  const trimmedValue = value.trim();
+  const normalizedValue = normalizeUnitValue(value);
 
   return {
-    value: trimmedValue,
-    label: trimmedValue,
+    value: normalizedValue,
+    label: formatUnitLabel(normalizedValue),
   };
 }
 
@@ -396,7 +400,6 @@ function getStoredItems() {
     const legacyItems = parseItems(localStorage.getItem(LEGACY_ITEMS_STORAGE_KEY));
 
     if (legacyItems.length > 0) {
-      localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(legacyItems));
       return legacyItems;
     }
 
@@ -416,6 +419,26 @@ function mergeDropdownOptions(...optionGroups: ProcurementOption[][]) {
   });
 
   return Array.from(optionMap, ([value, label]) => ({ value, label }));
+}
+
+function formatUnitLabel(value: string) {
+  return value.trim().replaceAll('_', ' ');
+}
+
+function normalizeUnitValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function normalizeSupabaseUnitOptions(options: ProcurementOption[]) {
+  return options.map(option => {
+    const value = normalizeUnitValue(option.value);
+    const label = option.label?.trim() || value;
+
+    return {
+      value,
+      label: formatUnitLabel(label),
+    };
+  });
 }
 
 export default function ItemsPage() {
@@ -472,7 +495,7 @@ export default function ItemsPage() {
 
       setItems(nextItems);
       setCategoryOptions(mergeDropdownOptions(defaultCategoryOptions, nextCategories));
-      setUnitOptions(mergeDropdownOptions(getDefaultUnitOptions(), nextUnits));
+      setUnitOptions(nextUnits.length > 0 ? normalizeSupabaseUnitOptions(nextUnits) : getDefaultUnitOptions());
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load Supabase item masters.';
 
@@ -657,9 +680,9 @@ export default function ItemsPage() {
     setDataError('');
 
     const categoryOption = createCategoryOption(formState.category);
-    const unitOption = createUnitOption(trimmedUnit);
+    const unitOption = createUnitOption(normalizeUnitValue(trimmedUnit));
     const itemCategory = registerCategoryOption(formState.category);
-    const itemUnit = registerUnitOption(trimmedUnit);
+    const itemUnit = registerUnitOption(normalizeUnitValue(trimmedUnit));
 
     const item: ProcurementItem = {
       id: modalState?.mode === 'edit' ? modalState.item.id : createId('item'),
