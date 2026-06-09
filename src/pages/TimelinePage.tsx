@@ -9,6 +9,8 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { DateInput } from '@/components/common/DateInput';
 
+import { supabase, type VendorRecord } from '@/lib/supabase';
+
 import {
   calculateTimelineSummary,
   generateTimelineAlerts,
@@ -33,8 +35,6 @@ import type {
 } from '@/features/timeline/types';
 
 const TIMELINE_STORAGE_KEY = 'gravium-os-timeline';
-const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
-const VENDORS_STORAGE_KEY = 'gravium-os-vendors';
 
 type LinkedCostEstimateStatus = 'draft' | 'approved' | 'revision';
 
@@ -46,30 +46,6 @@ type TimelineVendorRecord = {
   status?: string;
   availability?: string;
 };
-
-function getStoredVendorRecords() {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const storedVendors = localStorage.getItem(VENDORS_STORAGE_KEY);
-
-    if (!storedVendors) return [];
-
-    const parsedVendors = JSON.parse(storedVendors);
-
-    if (!Array.isArray(parsedVendors)) return [];
-
-    return parsedVendors.filter(vendor => {
-      return (
-        vendor &&
-        typeof vendor.id === 'string' &&
-        typeof vendor.name === 'string'
-      );
-    }) as TimelineVendorRecord[];
-  } catch {
-    return [];
-  }
-}
 
 type StoredCostEstimateRecord = {
   id: string;
@@ -97,33 +73,90 @@ type StoredCostEstimateRecord = {
   }>;
 };
 
-function getStoredCostEstimateRecords() {
-  if (typeof window === 'undefined') return [];
+type TimelineCostEstimateRow = {
+  id: string;
+  project_id: string | null;
+  project_name: string;
+  client_name: string | null;
+  status: string;
+  version: number | string | null;
+  grand_total: number | string | null;
+  updated_at: string | null;
+  created_at: string | null;
+  areas: unknown;
+  line_items: unknown;
+};
 
-  try {
-    const storedRecords = localStorage.getItem(COST_ESTIMATE_STORAGE_KEY);
+function toTimelineNumber(value: unknown, fallback = 0) {
+  const numberValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : Number.NaN;
 
-    if (!storedRecords) return [];
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
 
-    const parsedRecords = JSON.parse(storedRecords);
+function isLinkedCostEstimateStatus(value: unknown): value is LinkedCostEstimateStatus {
+  return value === 'draft' || value === 'approved' || value === 'revision';
+}
 
-    if (!Array.isArray(parsedRecords)) return [];
+function mapVendorRowToTimelineVendor(row: VendorRecord): TimelineVendorRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category || row.scope_of_work || undefined,
+    phone: row.phone || undefined,
+    status: row.status,
+    availability: row.availability,
+  };
+}
 
-    return parsedRecords.filter(record => {
-      return (
-        record &&
-        typeof record.id === 'string' &&
-        typeof record.projectName === 'string' &&
-        ['draft', 'approved', 'revision'].includes(record.status) &&
-        typeof record.version === 'number' &&
-        typeof record.grandTotal === 'number' &&
-        Array.isArray(record.areas) &&
-        Array.isArray(record.lineItems)
-      );
-    }) as StoredCostEstimateRecord[];
-  } catch {
-    return [];
-  }
+function mapCostEstimateRowToTimelineRecord(
+  row: TimelineCostEstimateRow
+): StoredCostEstimateRecord | null {
+  if (!isLinkedCostEstimateStatus(row.status)) return null;
+
+  const areas = Array.isArray(row.areas) ? row.areas : [];
+  const lineItems = Array.isArray(row.line_items) ? row.line_items : [];
+
+  return {
+    id: row.id,
+    projectId: row.project_id ?? undefined,
+    projectName: row.project_name,
+    clientName: row.client_name ?? undefined,
+    status: row.status,
+    version: toTimelineNumber(row.version, 1),
+    grandTotal: toTimelineNumber(row.grand_total),
+    updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+    areas: areas as StoredCostEstimateRecord['areas'],
+    lineItems: lineItems as StoredCostEstimateRecord['lineItems'],
+  };
+}
+
+async function fetchTimelineVendorRecords() {
+  const { data, error } = await supabase
+    .from('vendors')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+
+  return ((data ?? []) as VendorRecord[]).map(mapVendorRowToTimelineVendor);
+}
+
+async function fetchTimelineCostEstimateRecords() {
+  const { data, error } = await supabase
+    .from('cost_estimates')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as TimelineCostEstimateRow[])
+    .map(mapCostEstimateRowToTimelineRecord)
+    .filter((record): record is StoredCostEstimateRecord => Boolean(record));
 }
 
 function getLinkedCostEstimate(
@@ -582,10 +615,8 @@ export default function TimelinePage() {
   const [showPaymentGateControls, setShowPaymentGateControls] = useState(false);
   const [costEstimateRecords, setCostEstimateRecords] = useState<
     StoredCostEstimateRecord[]
-  >(() => getStoredCostEstimateRecords());
-  const [vendorRecords, setVendorRecords] = useState<TimelineVendorRecord[]>(
-    () => getStoredVendorRecords()
-  );
+  >([]);
+  const [vendorRecords, setVendorRecords] = useState<TimelineVendorRecord[]>([]);
   const [selectedTimelineProjectId, setSelectedTimelineProjectId] = useState(
     () => storedTimeline?.selectedTimelineProjectId ?? ''
   );
@@ -655,16 +686,37 @@ export default function TimelinePage() {
   ]);
 
   useEffect(() => {
-    const handleRefreshTimelineVendors = () => {
-      setVendorRecords(getStoredVendorRecords());
+    let isMounted = true;
+
+    async function refreshTimelineSourceData() {
+      try {
+        const [nextCostEstimateRecords, nextVendorRecords] = await Promise.all([
+          fetchTimelineCostEstimateRecords(),
+          fetchTimelineVendorRecords(),
+        ]);
+
+        if (!isMounted) return;
+
+        setCostEstimateRecords(nextCostEstimateRecords);
+        setVendorRecords(nextVendorRecords);
+      } catch (error) {
+        console.error('Could not refresh timeline source data from Supabase.', error);
+      }
+    }
+
+    const handleRefreshTimelineSourceData = () => {
+      void refreshTimelineSourceData();
     };
 
-    window.addEventListener('focus', handleRefreshTimelineVendors);
-    document.addEventListener('visibilitychange', handleRefreshTimelineVendors);
+    void refreshTimelineSourceData();
+
+    window.addEventListener('focus', handleRefreshTimelineSourceData);
+    document.addEventListener('visibilitychange', handleRefreshTimelineSourceData);
 
     return () => {
-      window.removeEventListener('focus', handleRefreshTimelineVendors);
-      document.removeEventListener('visibilitychange', handleRefreshTimelineVendors);
+      isMounted = false;
+      window.removeEventListener('focus', handleRefreshTimelineSourceData);
+      document.removeEventListener('visibilitychange', handleRefreshTimelineSourceData);
     };
   }, []);
 
@@ -1233,12 +1285,12 @@ export default function TimelinePage() {
     setActiveTab('overview');
   };
 
-  const handleReviseTimeline = () => {
+  const handleReviseTimeline = async () => {
     if (!hasActiveTimeline) {
       return;
     }
 
-    const latestRecords = getStoredCostEstimateRecords();
+    const latestRecords = await fetchTimelineCostEstimateRecords();
     setCostEstimateRecords(latestRecords);
 
     const latestLinkedEstimate = getLinkedCostEstimate(
