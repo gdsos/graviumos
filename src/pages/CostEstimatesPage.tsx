@@ -130,6 +130,55 @@ function createId(prefix: string) {
 
 const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
 
+type CostEstimateRecordRow = {
+  id: string;
+  project_id: string | null;
+  project_name: string;
+  client_name: string | null;
+  status: EstimateCardStatus;
+  version: number | string;
+  grand_total: number | string | null;
+  areas: unknown;
+  line_items: unknown;
+  service_charge_percent: number | string | null;
+  misc_charge_percent: number | string | null;
+  target_project_revenue: number | string | null;
+  approved_snapshot: unknown;
+  updated_at: string | null;
+  created_at: string | null;
+};
+
+function toNumber(value: unknown, fallback = 0) {
+  const numberValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function isEstimateCardRecord(record: unknown): record is EstimateCardRecord {
+  if (!record || typeof record !== 'object') return false;
+
+  const candidate = record as Partial<EstimateCardRecord>;
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.projectName === 'string' &&
+    ['draft', 'approved', 'revision'].includes(candidate.status ?? '') &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.grandTotal === 'number' &&
+    typeof candidate.updatedAt === 'string' &&
+    Array.isArray(candidate.areas) &&
+    Array.isArray(candidate.lineItems) &&
+    typeof candidate.serviceChargePercent === 'number' &&
+    typeof candidate.miscChargePercent === 'number' &&
+    typeof candidate.targetProjectRevenue === 'number'
+  );
+}
+
 function getStoredEstimateCards() {
   if (typeof window === 'undefined') return [];
 
@@ -142,25 +191,72 @@ function getStoredEstimateCards() {
 
     if (!Array.isArray(parsedRecords)) return [];
 
-    return parsedRecords.filter(record => {
-      return (
-        record &&
-        typeof record.id === 'string' &&
-        typeof record.projectName === 'string' &&
-        ['draft', 'approved', 'revision'].includes(record.status) &&
-        typeof record.version === 'number' &&
-        typeof record.grandTotal === 'number' &&
-        typeof record.updatedAt === 'string' &&
-        Array.isArray(record.areas) &&
-        Array.isArray(record.lineItems) &&
-        typeof record.serviceChargePercent === 'number' &&
-        typeof record.miscChargePercent === 'number' &&
-        typeof record.targetProjectRevenue === 'number'
-      );
-    }) as EstimateCardRecord[];
+    return parsedRecords.filter(isEstimateCardRecord);
   } catch {
     return [];
   }
+}
+
+function mapCostEstimateRowToRecord(row: CostEstimateRecordRow): EstimateCardRecord {
+  const areas = Array.isArray(row.areas) ? row.areas : [];
+  const lineItems = Array.isArray(row.line_items) ? row.line_items : [];
+  const approvedSnapshot =
+    row.approved_snapshot && typeof row.approved_snapshot === 'object'
+      ? (row.approved_snapshot as EstimateEditorPayload)
+      : undefined;
+
+  return {
+    id: row.id,
+    projectId: row.project_id ?? undefined,
+    projectName: row.project_name,
+    clientName: row.client_name ?? undefined,
+    status: row.status,
+    version: toNumber(row.version, 1),
+    grandTotal: toNumber(row.grand_total),
+    updatedAt: row.updated_at ?? row.created_at ?? nowTimestamp(),
+    areas: areas as CostEstimateArea[],
+    lineItems: lineItems as CostEstimateLineItem[],
+    serviceChargePercent: toNumber(row.service_charge_percent),
+    miscChargePercent: toNumber(row.misc_charge_percent),
+    targetProjectRevenue: toNumber(row.target_project_revenue),
+    approvedSnapshot,
+  };
+}
+
+function mapEstimateRecordToSupabaseRow(record: EstimateCardRecord) {
+  return {
+    id: record.id,
+    project_id: record.projectId ?? null,
+    project_name: record.projectName,
+    client_name: record.clientName ?? null,
+    status: record.status,
+    version: record.version,
+    grand_total: record.grandTotal,
+    areas: record.areas,
+    line_items: record.lineItems,
+    service_charge_percent: record.serviceChargePercent,
+    misc_charge_percent: record.miscChargePercent,
+    target_project_revenue: record.targetProjectRevenue,
+    approved_snapshot: record.approvedSnapshot ?? null,
+    updated_at: record.updatedAt,
+  };
+}
+
+async function saveEstimateRecordToSupabase(record: EstimateCardRecord) {
+  const { error } = await supabase
+    .from('cost_estimates')
+    .upsert(mapEstimateRecordToSupabaseRow(record), { onConflict: 'id' });
+
+  if (error) throw error;
+}
+
+async function deleteEstimateRecordFromSupabase(recordId: string) {
+  const { error } = await supabase
+    .from('cost_estimates')
+    .delete()
+    .eq('id', recordId);
+
+  if (error) throw error;
 }
 
 export default function CostEstimatesPage() {
@@ -206,10 +302,60 @@ export default function CostEstimatesPage() {
   const [newAreaName, setNewAreaName] = useState('');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    let isMounted = true;
 
-    localStorage.setItem(COST_ESTIMATE_STORAGE_KEY, JSON.stringify(records));
-  }, [records]);
+    async function fetchCostEstimateRecords() {
+      const localRecords = getStoredEstimateCards();
+
+      const { data, error } = await supabase
+        .from('cost_estimates')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error('Could not fetch cost estimates from Supabase.', error);
+        return;
+      }
+
+      const remoteRecords = ((data ?? []) as CostEstimateRecordRow[])
+        .map(mapCostEstimateRowToRecord)
+        .filter(isEstimateCardRecord);
+
+      if (remoteRecords.length > 0) {
+        setRecords(remoteRecords);
+        return;
+      }
+
+      if (localRecords.length === 0) {
+        setRecords([]);
+        return;
+      }
+
+      const { error: importError } = await supabase
+        .from('cost_estimates')
+        .upsert(
+          localRecords.map(mapEstimateRecordToSupabaseRow),
+          { onConflict: 'id' }
+        );
+
+      if (importError) {
+        console.error('Could not import local cost estimates to Supabase.', importError);
+        return;
+      }
+
+      if (isMounted) {
+        setRecords(localRecords);
+      }
+    }
+
+    void fetchCostEstimateRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -533,7 +679,7 @@ export default function CostEstimatesPage() {
       : `Unassigned Draft ${nextNumber}`;
   };
 
-  const handleStartEstimation = () => {
+  const handleStartEstimation = async () => {
     const nextRecord: EstimateCardRecord = {
       id: createId('estimate'),
       projectId:
@@ -554,10 +700,20 @@ export default function CostEstimatesPage() {
       targetProjectRevenue: selectedProject?.revenue ?? 0,
     };
 
-    setRecords(current => [nextRecord, ...current]);
-    setSelectedRecordId(nextRecord.id);
-    setIsViewingApprovedSnapshot(false);
-    setIsCreateModalOpen(false);
+    showOperationLoading('Creating Estimate');
+
+    try {
+      await saveEstimateRecordToSupabase(nextRecord);
+
+      setRecords(current => [nextRecord, ...current]);
+      setSelectedRecordId(nextRecord.id);
+      setIsViewingApprovedSnapshot(false);
+      setIsCreateModalOpen(false);
+      await showOperationSuccess('Estimate Created');
+    } catch (error) {
+      console.error('Could not create estimate.', error);
+      await showOperationError('Could Not Create Estimate');
+    }
   };
 
   const handleSaveEstimate = async (
@@ -566,33 +722,45 @@ export default function CostEstimatesPage() {
   ) => {
     if (!selectedRecordId) return;
 
+    const currentRecord = records.find(record => record.id === selectedRecordId);
+
+    if (!currentRecord) return;
+
     const messages = feedback ?? {
       loading: 'Saving Draft',
       success: 'Draft Saved',
     };
 
+    const updatedRecord: EstimateCardRecord = {
+      ...currentRecord,
+      grandTotal: payload.grandTotal,
+      status: payload.status,
+      version: payload.version,
+      updatedAt: nowTimestamp(),
+      areas: payload.areas,
+      lineItems: payload.lineItems,
+      serviceChargePercent: payload.serviceChargePercent,
+      miscChargePercent: payload.miscChargePercent,
+      targetProjectRevenue: payload.targetProjectRevenue,
+      approvedSnapshot: payload.approvedSnapshot ?? currentRecord.approvedSnapshot,
+    };
+
     showOperationLoading(messages.loading);
 
-    setRecords(current =>
-      current.map(record =>
-        record.id === selectedRecordId
-          ? {
-              ...record,
-              grandTotal: payload.grandTotal,
-              status: payload.status,
-              version: payload.version,
-              updatedAt: nowTimestamp(),
-              areas: payload.areas,
-              lineItems: payload.lineItems,
-              serviceChargePercent: payload.serviceChargePercent,
-              miscChargePercent: payload.miscChargePercent,
-              targetProjectRevenue: payload.targetProjectRevenue,
-            }
-          : record
-      )
-    );
+    try {
+      await saveEstimateRecordToSupabase(updatedRecord);
 
-    await showOperationSuccess(messages.success);
+      setRecords(current =>
+        current.map(record =>
+          record.id === selectedRecordId ? updatedRecord : record
+        )
+      );
+
+      await showOperationSuccess(messages.success);
+    } catch (error) {
+      console.error('Could not save estimate.', error);
+      await showOperationError('Could Not Save Estimate');
+    }
   };
 
   const approveEstimateWithRevenueSync = async (
@@ -602,54 +770,61 @@ export default function CostEstimatesPage() {
     setPendingRevenueApproval(null);
     showOperationLoading('Approving Estimate');
 
-    if (currentRecord.projectId) {
-      const { error: projectUpdateError } = await supabase
-        .from('projects')
-        .update({
-          revenue: payload.grandTotal,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentRecord.projectId);
+    try {
+      if (currentRecord.projectId) {
+        const { error: projectUpdateError } = await supabase
+          .from('projects')
+          .update({
+            revenue: payload.grandTotal,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', currentRecord.projectId);
 
-      if (projectUpdateError) {
-        await showOperationError('Project Revenue Update Failed');
-        return;
+        if (projectUpdateError) {
+          await showOperationError('Project Revenue Update Failed');
+          return;
+        }
+
+        setProjectOptions(current =>
+          current.map(project =>
+            project.id === currentRecord.projectId
+              ? {
+                  ...project,
+                  revenue: payload.grandTotal,
+                  updated_at: new Date().toISOString(),
+                }
+              : project
+          )
+        );
       }
 
-      setProjectOptions(current =>
-        current.map(project =>
-          project.id === currentRecord.projectId
-            ? {
-                ...project,
-                revenue: payload.grandTotal,
-                updated_at: new Date().toISOString(),
-              }
-            : project
+      const updatedRecord: EstimateCardRecord = {
+        ...currentRecord,
+        grandTotal: payload.grandTotal,
+        status: 'approved',
+        version: payload.version,
+        updatedAt: nowTimestamp(),
+        areas: payload.areas,
+        lineItems: payload.lineItems,
+        serviceChargePercent: payload.serviceChargePercent,
+        miscChargePercent: payload.miscChargePercent,
+        targetProjectRevenue: payload.targetProjectRevenue,
+        approvedSnapshot: undefined,
+      };
+
+      await saveEstimateRecordToSupabase(updatedRecord);
+
+      setRecords(current =>
+        current.map(record =>
+          record.id === currentRecord.id ? updatedRecord : record
         )
       );
+
+      await showOperationSuccess('Estimate Approved');
+    } catch (error) {
+      console.error('Could not approve estimate.', error);
+      await showOperationError('Could Not Approve Estimate');
     }
-
-    setRecords(current =>
-      current.map(record =>
-        record.id === currentRecord.id
-          ? {
-              ...record,
-              grandTotal: payload.grandTotal,
-              status: 'approved',
-              version: payload.version,
-              updatedAt: nowTimestamp(),
-              areas: payload.areas,
-              lineItems: payload.lineItems,
-              serviceChargePercent: payload.serviceChargePercent,
-              miscChargePercent: payload.miscChargePercent,
-              targetProjectRevenue: payload.targetProjectRevenue,
-              approvedSnapshot: undefined,
-            }
-          : record
-      )
-    );
-
-    await showOperationSuccess('Estimate Approved');
   };
 
   const handleApproveEstimate = async (payload: EstimateEditorPayload) => {
@@ -705,27 +880,34 @@ export default function CostEstimatesPage() {
       targetProjectRevenue: selectedRecord.targetProjectRevenue,
     };
 
-    setRecords(current =>
-      current.map(record =>
-        record.id === selectedRecordId
-          ? {
-              ...record,
-              grandTotal: payload.grandTotal,
-              status: 'revision',
-              version: payload.version,
-              updatedAt: nowTimestamp(),
-              areas: payload.areas,
-              lineItems: payload.lineItems,
-              serviceChargePercent: payload.serviceChargePercent,
-              miscChargePercent: payload.miscChargePercent,
-              targetProjectRevenue: payload.targetProjectRevenue,
-              approvedSnapshot,
-            }
-          : record
-      )
-    );
+    const updatedRecord: EstimateCardRecord = {
+      ...selectedRecord,
+      grandTotal: payload.grandTotal,
+      status: 'revision',
+      version: payload.version,
+      updatedAt: nowTimestamp(),
+      areas: payload.areas,
+      lineItems: payload.lineItems,
+      serviceChargePercent: payload.serviceChargePercent,
+      miscChargePercent: payload.miscChargePercent,
+      targetProjectRevenue: payload.targetProjectRevenue,
+      approvedSnapshot,
+    };
 
-    await showOperationSuccess('Revision Created');
+    try {
+      await saveEstimateRecordToSupabase(updatedRecord);
+
+      setRecords(current =>
+        current.map(record =>
+          record.id === selectedRecordId ? updatedRecord : record
+        )
+      );
+
+      await showOperationSuccess('Revision Created');
+    } catch (error) {
+      console.error('Could not create revision.', error);
+      await showOperationError('Could Not Create Revision');
+    }
   };
 
   const handleSaveAndCloseEstimate = async (payload: EstimateEditorPayload) => {
@@ -740,6 +922,8 @@ export default function CostEstimatesPage() {
     showOperationLoading('Deleting Estimate');
 
     try {
+      await deleteEstimateRecordFromSupabase(recordId);
+
       setRecords(current => current.filter(record => record.id !== recordId));
 
       if (selectedRecordId === recordId) {
@@ -766,23 +950,25 @@ export default function CostEstimatesPage() {
       if (currentRecord?.status === 'revision' && currentRecord.approvedSnapshot) {
         const snapshot = currentRecord.approvedSnapshot;
 
+        const restoredRecord: EstimateCardRecord = {
+          ...currentRecord,
+          grandTotal: snapshot.grandTotal,
+          status: 'approved',
+          version: snapshot.version,
+          updatedAt: nowTimestamp(),
+          areas: snapshot.areas,
+          lineItems: snapshot.lineItems,
+          serviceChargePercent: snapshot.serviceChargePercent,
+          miscChargePercent: snapshot.miscChargePercent,
+          targetProjectRevenue: snapshot.targetProjectRevenue,
+          approvedSnapshot: undefined,
+        };
+
+        await saveEstimateRecordToSupabase(restoredRecord);
+
         setRecords(current =>
           current.map(record =>
-            record.id === recordIdToDelete
-              ? {
-                  ...record,
-                  grandTotal: snapshot.grandTotal,
-                  status: 'approved',
-                  version: snapshot.version,
-                  updatedAt: nowTimestamp(),
-                  areas: snapshot.areas,
-                  lineItems: snapshot.lineItems,
-                  serviceChargePercent: snapshot.serviceChargePercent,
-                  miscChargePercent: snapshot.miscChargePercent,
-                  targetProjectRevenue: snapshot.targetProjectRevenue,
-                  approvedSnapshot: undefined,
-                }
-              : record
+            record.id === recordIdToDelete ? restoredRecord : record
           )
         );
         setIsViewingApprovedSnapshot(false);
@@ -790,6 +976,8 @@ export default function CostEstimatesPage() {
         await showOperationSuccess('Revision Deleted');
         return;
       }
+
+      await deleteEstimateRecordFromSupabase(recordIdToDelete);
 
       setRecords(current =>
         current.filter(record => record.id !== recordIdToDelete)
@@ -818,23 +1006,30 @@ export default function CostEstimatesPage() {
       approvedSnapshot: undefined,
     };
 
-    setRecords(current =>
-      current.map(currentRecord =>
-        currentRecord.id === record.id
-          ? {
-              ...currentRecord,
-              status: 'revision',
-              version: record.version + 1,
-              updatedAt: nowTimestamp(),
-              approvedSnapshot,
-            }
-          : currentRecord
-      )
-    );
+    const updatedRecord: EstimateCardRecord = {
+      ...record,
+      status: 'revision',
+      version: record.version + 1,
+      updatedAt: nowTimestamp(),
+      approvedSnapshot,
+    };
 
-    setIsViewingApprovedSnapshot(false);
-    setSelectedRecordId(record.id);
-    await showOperationSuccess('Revision Created');
+    try {
+      await saveEstimateRecordToSupabase(updatedRecord);
+
+      setRecords(current =>
+        current.map(currentRecord =>
+          currentRecord.id === record.id ? updatedRecord : currentRecord
+        )
+      );
+
+      setIsViewingApprovedSnapshot(false);
+      setSelectedRecordId(record.id);
+      await showOperationSuccess('Revision Created');
+    } catch (error) {
+      console.error('Could not create revision.', error);
+      await showOperationError('Could Not Create Revision');
+    }
   };
 
   if (activeSelectedRecord) {
