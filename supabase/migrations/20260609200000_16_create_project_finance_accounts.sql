@@ -53,7 +53,7 @@ $$;
 CREATE TABLE IF NOT EXISTS public.project_finance_accounts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  source_estimate_id uuid REFERENCES public.cost_estimates(id) ON DELETE SET NULL,
+  source_estimate_id text REFERENCES public.cost_estimates(id) ON DELETE SET NULL,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('draft', 'active', 'closed', 'archived')),
 
   revenue_amount numeric NOT NULL DEFAULT 0,
