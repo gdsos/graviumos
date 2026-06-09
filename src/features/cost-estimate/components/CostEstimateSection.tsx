@@ -16,6 +16,16 @@ import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 
+import { supabase, type ProcurementItemRecord } from '@/lib/supabase';
+import {
+  fetchProcurementCategories,
+  fetchProcurementItems,
+  fetchProcurementUnits,
+  mapItemRecordToProcurementItem,
+  mapProcurementItemToUpsertPayload,
+  type ProcurementOption,
+} from '@/lib/procurementMasters';
+
 import type { ProcurementItem } from '@/features/items/types';
 import { vendorCategoryLabels } from '@/features/vendors/data';
 
@@ -135,13 +145,22 @@ function createProcurementCategoryOption(value: string): ProcurementCategoryOpti
   };
 }
 
-function saveProcurementCategoryOptions(options: ProcurementCategoryOption[]) {
-  if (typeof window === 'undefined') return;
+async function saveProcurementCategoryOptions(options: ProcurementCategoryOption[]) {
+  const payload = options
+    .filter(option => option.value !== 'all')
+    .map(option => ({
+      id: `category-${option.value}`,
+      value: option.value,
+      label: option.label,
+    }));
 
-  localStorage.setItem(
-    PROCUREMENT_CATEGORIES_STORAGE_KEY,
-    JSON.stringify(options.filter(option => option.value !== 'all'))
-  );
+  if (payload.length === 0) return;
+
+  const { error } = await supabase
+    .from('procurement_categories')
+    .upsert(payload, { onConflict: 'value' });
+
+  if (error) throw error;
 }
 
 function getProcurementCategoryLabel(
@@ -236,18 +255,24 @@ function getStoredCostEstimateUnits() {
   }
 }
 
-function saveCostEstimateUnitsToStorage(units: CostEstimateUnit[]) {
-  if (typeof window === 'undefined') return;
+async function saveCostEstimateUnitsToStorage(units: CostEstimateUnit[]) {
+  const payload = units.map(unit => {
+    const value = normalizeUnitValue(unit.shortLabel);
 
-  localStorage.setItem(
-    PROCUREMENT_UNITS_STORAGE_KEY,
-    JSON.stringify(
-      units.map(unit => ({
-        value: unit.shortLabel,
-        label: unit.shortLabel,
-      }))
-    )
-  );
+    return {
+      id: `unit-${value}`,
+      value,
+      label: unit.label?.trim().replaceAll('_', ' ') || formatUnitLabel(value),
+    };
+  });
+
+  if (payload.length === 0) return;
+
+  const { error } = await supabase
+    .from('procurement_units')
+    .upsert(payload, { onConflict: 'value' });
+
+  if (error) throw error;
 }
 
 function mapProcurementItemToPreset(item: ProcurementItem): CostEstimateItemPreset {
@@ -261,6 +286,81 @@ function mapProcurementItemToPreset(item: ProcurementItem): CostEstimateItemPres
     sellingRatePerUnit: item.sellingRatePerUnit,
     defaultDescription: item.defaultDescription,
   };
+}
+
+function mergeProcurementCategoryOptions(
+  ...optionGroups: ProcurementCategoryOption[][]
+) {
+  const optionMap = new Map<string, string>();
+
+  optionGroups.flat().forEach(option => {
+    if (!option || !option.value) return;
+
+    optionMap.set(option.value, option.label || formatProcurementCategoryLabel(option.value));
+  });
+
+  return Array.from(optionMap, ([value, label]) => ({ value, label }));
+}
+
+function formatUnitLabel(value: string) {
+  return value.trim().replaceAll('_', ' ');
+}
+
+function normalizeUnitValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function getCostEstimateUnitDisplayLabel(
+  units: CostEstimateUnit[],
+  value: string
+) {
+  const normalizedValue = normalizeUnitValue(value);
+
+  return (
+    units.find(unit => normalizeUnitValue(unit.shortLabel) === normalizedValue)
+      ?.label ??
+    formatUnitLabel(normalizedValue || value)
+  );
+}
+
+function doesCostEstimateUnitMatchSearch(
+  unit: CostEstimateUnit,
+  searchValue: string
+) {
+  const normalizedSearch = searchValue.trim().toLowerCase();
+
+  if (!normalizedSearch) return true;
+
+  return (
+    unit.shortLabel.toLowerCase().includes(normalizedSearch) ||
+    unit.label.toLowerCase().includes(normalizedSearch)
+  );
+}
+
+function mapProcurementUnitOptionsToCostEstimateUnits(
+  options: ProcurementOption[]
+): CostEstimateUnit[] {
+  if (options.length === 0) return defaultCostEstimateUnits;
+
+  const unitMap = new Map<string, CostEstimateUnit>();
+
+  options.forEach(option => {
+    const normalizedValue = normalizeUnitValue(option.value);
+    const shortLabel = normalizedValue;
+
+    if (!shortLabel) return;
+
+    unitMap.set(shortLabel, {
+      id: `unit-${shortLabel}`,
+      label: option.label?.trim().replaceAll('_', ' ') || formatUnitLabel(shortLabel),
+      shortLabel,
+      isCustom: !defaultCostEstimateUnits.some(
+        unit => normalizeUnitValue(unit.shortLabel) === shortLabel
+      ),
+    });
+  });
+
+  return Array.from(unitMap.values());
 }
 
 function getValidProcurementItemsFromStorage(rawItems: string | null) {
@@ -305,7 +405,6 @@ function getStoredItemPresets() {
     );
 
     if (legacyItems.length > 0) {
-      localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(legacyItems));
 
       return legacyItems
         .filter(item => item.status === 'active')
@@ -318,25 +417,9 @@ function getStoredItemPresets() {
   }
 }
 
-function saveItemPresetToItemsMaster(preset: CostEstimateItemPreset) {
-  if (typeof window === 'undefined') return;
-
-  let currentItems: ProcurementItem[] = [];
-
-  try {
-    currentItems = getValidProcurementItemsFromStorage(
-      localStorage.getItem(ITEMS_STORAGE_KEY)
-    );
-
-    if (currentItems.length === 0) {
-      currentItems = getValidProcurementItemsFromStorage(
-        localStorage.getItem(LEGACY_ITEMS_STORAGE_KEY)
-      );
-    }
-  } catch {
-    currentItems = [];
-  }
-
+async function saveItemPresetToItemsMaster(
+  preset: CostEstimateItemPreset
+): Promise<CostEstimateItemPreset> {
   const nextItem: ProcurementItem = {
     id: preset.id,
     name: preset.name,
@@ -350,19 +433,20 @@ function saveItemPresetToItemsMaster(preset: CostEstimateItemPreset) {
     updatedAt: new Date().toISOString(),
   };
 
-  const nextItems = [
-    nextItem,
-    ...currentItems.filter(item => {
-      return (
-        item.id !== nextItem.id &&
-        item.name.trim().toLowerCase() !== nextItem.name.trim().toLowerCase()
-      );
-    }),
-  ];
+  const { data, error } = await supabase
+    .from('procurement_items')
+    .upsert(mapProcurementItemToUpsertPayload(nextItem), { onConflict: 'id' })
+    .select('*')
+    .maybeSingle();
 
-  localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(nextItems));
+  if (error) throw error;
+
+  return data
+    ? mapProcurementItemToPreset(
+        mapItemRecordToProcurementItem(data as ProcurementItemRecord)
+      )
+    : preset;
 }
-
 
 interface CostEstimateSavePayload {
   grandTotal: number;
@@ -485,13 +569,11 @@ export function CostEstimateSection({
     initialLineItems ?? []
   );
   const [units, setUnits] = useState<CostEstimateUnit[]>(
-    () => getStoredCostEstimateUnits()
+    defaultCostEstimateUnits
   );
-  const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>(
-    () => getStoredItemPresets()
-  );
+  const [itemPresets, setItemPresets] = useState<CostEstimateItemPreset[]>([]);
   const [itemCategoryOptions, setItemCategoryOptions] = useState(() =>
-    getStoredCategoryOptions()
+    getDefaultCategoryOptions()
   );
   const [serviceChargePercent, setServiceChargePercent] = useState<number | ''>(
     initialServiceChargePercent ?? DEFAULT_SERVICE_CHARGE_PERCENT
@@ -540,6 +622,55 @@ export function CostEstimateSection({
   const numericTargetProjectRevenue =
     targetProjectRevenue === '' ? 0 : targetProjectRevenue;
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCostEstimateMasterSources = async () => {
+      try {
+        const [nextItems, nextUnits, nextCategories] = await Promise.all([
+          fetchProcurementItems(),
+          fetchProcurementUnits(),
+          fetchProcurementCategories(),
+        ]);
+
+        if (!isMounted) return;
+
+        const activeItemPresets = nextItems
+          .filter(item => item.status === 'active')
+          .map(mapProcurementItemToPreset);
+
+        const categoryOptionsFromItems = nextItems.map(item => ({
+          value: item.category,
+          label: formatProcurementCategoryLabel(item.category),
+        }));
+
+        setItemPresets(activeItemPresets);
+        setUnits(mapProcurementUnitOptionsToCostEstimateUnits(nextUnits));
+        setItemCategoryOptions(
+          mergeProcurementCategoryOptions(
+            getDefaultCategoryOptions(),
+            nextCategories,
+            categoryOptionsFromItems
+          )
+        );
+      } catch (error) {
+        console.error('Could not load cost estimate master sources from Supabase.', error);
+
+        if (!isMounted) return;
+
+        setUnits(getStoredCostEstimateUnits());
+        setItemPresets(getStoredItemPresets());
+        setItemCategoryOptions(getStoredCategoryOptions());
+      }
+    };
+
+    void loadCostEstimateMasterSources();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const summary = useMemo(
     () =>
       calculateCostEstimateSummary({
@@ -562,7 +693,7 @@ export function CostEstimateSection({
     areaName: selectedAreaName,
     itemName: newLineItemName,
     quantity: Number(newLineItemQuantity) || 0,
-    unitLabel: newLineItemUnit,
+    unitLabel: getCostEstimateUnitDisplayLabel(units, newLineItemUnit),
   });
   const newPresetCategorySearchValue = newPresetCategoryQuery
     .trim()
@@ -581,15 +712,25 @@ export function CostEstimateSection({
     .toLowerCase();
   const matchingLineItemUnitOptions = newLineItemUnitSearchValue
     ? units.filter(unit =>
-        unit.shortLabel.toLowerCase().includes(newLineItemUnitSearchValue)
+        doesCostEstimateUnitMatchSearch(unit, newLineItemUnitSearchValue)
       )
     : units;
   const newPresetUnitSearchValue = newPresetUnitQuery.trim().toLowerCase();
   const matchingNewPresetUnitOptions = newPresetUnitSearchValue
     ? units.filter(unit =>
-        unit.shortLabel.toLowerCase().includes(newPresetUnitSearchValue)
+        doesCostEstimateUnitMatchSearch(unit, newPresetUnitSearchValue)
       )
     : units;
+  const handleMasterSourceError = (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Could not save cost estimate master source.';
+
+    console.error(message, error);
+    window.alert(message);
+  };
+
   const canAddNewPresetUnit =
     newPresetUnitQuery.trim().length > 0 &&
     !units.some(
@@ -623,7 +764,7 @@ export function CostEstimateSection({
 
     setUnits(current => {
       const nextUnits = [...current, newUnit];
-      saveCostEstimateUnitsToStorage(nextUnits);
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
       return nextUnits;
     });
     setNewPresetUnit(newUnit.shortLabel);
@@ -666,7 +807,7 @@ export function CostEstimateSection({
 
     setUnits(current => {
       const nextUnits = [...current, newUnit];
-      saveCostEstimateUnitsToStorage(nextUnits);
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
       return nextUnits;
     });
     setNewLineItemUnit(newUnit.shortLabel);
@@ -695,7 +836,7 @@ export function CostEstimateSection({
       if (exists) return currentOptions;
 
       const nextOptions = [...currentOptions, option];
-      saveProcurementCategoryOptions(nextOptions);
+      void saveProcurementCategoryOptions(nextOptions).catch(handleMasterSourceError);
       return nextOptions;
     });
 
@@ -1142,23 +1283,21 @@ export function CostEstimateSection({
     setIsItemSuggestionOpen(false);
   };
 
-  const handleAddItemPreset = () => {
+  const handleAddItemPreset = async () => {
     const trimmedName = newPresetName.trim();
-    const purchaseRatePerUnit = Math.max(
-      0,
-      Number(newPresetPurchaseRate) || 0
-    );
+    const purchaseRatePerUnit = Math.max(0, Number(newPresetPurchaseRate) || 0);
     const markupPercent = Math.max(0, Number(newPresetMarkupPercent) || 0);
+    const sellingRatePerUnit = Math.round(
+      purchaseRatePerUnit * (1 + markupPercent / 100)
+    );
 
     if (!trimmedName) return;
 
-    const sellingRatePerUnit = calculateSellingRate(
-      purchaseRatePerUnit,
-      markupPercent
-    );
+    const selectedAreaName =
+      areas.find(area => area.id === newLineItemAreaId)?.name ?? 'selected area';
 
     const newPreset: CostEstimateItemPreset = {
-      id: createId('estimate-item-preset'),
+      id: createId('estimate-item'),
       name: trimmedName,
       category: newPresetCategory,
       defaultUnitLabel: newPresetUnit,
@@ -1170,32 +1309,38 @@ export function CostEstimateSection({
         createItemMasterDefaultDescription(trimmedName),
     };
 
-    setItemPresets(current => [
-      newPreset,
-      ...current.filter(preset => {
-        return (
-          preset.id !== newPreset.id &&
-          preset.name.trim().toLowerCase() !==
-            newPreset.name.trim().toLowerCase()
-        );
-      }),
-    ]);
-    saveItemPresetToItemsMaster(newPreset);
-    setNewLineItemName(newPreset.name);
-    setNewLineItemUnit(newPreset.defaultUnitLabel);
-    setNewLineItemRate(String(newPreset.sellingRatePerUnit));
-    setNewLineItemDescription(
-      createEstimateLineItemDescription({
-        areaName: selectedAreaName,
-        itemDescription: newPreset.defaultDescription,
-      })
-    );
-    setNewPresetName('');
-    setNewPresetCategory('custom');
-    setNewPresetPurchaseRate('500');
-    setNewPresetMarkupPercent('35');
-    setNewPresetDescription('');
-    setIsNewItemPresetFormOpen(false);
+    try {
+      const savedPreset = await saveItemPresetToItemsMaster(newPreset);
+
+      setItemPresets(current => [
+        savedPreset,
+        ...current.filter(preset => {
+          return (
+            preset.id !== savedPreset.id &&
+            preset.name.trim().toLowerCase() !==
+              savedPreset.name.trim().toLowerCase()
+          );
+        }),
+      ]);
+
+      setNewLineItemName(savedPreset.name);
+      setNewLineItemUnit(savedPreset.defaultUnitLabel);
+      setNewLineItemRate(String(savedPreset.sellingRatePerUnit));
+      setNewLineItemDescription(
+        createEstimateLineItemDescription({
+          areaName: selectedAreaName,
+          itemDescription: savedPreset.defaultDescription,
+        })
+      );
+      setNewPresetName('');
+      setNewPresetCategory('custom');
+      setNewPresetPurchaseRate('500');
+      setNewPresetMarkupPercent('35');
+      setNewPresetDescription('');
+      setIsNewItemPresetFormOpen(false);
+    } catch (error) {
+      handleMasterSourceError(error);
+    }
   };
 
   const handleAddCustomUnit = () => {
@@ -1223,7 +1368,7 @@ export function CostEstimateSection({
 
     setUnits(current => {
       const nextUnits = [...current, newUnit];
-      saveCostEstimateUnitsToStorage(nextUnits);
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
       return nextUnits;
     });
     setNewLineItemUnit(newUnit.shortLabel);
@@ -1263,7 +1408,7 @@ export function CostEstimateSection({
     const searchValue = savedRowUnitQuery.trim().toLowerCase();
 
     return searchValue
-      ? units.filter(unit => unit.shortLabel.toLowerCase().includes(searchValue))
+      ? units.filter(unit => doesCostEstimateUnitMatchSearch(unit, searchValue))
       : units;
   };
 
@@ -1299,7 +1444,7 @@ export function CostEstimateSection({
 
     setUnits(current => {
       const nextUnits = [...current, newUnit];
-      saveCostEstimateUnitsToStorage(nextUnits);
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
       return nextUnits;
     });
 
@@ -1932,7 +2077,7 @@ export function CostEstimateSection({
                                       {preset.name}
                                     </span>
                                     <span className="mt-0.5 block text-xs text-muted-foreground">
-                                      {preset.defaultUnitLabel} @{' '}
+                                      {getCostEstimateUnitDisplayLabel(units, preset.defaultUnitLabel)} @{' '}
                                       {formatINR(preset.sellingRatePerUnit)}
                                     </span>
                                   </button>
@@ -2104,7 +2249,7 @@ export function CostEstimateSection({
                                     value={
                                       isNewPresetUnitOpen
                                         ? newPresetUnitQuery
-                                        : newPresetUnit
+                                        : getCostEstimateUnitDisplayLabel(units, newPresetUnit)
                                     }
                                     onFocus={() => {
                                       setNewPresetUnitQuery('');
@@ -2148,7 +2293,7 @@ export function CostEstimateSection({
                                           }}
                                           className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
                                         >
-                                          {unit.shortLabel}
+                                          {unit.label}
                                         </button>
                                       ))}
 
@@ -2345,7 +2490,7 @@ export function CostEstimateSection({
                               }}
                               className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
                             >
-                              {unit.shortLabel}
+                              {unit.label}
                             </button>
                           ))}
 
@@ -2524,7 +2669,7 @@ export function CostEstimateSection({
                                 }}
                                 className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
                               >
-                                {unit.shortLabel}
+                                {unit.label}
                               </button>
                             ))}
 
