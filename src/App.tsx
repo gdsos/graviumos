@@ -122,13 +122,20 @@ function AppWithTheme() {
 }
 
 export default function App() {
-  // PWA update reload
+  // Avoid forced reloads while users are editing forms or modals.
+  // New PWA/service-worker updates will apply on the next manual refresh or app reopen.
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        window.location.reload();
-      });
-    }
+    if (!("serviceWorker" in navigator)) return;
+
+    const handleControllerChange = () => {
+      console.info("A new Gravium OS service worker is active. Refresh manually when ready.");
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+    };
   }, []);
 
   return (
