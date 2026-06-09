@@ -64,6 +64,36 @@ type ProjectFinancePaymentGateRow = {
   source_gate_snapshot: Record<string, unknown>;
 };
 
+type ProjectTimelineGateSourceRow = {
+  id: string;
+  project_id: string;
+  source_estimate_id: string | null;
+  source_estimate_version: number | string | null;
+  has_timeline: boolean | null;
+  payment_gates: unknown;
+  updated_at: string | null;
+};
+
+type TimelineGateRecord = Record<string, unknown> & {
+  id?: string;
+};
+
+function getTimelineGateRecords(value: unknown): TimelineGateRecord[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter(
+    (gate): gate is TimelineGateRecord =>
+      typeof gate === 'object' && gate !== null
+  );
+}
+
+function getTimelineGateIdentity(gate: TimelineGateRecord, index: number) {
+  return typeof gate.id === 'string' && gate.id.trim()
+    ? gate.id
+    : `timeline-gate-${index + 1}`;
+}
+
+
 
 type SyncNotice = {
   state: 'success' | 'error' | 'info';
@@ -260,6 +290,7 @@ function FinancialsInner() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [financeAccounts, setFinanceAccounts] = useState<ProjectFinanceAccountRow[]>([]);
   const [financePaymentGates, setFinancePaymentGates] = useState<ProjectFinancePaymentGateRow[]>([]);
+  const [timelineGateSources, setTimelineGateSources] = useState<ProjectTimelineGateSourceRow[]>([]);
   const [approvedEstimates, setApprovedEstimates] = useState<ApprovedEstimateRow[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
@@ -267,6 +298,7 @@ function FinancialsInner() {
   const projectPickerRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncingProjectId, setSyncingProjectId] = useState<string | null>(null);
+  const [autoSyncAttemptKey, setAutoSyncAttemptKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<SyncNotice | null>(null);
   const [error, setError] = useState('');
 
@@ -276,10 +308,14 @@ function FinancialsInner() {
     }
     setError('');
 
-    const [projectsRes, accountsRes, gatesRes, estimatesRes] = await Promise.all([
+    const [projectsRes, accountsRes, gatesRes, timelinesRes, estimatesRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('project_finance_accounts').select('*').order('updated_at', { ascending: false }),
       supabase.from('project_finance_payment_gates').select('*').order('gate_order', { ascending: true }),
+      supabase
+        .from('project_timelines')
+        .select('id, project_id, source_estimate_id, source_estimate_version, has_timeline, payment_gates, updated_at')
+        .order('updated_at', { ascending: false }),
       supabase
         .from('cost_estimates')
         .select('id, project_id, project_name, client_name, status, version, grand_total, updated_at')
@@ -305,6 +341,12 @@ function FinancialsInner() {
       return;
     }
 
+    if (timelinesRes.error) {
+      setError(timelinesRes.error.message);
+      setLoading(false);
+      return;
+    }
+
     if (estimatesRes.error) {
       setError(estimatesRes.error.message);
       setLoading(false);
@@ -316,6 +358,7 @@ function FinancialsInner() {
     setProjects(nextProjects);
     setFinanceAccounts((accountsRes.data ?? []) as ProjectFinanceAccountRow[]);
     setFinancePaymentGates((gatesRes.data ?? []) as ProjectFinancePaymentGateRow[]);
+    setTimelineGateSources((timelinesRes.data ?? []) as ProjectTimelineGateSourceRow[]);
     setApprovedEstimates((estimatesRes.data ?? []) as ApprovedEstimateRow[]);
 
     setSelectedProjectId(current => {
@@ -346,6 +389,13 @@ function FinancialsInner() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'project_finance_payment_gates' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_timelines' },
         () => {
           void fetchFinanceData({ silent: true });
         }
@@ -467,6 +517,113 @@ function FinancialsInner() {
         .filter(gate => gate.finance_account_id === selectedFinanceAccount.id)
         .sort((a, b) => toNumber(a.gate_order) - toNumber(b.gate_order))
     : [];
+  const selectedTimelineGateSource = selectedProject
+    ? timelineGateSources.find(
+        timeline =>
+          timeline.project_id === selectedProject.id &&
+          timeline.has_timeline
+      ) ?? null
+    : null;
+  const selectedTimelineGateRecords = getTimelineGateRecords(
+    selectedTimelineGateSource?.payment_gates
+  );
+  const selectedTimelineGateIds = selectedTimelineGateRecords.map(getTimelineGateIdentity);
+  const selectedFinanceTimelineGateIds = selectedPaymentGates
+    .map(gate => gate.timeline_gate_id)
+    .filter((gateId): gateId is string => Boolean(gateId));
+  const hasMissingTimelineGatesInFinance =
+    selectedTimelineGateIds.length > 0 &&
+    selectedTimelineGateIds.some(
+      gateId => !selectedFinanceTimelineGateIds.includes(gateId)
+    );
+  const hasTimelineGateSyncDrift = Boolean(
+    selectedFinanceAccount &&
+      selectedTimelineGateIds.length > 0 &&
+      (selectedPaymentGates.length !== selectedTimelineGateIds.length ||
+        hasMissingTimelineGatesInFinance)
+  );
+  const needsInitialFinanceSync = Boolean(
+    selectedApprovedEstimate && !selectedFinanceAccount
+  );
+  const needsManualFinanceSync = needsInitialFinanceSync || hasTimelineGateSyncDrift;
+  const isSyncingSelectedProject =
+    Boolean(selectedProject) && syncingProjectId === selectedProject?.id;
+  const syncActionLabel = selectedFinanceAccount
+    ? 'Sync Timeline Gates'
+    : 'Sync Finance Account';
+  const selectedSyncStatus = !selectedApprovedEstimate
+    ? { tone: 'muted' as const, label: 'No Approved Estimate' }
+    : isSyncingSelectedProject
+      ? { tone: 'info' as const, label: 'Syncing' }
+      : needsInitialFinanceSync
+        ? { tone: 'warning' as const, label: 'Ready To Sync' }
+        : hasTimelineGateSyncDrift
+          ? { tone: 'warning' as const, label: 'Timeline Gates Pending Sync' }
+          : { tone: 'success' as const, label: 'Synced' };
+  const autoSyncKey =
+    selectedProject && selectedApprovedEstimate && selectedFinanceAccount
+      ? [
+          selectedProject.id,
+          selectedApprovedEstimate.id,
+          selectedFinanceAccount.id,
+          selectedTimelineGateIds.join('|'),
+          selectedFinanceTimelineGateIds.join('|'),
+        ].join('::')
+      : '';
+
+  useEffect(() => {
+    if (!selectedProject || !selectedApprovedEstimate || !selectedFinanceAccount) return;
+    if (!hasTimelineGateSyncDrift) return;
+    if (!autoSyncKey || autoSyncAttemptKey === autoSyncKey) return;
+    if (syncingProjectId === selectedProject.id) return;
+
+    const projectId = selectedProject.id;
+    const approvedEstimateId = selectedApprovedEstimate.id;
+
+    let isMounted = true;
+
+    async function syncTimelineGatesSilently() {
+      setAutoSyncAttemptKey(autoSyncKey);
+      setSyncingProjectId(projectId);
+
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+
+        await syncProjectFinanceAccountFromApprovedEstimate({
+          projectId,
+          estimateId: approvedEstimateId,
+          userId: userData.user?.id ?? null,
+        });
+
+        if (isMounted) {
+          await fetchFinanceData({ silent: true });
+        }
+      } catch (syncError) {
+        console.error('Unable to auto-sync Finance gates from Timeline', syncError);
+      } finally {
+        if (isMounted) {
+          setSyncingProjectId(null);
+        }
+      }
+    }
+
+    void syncTimelineGatesSilently();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    autoSyncAttemptKey,
+    autoSyncKey,
+    fetchFinanceData,
+    hasTimelineGateSyncDrift,
+    selectedApprovedEstimate,
+    selectedFinanceAccount,
+    selectedProject,
+    syncingProjectId,
+  ]);
 
   const handleSyncFinanceAccount = async () => {
     if (!selectedProject) return;
@@ -726,13 +883,9 @@ function FinancialsInner() {
               </div>
 
               <div className="flex justify-start lg:justify-end">
-                {selectedFinanceAccount ? (
-                  <StatusPill tone="success">Synced</StatusPill>
-                ) : selectedApprovedEstimate ? (
-                  <StatusPill tone="warning">Ready To Sync</StatusPill>
-                ) : (
-                  <StatusPill>No Approved Estimate</StatusPill>
-                )}
+                <StatusPill tone={selectedSyncStatus.tone}>
+                  {selectedSyncStatus.label}
+                </StatusPill>
               </div>
             </div>
           </div>
@@ -755,19 +908,21 @@ function FinancialsInner() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleSyncFinanceAccount}
-                  disabled={!selectedApprovedEstimate || syncingProjectId === selectedProject.id}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-foreground px-5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {syncingProjectId === selectedProject.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCcw className="h-4 w-4" />
-                  )}
-                  {selectedFinanceAccount ? 'Resync Finance Account' : 'Sync Finance Account'}
-                </button>
+                {selectedApprovedEstimate && (needsManualFinanceSync || isSyncingSelectedProject) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSyncFinanceAccount()}
+                    disabled={isSyncingSelectedProject}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-foreground px-5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isSyncingSelectedProject ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="h-4 w-4" />
+                    )}
+                    {isSyncingSelectedProject ? 'Syncing' : syncActionLabel}
+                  </button>
+                )}
               </div>
 
               {!selectedApprovedEstimate && (
@@ -796,8 +951,8 @@ function FinancialsInner() {
                         Approved estimate is ready.
                       </p>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        Sync once to create the clean Finance Account. No old project revenue
-                        will be used.
+                        Finance can create the clean project account from this approved estimate.
+                        No old project revenue will be used.
                       </p>
                     </div>
                   </div>
