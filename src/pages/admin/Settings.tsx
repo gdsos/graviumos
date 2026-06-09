@@ -3,6 +3,14 @@ import { AlertTriangle, CheckCircle, Copy, Eye, RefreshCw, Save } from 'lucide-r
 import { supabase, type OrgSettings } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader } from '../../components/common/PageHeader';
+import {
+  DEFAULT_COST_ESTIMATE_TERMS,
+  DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS,
+  fetchDocumentExportSettings,
+  importLocalDocumentExportSettingsToSupabase,
+  saveDocumentExportSettings,
+  type DocumentExportSettings,
+} from '../../lib/documentExportSettings';
 
 // ??? Helpers ??????????????????????????????????????????????????????????????????
 
@@ -187,6 +195,35 @@ interface SettingsForm {
   profit_first_owner_pay_pct: string;
 }
 
+
+interface DocumentSettingsForm {
+  addressLine1: string;
+  addressLine2: string;
+  addressLine3: string;
+  addressLine4: string;
+  email: string;
+  phone: string;
+  logoPath: string;
+  fallbackLogoPath: string;
+  signaturePath: string;
+  invertLogoOnDark: boolean;
+}
+
+const defaultDocumentSettings: DocumentSettingsForm = {
+  addressLine1: '',
+  addressLine2: '',
+  addressLine3: '',
+  addressLine4: '',
+  email: '',
+  phone: '',
+  logoPath: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.logoPath,
+  fallbackLogoPath: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.fallbackLogoPath,
+  signaturePath: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.signaturePath,
+  invertLogoOnDark: DEFAULT_DOCUMENT_ORGANIZATION_SETTINGS.invertLogoOnDark,
+};
+
+const defaultCostEstimateTerms = DEFAULT_COST_ESTIMATE_TERMS;
+
 const defaultForm: SettingsForm = {
   org_name: '',
   admin_key: '',
@@ -213,6 +250,58 @@ function settingsToForm(s: OrgSettings): SettingsForm {
   };
 }
 
+function documentExportSettingsToForm(
+  settings: DocumentExportSettings
+): DocumentSettingsForm {
+  const addressLines = settings.organizationSettings.addressLines;
+
+  return {
+    addressLine1: addressLines[0] ?? '',
+    addressLine2: addressLines[1] ?? '',
+    addressLine3: addressLines[2] ?? '',
+    addressLine4: addressLines[3] ?? '',
+    email: settings.organizationSettings.email,
+    phone: settings.organizationSettings.phone,
+    logoPath: settings.organizationSettings.logoPath,
+    fallbackLogoPath: settings.organizationSettings.fallbackLogoPath,
+    signaturePath: settings.organizationSettings.signaturePath,
+    invertLogoOnDark: settings.organizationSettings.invertLogoOnDark,
+  };
+}
+
+function buildDocumentExportSettingsPayload(
+  organizationName: string,
+  documentSettings: DocumentSettingsForm,
+  costEstimateTerms: string
+): DocumentExportSettings {
+  return {
+    organizationSettings: {
+      organizationName: organizationName.trim() || 'GRAVIUM DESIGN STUDIO LLP',
+      addressLines: [
+        documentSettings.addressLine1.trim(),
+        documentSettings.addressLine2.trim(),
+        documentSettings.addressLine3.trim(),
+        documentSettings.addressLine4.trim(),
+      ].filter(Boolean),
+      email: documentSettings.email.trim(),
+      phone: documentSettings.phone.trim(),
+      logoPath:
+        documentSettings.logoPath.trim() || defaultDocumentSettings.logoPath,
+      fallbackLogoPath:
+        documentSettings.fallbackLogoPath.trim() ||
+        defaultDocumentSettings.fallbackLogoPath,
+      signaturePath:
+        documentSettings.signaturePath.trim() ||
+        defaultDocumentSettings.signaturePath,
+      invertLogoOnDark: documentSettings.invertLogoOnDark,
+    },
+    costEstimateTerms: costEstimateTerms
+      .split('\n')
+      .map(term => term.trim())
+      .filter(Boolean),
+  };
+}
+
 // ——— Main Component ———————————————————————————————————————————————————————————
 
 export default function Settings() {
@@ -221,6 +310,13 @@ export default function Settings() {
 
   const [settings, setSettings] = useState<OrgSettings | null>(null);
   const [form, setForm] = useState<SettingsForm>(defaultForm);
+  const [documentSettings, setDocumentSettings] =
+    useState<DocumentSettingsForm>(defaultDocumentSettings);
+  const [costEstimateTerms, setCostEstimateTerms] = useState(
+    defaultCostEstimateTerms.join('\n')
+  );
+  const [hasLoadedDocumentSettings, setHasLoadedDocumentSettings] =
+    useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
@@ -251,7 +347,71 @@ export default function Settings() {
     fetchSettings();
   }, [fetchSettings]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDocumentExportSettings() {
+      try {
+        const importedSettings =
+          await importLocalDocumentExportSettingsToSupabase();
+        const nextSettings =
+          importedSettings ?? (await fetchDocumentExportSettings());
+
+        if (!isMounted) return;
+
+        setDocumentSettings(documentExportSettingsToForm(nextSettings));
+        setCostEstimateTerms(nextSettings.costEstimateTerms.join('\n'));
+      } catch (loadError) {
+        console.error('Could not load document export settings.', loadError);
+
+        if (!isMounted) return;
+
+        setDocumentSettings(defaultDocumentSettings);
+        setCostEstimateTerms(defaultCostEstimateTerms.join('\n'));
+      } finally {
+        if (isMounted) {
+          setHasLoadedDocumentSettings(true);
+        }
+      }
+    }
+
+    void loadDocumentExportSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+
+
   // —— Derived values ————————————————————————————————————————————————————————
+
+  // Auto-save document export settings to Supabase after local edits settle.
+  useEffect(() => {
+    if (!hasLoadedDocumentSettings || !canEdit) return;
+
+    const saveTimeout = window.setTimeout(() => {
+      void saveDocumentExportSettings(
+        buildDocumentExportSettingsPayload(
+          form.org_name,
+          documentSettings,
+          costEstimateTerms
+        )
+      ).catch(saveError => {
+        console.error('Could not auto-save document export settings.', saveError);
+      });
+    }, 700);
+
+    return () => {
+      window.clearTimeout(saveTimeout);
+    };
+  }, [
+    canEdit,
+    costEstimateTerms,
+    documentSettings,
+    form.org_name,
+    hasLoadedDocumentSettings,
+  ]);
 
   const profitFirstTotal =
     parseFloat(form.profit_first_profit_pct || '0') +
@@ -303,6 +463,24 @@ export default function Settings() {
       return;
     }
 
+    try {
+      await saveDocumentExportSettings(
+        buildDocumentExportSettingsPayload(
+          form.org_name,
+          documentSettings,
+          costEstimateTerms
+        )
+      );
+    } catch (documentSettingsError) {
+      const message =
+        documentSettingsError instanceof Error
+          ? documentSettingsError.message
+          : 'Could not save document export settings.';
+
+      setError(message);
+      return;
+    }
+
     setSuccess('Settings saved successfully.');
     fetchSettings();
   };
@@ -321,6 +499,17 @@ export default function Settings() {
 
   const setField = (key: keyof SettingsForm) => (value: string) => {
     setForm(f => ({ ...f, [key]: value }));
+    setSuccess('');
+  };
+
+  const setDocumentField =
+    (key: keyof DocumentSettingsForm) => (value: string | boolean) => {
+      setDocumentSettings(current => ({ ...current, [key]: value }));
+      setSuccess('');
+    };
+
+  const handleCostEstimateTermsChange = (value: string) => {
+    setCostEstimateTerms(value);
     setSuccess('');
   };
 
@@ -463,6 +652,198 @@ export default function Settings() {
                 )}
               </div>
             </SettingRow>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+            <SectionHeading
+              title="Document Export Settings"
+              description="Used for branded PDFs such as cost estimates. Stored locally until the document settings schema is migrated."
+            />
+
+            <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs leading-5 text-emerald-700 dark:text-emerald-300">
+              Document export settings auto-save locally. Changes apply to PDF exports immediately.
+            </div>
+
+            <SettingRow
+              label="Document Logo Path"
+              description="Current logo asset used by PDFs. Upload UI will come later."
+              readOnly={!canEdit}
+              value={documentSettings.logoPath || defaultDocumentSettings.logoPath}
+            >
+              <input
+                type="text"
+                value={documentSettings.logoPath}
+                onChange={event =>
+                  setDocumentField('logoPath')(event.target.value)
+                }
+                className="form-input"
+                placeholder="/brand/Organization-Logo.png"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Authorized Signature Path"
+              description="Signature image used in PDFs. Recommended image size is 497 x 250 px."
+              readOnly={!canEdit}
+              value={documentSettings.signaturePath || defaultDocumentSettings.signaturePath}
+            >
+              <input
+                type="text"
+                value={documentSettings.signaturePath}
+                onChange={event =>
+                  setDocumentField('signaturePath')(event.target.value)
+                }
+                className="form-input"
+                placeholder="/brand/Authorized-Signature.png"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Address Line 1"
+              description="Building name displayed in PDF headers."
+              readOnly={!canEdit}
+              value={documentSettings.addressLine1 || '?'}
+            >
+              <input
+                type="text"
+                value={documentSettings.addressLine1}
+                onChange={event =>
+                  setDocumentField('addressLine1')(event.target.value)
+                }
+                className="form-input"
+                placeholder="Building name"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Address Line 2"
+              description="Street or area displayed in PDF headers."
+              readOnly={!canEdit}
+              value={documentSettings.addressLine2 || '?'}
+            >
+              <input
+                type="text"
+                value={documentSettings.addressLine2}
+                onChange={event =>
+                  setDocumentField('addressLine2')(event.target.value)
+                }
+                className="form-input"
+                placeholder="Street / Area"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Address Line 3"
+              description="City, district, or PIN displayed in PDF headers."
+              readOnly={!canEdit}
+              value={documentSettings.addressLine3 || '?'}
+            >
+              <input
+                type="text"
+                value={documentSettings.addressLine3}
+                onChange={event =>
+                  setDocumentField('addressLine3')(event.target.value)
+                }
+                className="form-input"
+                placeholder="City / District / PIN"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Address Line 4"
+              description="State and country displayed in PDF headers."
+              readOnly={!canEdit}
+              value={documentSettings.addressLine4 || '?'}
+            >
+              <input
+                type="text"
+                value={documentSettings.addressLine4}
+                onChange={event =>
+                  setDocumentField('addressLine4')(event.target.value)
+                }
+                className="form-input"
+                placeholder="Kerala, India"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Document Email"
+              description="Email shown on exported PDFs."
+              readOnly={!canEdit}
+              value={documentSettings.email || '?'}
+            >
+              <input
+                type="email"
+                value={documentSettings.email}
+                onChange={event =>
+                  setDocumentField('email')(event.target.value)
+                }
+                className="form-input"
+                placeholder="hello@gravium.in"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Document Phone"
+              description="Phone number shown on exported PDFs."
+              readOnly={!canEdit}
+              value={documentSettings.phone || '?'}
+            >
+              <input
+                type="tel"
+                value={documentSettings.phone}
+                onChange={event =>
+                  setDocumentField('phone')(event.target.value)
+                }
+                className="form-input"
+                placeholder="+91 8848895475"
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Invert Logo On Dark Header"
+              description="Keep enabled when the logo image is dark and the PDF header is dark."
+              readOnly={!canEdit}
+              value={documentSettings.invertLogoOnDark ? 'Enabled' : 'Disabled'}
+            >
+              <SwitchControl
+                checked={documentSettings.invertLogoOnDark}
+                onChange={checked =>
+                  setDocumentField('invertLogoOnDark')(checked)
+                }
+                ariaLabel="Toggle PDF logo inversion"
+              />
+            </SettingRow>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
+            <SectionHeading
+              title="Document Terms Presets"
+              description="Reusable terms for exported PDFs. Cost Estimate terms are active now; more document types can be added later."
+            />
+
+            <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs leading-5 text-emerald-700 dark:text-emerald-300">
+              Document terms auto-save locally. Enter one term per line.
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Cost Estimate Terms & Conditions
+              </label>
+              <textarea
+                value={costEstimateTerms}
+                onChange={event =>
+                  handleCostEstimateTermsChange(event.target.value)
+                }
+                disabled={!canEdit}
+                rows={7}
+                className="min-h-40 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground disabled:cursor-not-allowed disabled:opacity-70"
+                placeholder="Enter one term per line"
+              />
+              <p className="text-xs leading-5 text-muted-foreground">
+                Enter one term per line. The PDF exporter converts each line into a numbered term.
+              </p>
+            </div>
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
