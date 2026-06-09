@@ -104,6 +104,156 @@ export interface ProjectCashReceived {
   created_at: string;
 }
 
+
+export type ProjectFinanceAccountStatus = 'draft' | 'active' | 'closed' | 'archived';
+
+export interface ProjectFinanceAccount {
+  id: string;
+  project_id: string;
+  source_estimate_id: string | null;
+  status: ProjectFinanceAccountStatus;
+  revenue_amount: number;
+  estimated_cogs_amount: number;
+  estimated_margin_amount: number;
+  service_charge_amount: number;
+  misc_charge_amount: number;
+  gst_amount: number;
+  source_snapshot: Record<string, unknown>;
+  last_synced_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectFinancePaymentGateStatus = 'pending' | 'partial' | 'paid' | 'overpaid' | 'cancelled';
+
+export interface ProjectFinancePaymentGate {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  timeline_id: string | null;
+  timeline_gate_id: string | null;
+  gate_order: number;
+  title: string;
+  trigger_label: string;
+  required_amount: number;
+  collected_amount: number;
+  carry_forward_in_amount: number;
+  carry_forward_out_amount: number;
+  outstanding_amount: number;
+  status: ProjectFinancePaymentGateStatus;
+  marked_paid_at: string | null;
+  marked_paid_by: string | null;
+  source_gate_snapshot: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectCashReceipt {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  receipt_date: string;
+  received_from: string;
+  description: string;
+  amount: number;
+  gst_treatment: 'GST' | 'NO_GST';
+  payment_mode: string;
+  reference_number: string;
+  unallocated_amount: number;
+  overpayment_amount: number;
+  carry_forward_confirmed: boolean;
+  carry_forward_notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectCashReceiptAllocationType = 'gate' | 'carry_forward' | 'adjustment';
+
+export interface ProjectCashReceiptAllocation {
+  id: string;
+  receipt_id: string;
+  finance_account_id: string;
+  project_id: string;
+  payment_gate_id: string | null;
+  source_payment_gate_id: string | null;
+  allocation_type: ProjectCashReceiptAllocationType;
+  allocated_amount: number;
+  allocation_order: number;
+  notes: string;
+  created_at: string;
+}
+
+export type ProjectVendorAccountType = 'in_house' | 'vendor';
+export type ProjectVendorAccountStatus = 'open' | 'settled' | 'on_hold' | 'closed';
+
+export interface ProjectVendorAccount {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  account_key: string;
+  account_type: ProjectVendorAccountType;
+  vendor_id: string | null;
+  vendor_name: string;
+  payable_amount: number;
+  advance_paid_amount: number;
+  total_paid_amount: number;
+  outstanding_amount: number;
+  status: ProjectVendorAccountStatus;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectCogsSourceType = 'in_house' | 'vendor';
+export type ProjectCogsPaymentStatus = 'unpaid' | 'partial' | 'paid' | 'overpaid' | 'cancelled';
+
+export interface ProjectCogsEntry {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  vendor_account_id: string | null;
+  source_type: ProjectCogsSourceType;
+  vendor_id: string | null;
+  vendor_name: string;
+  category: string;
+  description: string;
+  estimated_amount: number;
+  payable_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  payment_status: ProjectCogsPaymentStatus;
+  entry_date: string;
+  source_estimate_line_id: string | null;
+  source_work_package_id: string | null;
+  source_snapshot: Record<string, unknown>;
+  remarks: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectVendorPaymentType = 'advance' | 'bill_payment' | 'adjustment' | 'refund';
+
+export interface ProjectVendorPayment {
+  id: string;
+  vendor_account_id: string;
+  finance_account_id: string;
+  project_id: string;
+  vendor_id: string | null;
+  cogs_entry_id: string | null;
+  payment_date: string;
+  amount: number;
+  payment_type: ProjectVendorPaymentType;
+  payment_mode: string;
+  reference_number: string;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Task {
   id: string;
   title: string;
