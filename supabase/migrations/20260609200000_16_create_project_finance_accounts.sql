@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS public.project_finance_payment_gates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   finance_account_id uuid NOT NULL REFERENCES public.project_finance_accounts(id) ON DELETE CASCADE,
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  timeline_id uuid REFERENCES public.project_timelines(id) ON DELETE SET NULL,
+  timeline_id text REFERENCES public.project_timelines(id) ON DELETE SET NULL,
 
   timeline_gate_id text,
   gate_order integer NOT NULL DEFAULT 1,
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS public.project_vendor_accounts (
 
   account_key text NOT NULL,
   account_type text NOT NULL DEFAULT 'in_house' CHECK (account_type IN ('in_house', 'vendor')),
-  vendor_id uuid REFERENCES public.vendors(id) ON DELETE SET NULL,
+  vendor_id text REFERENCES public.vendors(id) ON DELETE SET NULL,
   vendor_name text NOT NULL DEFAULT 'In-House',
 
   payable_amount numeric NOT NULL DEFAULT 0,
@@ -289,7 +289,7 @@ CREATE TABLE IF NOT EXISTS public.project_cogs_entries (
   vendor_account_id uuid REFERENCES public.project_vendor_accounts(id) ON DELETE SET NULL,
 
   source_type text NOT NULL DEFAULT 'in_house' CHECK (source_type IN ('in_house', 'vendor')),
-  vendor_id uuid REFERENCES public.vendors(id) ON DELETE SET NULL,
+  vendor_id text REFERENCES public.vendors(id) ON DELETE SET NULL,
   vendor_name text NOT NULL DEFAULT 'In-House',
 
   category text NOT NULL DEFAULT '',
@@ -345,7 +345,7 @@ CREATE TABLE IF NOT EXISTS public.project_vendor_payments (
   vendor_account_id uuid NOT NULL REFERENCES public.project_vendor_accounts(id) ON DELETE CASCADE,
   finance_account_id uuid NOT NULL REFERENCES public.project_finance_accounts(id) ON DELETE CASCADE,
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  vendor_id uuid REFERENCES public.vendors(id) ON DELETE SET NULL,
+  vendor_id text REFERENCES public.vendors(id) ON DELETE SET NULL,
   cogs_entry_id uuid REFERENCES public.project_cogs_entries(id) ON DELETE SET NULL,
 
   payment_date date NOT NULL DEFAULT CURRENT_DATE,
