@@ -739,14 +739,19 @@ export default function CostEstimatesPage() {
   const handleDeleteRecord = async (recordId: string) => {
     showOperationLoading('Deleting Estimate');
 
-    setRecords(current => current.filter(record => record.id !== recordId));
+    try {
+      setRecords(current => current.filter(record => record.id !== recordId));
 
-    if (selectedRecordId === recordId) {
-      setIsViewingApprovedSnapshot(false);
-      setSelectedRecordId(null);
+      if (selectedRecordId === recordId) {
+        setIsViewingApprovedSnapshot(false);
+        setSelectedRecordId(null);
+      }
+
+      await showOperationSuccess('Estimate Deleted');
+    } catch (error) {
+      console.error('Could not delete estimate.', error);
+      await showOperationError('Could Not Delete Estimate');
     }
-
-    await showOperationSuccess('Estimate Deleted');
   };
 
   const handleDeleteSelectedEstimate = async () => {
@@ -754,38 +759,48 @@ export default function CostEstimatesPage() {
 
     showOperationLoading('Deleting Estimate');
 
-    const currentRecord = records.find(record => record.id === selectedRecordId);
+    try {
+      const recordIdToDelete = selectedRecordId;
+      const currentRecord = records.find(record => record.id === recordIdToDelete);
 
-    if (currentRecord?.status === 'revision' && currentRecord.approvedSnapshot) {
-      const snapshot = currentRecord.approvedSnapshot;
+      if (currentRecord?.status === 'revision' && currentRecord.approvedSnapshot) {
+        const snapshot = currentRecord.approvedSnapshot;
+
+        setRecords(current =>
+          current.map(record =>
+            record.id === recordIdToDelete
+              ? {
+                  ...record,
+                  grandTotal: snapshot.grandTotal,
+                  status: 'approved',
+                  version: snapshot.version,
+                  updatedAt: nowTimestamp(),
+                  areas: snapshot.areas,
+                  lineItems: snapshot.lineItems,
+                  serviceChargePercent: snapshot.serviceChargePercent,
+                  miscChargePercent: snapshot.miscChargePercent,
+                  targetProjectRevenue: snapshot.targetProjectRevenue,
+                  approvedSnapshot: undefined,
+                }
+              : record
+          )
+        );
+        setIsViewingApprovedSnapshot(false);
+        setSelectedRecordId(null);
+        await showOperationSuccess('Revision Deleted');
+        return;
+      }
 
       setRecords(current =>
-        current.map(record =>
-          record.id === selectedRecordId
-            ? {
-                ...record,
-                grandTotal: snapshot.grandTotal,
-                status: 'approved',
-                version: snapshot.version,
-                updatedAt: nowTimestamp(),
-                areas: snapshot.areas,
-                lineItems: snapshot.lineItems,
-                serviceChargePercent: snapshot.serviceChargePercent,
-                miscChargePercent: snapshot.miscChargePercent,
-                targetProjectRevenue: snapshot.targetProjectRevenue,
-                approvedSnapshot: undefined,
-              }
-            : record
-        )
+        current.filter(record => record.id !== recordIdToDelete)
       );
       setIsViewingApprovedSnapshot(false);
       setSelectedRecordId(null);
-      return;
+      await showOperationSuccess('Estimate Deleted');
+    } catch (error) {
+      console.error('Could not delete selected estimate.', error);
+      await showOperationError('Could Not Delete Estimate');
     }
-
-    setRecords(current => current.filter(record => record.id !== selectedRecordId));
-    setIsViewingApprovedSnapshot(false);
-    setSelectedRecordId(null);
   };
 
   const handleCreateRevision = async (record: EstimateCardRecord) => {
