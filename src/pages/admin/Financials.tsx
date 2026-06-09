@@ -380,10 +380,10 @@ export default function Financials() {
             <Lock size={32} className="text-red-600" />
           </div>
           <h2 className="text-2xl font-bold">Access Restricted</h2>
-          <span className="text-sm text-slate-600">This section is only accessible to Finance department members and Administrators.</span>
+          <span className="text-sm text-slate-600">Finance is restricted to Finance department members and Administrators.</span>
           <div className="p-4 rounded-lg bg-red-50 border border-red-200 mt-4 w-full max-w-md">
             <p className="text-sm font-semibold text-red-900">Insufficient Permissions</p>
-            <p className="text-sm text-red-700 mt-1">You do not have the required role to view financial data. Contact your administrator for access.</p>
+            <p className="text-sm text-red-700 mt-1">You do not have access to project accounts, cash received, COGS, or profit summaries. Contact your administrator for access.</p>
           </div>
         </div>
       </div>
@@ -404,7 +404,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Project-wise tab
+  // Project accounts tab
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [projectExpenses, setProjectExpenses] = useState<ProjectExpense[]>([]);
   const [projectCash, setProjectCash] = useState<ProjectCashReceived[]>([]);
@@ -528,7 +528,7 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
     value: a.pct,
   }));
 
-  // —— Project-wise calculations ——————————————————————————————————————————————
+  // —— Project account calculations ——————————————————————————————————————————————
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
 
   const calcProjectFinancials = () => {
@@ -590,10 +590,10 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
       <div className="flex items-center justify-between mb-8">
         <div>
           <Heading tag="h1" size="x-large" className="mb-1">
-            Financials
+            Finance
           </Heading>
           <Text color="muted">
-            Profit First financial overview for GRAVIUM OS
+            Project accounts, cash received, COGS, and finance summaries for Gravium OS.
           </Text>
         </div>
         <ActionButton icon="refresh" variant="secondary" onClick={fetchAll}>
@@ -619,11 +619,11 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         {/* ══════════════════════════════════════════════════════════════════ */}
         {/* TAB 1: Global Financial View                                       */}
         {/* ══════════════════════════════════════════════════════════════════ */}
-        <TabPanel label="Global Overview">
+        <TabPanel label="Overview">
           <div className="flex flex-col gap-8 pt-6">
             {/* —— KPI Cards —————————————————————————————————————————————————— */}
             <div>
-              <SectionHeading>Key Performance Indicators</SectionHeading>
+              <SectionHeading>Finance Overview</SectionHeading>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <KpiCard
                   label="Total Revenue"
@@ -1017,9 +1017,9 @@ function FinancialsInner({ theme }: { theme: 'light' | 'dark' }) {
         </TabPanel>
 
         {/* ══════════════════════════════════════════════════════════════════ */}
-        {/* TAB 2: Project-wise Financial View                                */}
+        {/* TAB 2: Project Accounts                                               */}
         {/* ══════════════════════════════════════════════════════════════════ */}
-        <TabPanel label="Project Breakdown">
+        <TabPanel label="Project Accounts">
           <div className="flex flex-col gap-6 pt-6">
             {/* —— Project Selector ——————————————————————————————————————————— */}
             <div className="bg-card rounded-xl border border-border p-5">
