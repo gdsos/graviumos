@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -22,7 +24,8 @@ interface OperationFeedbackContextValue {
   hideOperation: () => void;
 }
 
-const OperationFeedbackContext = createContext<OperationFeedbackContextValue | null>(null);
+const OperationFeedbackContext =
+  createContext<OperationFeedbackContextValue | null>(null);
 
 function wait(duration: number) {
   return new Promise(resolve => window.setTimeout(resolve, duration));
@@ -38,101 +41,96 @@ function OperationFeedbackOverlay({ state }: { state: OperationState }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(96,61,42,0.18),transparent_34%),linear-gradient(135deg,rgba(85,93,58,0.12),transparent_34%)]" />
 
       <div className="relative z-10 flex w-full max-w-[21rem] flex-col items-center rounded-[2rem] border border-[#F5F5F5]/12 bg-black/72 px-8 py-9 text-center shadow-2xl shadow-black/45 backdrop-blur-2xl">
-        <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-[1.65rem] border border-[#F5F5F5]/12 bg-[#F5F5F5]/6 shadow-2xl shadow-black/40 backdrop-blur">
-          <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/12 to-transparent" />
+        {isLoading ? (
+          <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-[1.65rem] border border-[#F5F5F5]/12 bg-[#F5F5F5]/6 shadow-2xl shadow-black/40 backdrop-blur">
+            <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/12 to-transparent" />
 
-          {isLoading && (
-            <>
-              <svg
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-[-7px] h-[calc(100%+14px)] w-[calc(100%+14px)] -rotate-90"
-                viewBox="0 0 112 112"
-                fill="none"
-              >
-                <rect
-                  x="10"
-                  y="10"
-                  width="92"
-                  height="92"
-                  rx="30"
-                  pathLength="100"
-                  stroke="rgba(245,245,245,0.12)"
-                  strokeWidth="3"
-                />
-                <rect
-                  x="10"
-                  y="10"
-                  width="92"
-                  height="92"
-                  rx="30"
-                  pathLength="100"
-                  stroke="rgba(245,245,245,0.85)"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeDasharray="24 76"
-                  style={{ animation: 'gravium_operation_trace 1.2s linear infinite' }}
-                />
-              </svg>
-
-              <img
-                src="/brand/gravium-icon-light.png"
-                alt=""
-                className="relative h-10 w-10 object-contain"
-                style={{ filter: 'brightness(0) invert(1)' }}
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-[-7px] h-[calc(100%+14px)] w-[calc(100%+14px)] -rotate-90"
+              viewBox="0 0 112 112"
+              fill="none"
+            >
+              <rect
+                x="10"
+                y="10"
+                width="92"
+                height="92"
+                rx="30"
+                pathLength="100"
+                stroke="rgba(245,245,245,0.12)"
+                strokeWidth="3"
               />
-            </>
-          )}
+              <rect
+                x="10"
+                y="10"
+                width="92"
+                height="92"
+                rx="30"
+                pathLength="100"
+                stroke="rgba(245,245,245,0.85)"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray="24 76"
+                style={{ animation: 'gravium_operation_trace 1.2s linear infinite' }}
+              />
+            </svg>
 
-          {isSuccess && (
-            <div className="relative flex h-12 w-12 animate-[gravium_success_pop_360ms_ease-out] items-center justify-center rounded-full border border-[#F5F5F5]/24 bg-[#F5F5F5]/12">
-              <Check className="h-6 w-6 text-[#F5F5F5]" strokeWidth={2.4} />
-            </div>
-          )}
+            <div
+              aria-hidden="true"
+              className="absolute inset-3 rounded-[1.25rem] border border-white/12"
+              style={{ animation: 'gravium_operation_breathe 1.6s ease-in-out infinite' }}
+            />
 
-          {isError && (
-            <div className="relative flex h-12 w-12 animate-[gravium_success_pop_360ms_ease-out] items-center justify-center rounded-full border border-[#F5F5F5]/24 bg-[#F5F5F5]/12">
-              <X className="h-6 w-6 text-[#F5F5F5]" strokeWidth={2.4} />
-            </div>
-          )}
-        </div>
+            <img
+              src="/brand/gravium-crown-icon.svg"
+              alt=""
+              className="relative z-10 h-9 w-9 object-contain"
+            />
+          </div>
+        ) : (
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#F5F5F5]/12 bg-[#F5F5F5]/6 shadow-2xl shadow-black/40 backdrop-blur">
+            {isSuccess && <Check className="h-9 w-9 text-[#F5F5F5]" />}
+            {isError && <X className="h-9 w-9 text-[#F5F5F5]" />}
+          </div>
+        )}
 
         <img
-          src="/brand/gravium-wordmark-light.png"
+          src="/brand/gravium-wordmark-dark.png"
           alt="Gravium"
-          className="mb-4 h-6 w-auto object-contain"
-          style={{ filter: 'brightness(0) invert(1)' }}
+          className="mb-6 h-7 w-auto object-contain opacity-95 brightness-0 invert"
         />
 
-        <p className="text-sm font-medium uppercase tracking-[0.22em] text-[#F5F5F5]/72">
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.34em] text-[#F5F5F5]/72">
           {state.message}
         </p>
       </div>
 
       <style>{`
         @keyframes gravium_operation_trace {
-          from {
+          0% {
             stroke-dashoffset: 0;
           }
 
-          to {
+          100% {
             stroke-dashoffset: -100;
           }
         }
 
-        @keyframes gravium_success_pop {
+        @keyframes gravium_operation_breathe {
           0% {
-            transform: scale(0.82);
-            opacity: 0;
+            transform: scale(1);
+            opacity: 0.55;
           }
 
-          70% {
+          50% {
             transform: scale(1.06);
             opacity: 1;
           }
 
           100% {
             transform: scale(1);
-            opacity: 1;
+            opacity: 0.55;
           }
         }
       `}</style>
@@ -142,43 +140,105 @@ function OperationFeedbackOverlay({ state }: { state: OperationState }) {
 
 export function OperationFeedbackProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<OperationState | null>(null);
+  const operationIdRef = useRef(0);
+  const safetyTimeoutRef = useRef<number | null>(null);
+  const safetyClearTimeoutRef = useRef<number | null>(null);
 
-  const showOperationLoading = useCallback((message: string) => {
-    setState({
-      phase: 'loading',
-      message,
-    });
+  const clearSafetyTimers = useCallback(() => {
+    if (safetyTimeoutRef.current !== null) {
+      window.clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+
+    if (safetyClearTimeoutRef.current !== null) {
+      window.clearTimeout(safetyClearTimeoutRef.current);
+      safetyClearTimeoutRef.current = null;
+    }
   }, []);
 
-  const showOperationSuccess = useCallback(async (
-    message: string = 'Saved Successfully',
-    duration: number = 650
-  ) => {
-    setState({
-      phase: 'success',
-      message,
-    });
+  useEffect(() => {
+    return () => {
+      clearSafetyTimers();
+    };
+  }, [clearSafetyTimers]);
 
-    await wait(duration);
-    setState(null);
-  }, []);
+  const showOperationLoading = useCallback(
+    (message: string) => {
+      clearSafetyTimers();
 
-  const showOperationError = useCallback(async (
-    message: string = 'Something Went Wrong',
-    duration: number = 900
-  ) => {
-    setState({
-      phase: 'error',
-      message,
-    });
+      const operationId = operationIdRef.current + 1;
+      operationIdRef.current = operationId;
 
-    await wait(duration);
-    setState(null);
-  }, []);
+      setState({
+        phase: 'loading',
+        message,
+      });
+
+      safetyTimeoutRef.current = window.setTimeout(() => {
+        if (operationIdRef.current !== operationId) return;
+
+        setState({
+          phase: 'error',
+          message: 'Operation took too long. Please refresh and check if it completed.',
+        });
+
+        safetyClearTimeoutRef.current = window.setTimeout(() => {
+          if (operationIdRef.current !== operationId) return;
+
+          setState(null);
+        }, 1800);
+      }, 12000);
+    },
+    [clearSafetyTimers]
+  );
+
+  const showOperationSuccess = useCallback(
+    async (message: string = 'Saved Successfully', duration: number = 650) => {
+      clearSafetyTimers();
+
+      const operationId = operationIdRef.current + 1;
+      operationIdRef.current = operationId;
+
+      setState({
+        phase: 'success',
+        message,
+      });
+
+      await wait(duration);
+
+      if (operationIdRef.current === operationId) {
+        setState(null);
+      }
+    },
+    [clearSafetyTimers]
+  );
+
+  const showOperationError = useCallback(
+    async (message: string = 'Something Went Wrong', duration: number = 900) => {
+      clearSafetyTimers();
+
+      const operationId = operationIdRef.current + 1;
+      operationIdRef.current = operationId;
+
+      setState({
+        phase: 'error',
+        message,
+      });
+
+      await wait(duration);
+
+      if (operationIdRef.current === operationId) {
+        setState(null);
+      }
+    },
+    [clearSafetyTimers]
+  );
 
   const hideOperation = useCallback(() => {
+    clearSafetyTimers();
+    operationIdRef.current += 1;
     setState(null);
-  }, []);
+  }, [clearSafetyTimers]);
 
   const value = useMemo(
     () => ({
