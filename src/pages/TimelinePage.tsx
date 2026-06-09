@@ -221,6 +221,115 @@ type StoredTimelineState = {
   sourceEstimateGrandTotal?: number;
 };
 
+type ProjectTimelineRow = {
+  id: string;
+  project_id: string;
+  source_estimate_id: string | null;
+  source_estimate_version: number | string | null;
+  source_estimate_updated_at: string | null;
+  source_estimate_project_name: string | null;
+  source_estimate_client_name: string | null;
+  source_estimate_grand_total: number | string | null;
+  has_timeline: boolean;
+  timeline_confirmed_at: string | null;
+  payment_gates: unknown;
+  work_packages: unknown;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type ProjectTimelinePersistencePayload = {
+  projectId: string;
+  hasTimeline: boolean;
+  paymentGates: PaymentGate[];
+  workPackages: WorkPackage[];
+  timelineConfirmedAt: string;
+  sourceEstimateId: string;
+  sourceEstimateVersion: number;
+  sourceEstimateUpdatedAt: string;
+  sourceEstimateProjectName: string;
+  sourceEstimateClientName: string;
+  sourceEstimateGrandTotal: number;
+};
+
+function mapProjectTimelineRowToStoredState(row: ProjectTimelineRow): StoredTimelineState {
+  return {
+    hasTimeline: row.has_timeline,
+    paymentGates: Array.isArray(row.payment_gates)
+      ? (row.payment_gates as PaymentGate[])
+      : [],
+    workPackages: Array.isArray(row.work_packages)
+      ? (row.work_packages as WorkPackage[])
+      : [],
+    timelineConfirmedAt: row.timeline_confirmed_at ?? '',
+    selectedTimelineProjectId: row.project_id,
+    sourceEstimateId: row.source_estimate_id ?? '',
+    sourceEstimateVersion: toTimelineNumber(row.source_estimate_version),
+    sourceEstimateUpdatedAt: row.source_estimate_updated_at ?? '',
+    sourceEstimateProjectName: row.source_estimate_project_name ?? '',
+    sourceEstimateClientName: row.source_estimate_client_name ?? '',
+    sourceEstimateGrandTotal: toTimelineNumber(row.source_estimate_grand_total),
+  };
+}
+
+function mapProjectTimelineStateToRow(payload: ProjectTimelinePersistencePayload) {
+  return {
+    project_id: payload.projectId,
+    source_estimate_id: payload.sourceEstimateId || null,
+    source_estimate_version: payload.sourceEstimateVersion,
+    source_estimate_updated_at: payload.sourceEstimateUpdatedAt || null,
+    source_estimate_project_name: payload.sourceEstimateProjectName,
+    source_estimate_client_name: payload.sourceEstimateClientName,
+    source_estimate_grand_total: payload.sourceEstimateGrandTotal,
+    has_timeline: payload.hasTimeline,
+    timeline_confirmed_at: payload.timelineConfirmedAt || null,
+    payment_gates: payload.paymentGates,
+    work_packages: payload.workPackages,
+  };
+}
+
+async function fetchProjectTimelineState(projectId: string) {
+  const { data, error } = await supabase
+    .from('project_timelines')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data ? mapProjectTimelineRowToStoredState(data as ProjectTimelineRow) : null;
+}
+
+async function fetchLatestProjectTimelineState() {
+  const { data, error } = await supabase
+    .from('project_timelines')
+    .select('*')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data ? mapProjectTimelineRowToStoredState(data as ProjectTimelineRow) : null;
+}
+
+async function saveProjectTimelineState(payload: ProjectTimelinePersistencePayload) {
+  const { error } = await supabase
+    .from('project_timelines')
+    .upsert(mapProjectTimelineStateToRow(payload), { onConflict: 'project_id' });
+
+  if (error) throw error;
+}
+
+async function deleteProjectTimelineState(projectId: string) {
+  const { error } = await supabase
+    .from('project_timelines')
+    .delete()
+    .eq('project_id', projectId);
+
+  if (error) throw error;
+}
+
 type TimelineTab = 'overview' | 'work' | 'payments' | 'schedule' | 'alerts';
 
 const tabs: Array<{ id: TimelineTab; label: string }> = [
@@ -653,26 +762,147 @@ export default function TimelinePage() {
   const [stageOnePaymentPercent, setStageOnePaymentPercent] = useState('30');
   const [stageTwoPaymentPercent, setStageTwoPaymentPercent] = useState('25');
   const [handoverPaymentPercent, setHandoverPaymentPercent] = useState('10');
+  const [isTimelineStateHydrated, setIsTimelineStateHydrated] = useState(false);
+
+  const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
+    setHasTimeline(nextTimelineState.hasTimeline);
+    setPaymentGates(nextTimelineState.paymentGates);
+    setWorkPackages(nextTimelineState.workPackages);
+    setTimelineConfirmedAt(nextTimelineState.timelineConfirmedAt ?? '');
+    setSelectedTimelineProjectId(nextTimelineState.selectedTimelineProjectId ?? '');
+    setTimelineSourceEstimateId(nextTimelineState.sourceEstimateId ?? '');
+    setTimelineSourceEstimateVersion(nextTimelineState.sourceEstimateVersion ?? 0);
+    setTimelineSourceEstimateUpdatedAt(nextTimelineState.sourceEstimateUpdatedAt ?? '');
+    setTimelineSourceEstimateProjectName(nextTimelineState.sourceEstimateProjectName ?? '');
+    setTimelineSourceEstimateClientName(nextTimelineState.sourceEstimateClientName ?? '');
+    setTimelineSourceEstimateGrandTotal(nextTimelineState.sourceEstimateGrandTotal ?? 0);
+  };
 
   useEffect(() => {
-    localStorage.setItem(
-      TIMELINE_STORAGE_KEY,
-      JSON.stringify({
+    let isMounted = true;
+
+    async function hydrateProjectTimelineState() {
+      if (!selectedTimelineProjectId) {
+        setIsTimelineStateHydrated(false);
+
+        try {
+          const latestRemoteTimelineState = await fetchLatestProjectTimelineState();
+
+          if (!isMounted) return;
+
+          if (latestRemoteTimelineState) {
+            applyStoredTimelineState(latestRemoteTimelineState);
+          }
+
+          setIsTimelineStateHydrated(true);
+        } catch (error) {
+          console.error('Could not hydrate latest timeline state from Supabase.', error);
+
+          if (isMounted) {
+            setIsTimelineStateHydrated(true);
+          }
+        }
+
+        return;
+      }
+
+      setIsTimelineStateHydrated(false);
+
+      try {
+        const remoteTimelineState = await fetchProjectTimelineState(
+          selectedTimelineProjectId
+        );
+
+        if (!isMounted) return;
+
+        if (remoteTimelineState) {
+          applyStoredTimelineState(remoteTimelineState);
+          setIsTimelineStateHydrated(true);
+          return;
+        }
+
+        const localTimelineState = getStoredTimelineState();
+
+        if (
+          localTimelineState?.selectedTimelineProjectId === selectedTimelineProjectId &&
+          (
+            localTimelineState.hasTimeline ||
+            localTimelineState.paymentGates.length > 0 ||
+            localTimelineState.workPackages.length > 0 ||
+            Boolean(localTimelineState.sourceEstimateId)
+          )
+        ) {
+          await saveProjectTimelineState({
+            projectId: selectedTimelineProjectId,
+            hasTimeline: localTimelineState.hasTimeline,
+            paymentGates: localTimelineState.paymentGates,
+            workPackages: localTimelineState.workPackages,
+            timelineConfirmedAt: localTimelineState.timelineConfirmedAt ?? '',
+            sourceEstimateId: localTimelineState.sourceEstimateId ?? '',
+            sourceEstimateVersion: localTimelineState.sourceEstimateVersion ?? 0,
+            sourceEstimateUpdatedAt: localTimelineState.sourceEstimateUpdatedAt ?? '',
+            sourceEstimateProjectName: localTimelineState.sourceEstimateProjectName ?? '',
+            sourceEstimateClientName: localTimelineState.sourceEstimateClientName ?? '',
+            sourceEstimateGrandTotal: localTimelineState.sourceEstimateGrandTotal ?? 0,
+          });
+
+          window.localStorage.removeItem(TIMELINE_STORAGE_KEY);
+        }
+
+        if (isMounted) {
+          setIsTimelineStateHydrated(true);
+        }
+      } catch (error) {
+        console.error('Could not hydrate timeline state from Supabase.', error);
+
+        if (isMounted) {
+          setIsTimelineStateHydrated(true);
+        }
+      }
+    }
+
+    void hydrateProjectTimelineState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedTimelineProjectId]);
+
+  useEffect(() => {
+    if (!isTimelineStateHydrated || !selectedTimelineProjectId) return;
+
+    const hasPersistableTimelineState =
+      hasTimeline ||
+      paymentGates.length > 0 ||
+      workPackages.length > 0 ||
+      Boolean(timelineSourceEstimateId);
+
+    if (!hasPersistableTimelineState) return;
+
+    const saveTimeout = window.setTimeout(() => {
+      void saveProjectTimelineState({
+        projectId: selectedTimelineProjectId,
         hasTimeline,
         paymentGates,
         workPackages,
         timelineConfirmedAt,
-        selectedTimelineProjectId,
         sourceEstimateId: timelineSourceEstimateId,
         sourceEstimateVersion: timelineSourceEstimateVersion,
         sourceEstimateUpdatedAt: timelineSourceEstimateUpdatedAt,
         sourceEstimateProjectName: timelineSourceEstimateProjectName,
         sourceEstimateClientName: timelineSourceEstimateClientName,
         sourceEstimateGrandTotal: timelineSourceEstimateGrandTotal,
-      })
-    );
+      }).catch(error => {
+        console.error('Could not save timeline state to Supabase.', error);
+      });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(saveTimeout);
+    };
   }, [
     hasTimeline,
+    isTimelineStateHydrated,
     paymentGates,
     selectedTimelineProjectId,
     timelineConfirmedAt,
@@ -1382,8 +1612,16 @@ export default function TimelinePage() {
     setIsDeleteTimelineDialogOpen(true);
   };
 
-  const handleConfirmDeleteTimeline = () => {
-    localStorage.removeItem(TIMELINE_STORAGE_KEY);
+  const handleConfirmDeleteTimeline = async () => {
+    if (selectedTimelineProjectId) {
+      try {
+        await deleteProjectTimelineState(selectedTimelineProjectId);
+      } catch (error) {
+        console.error('Could not delete timeline state from Supabase.', error);
+      }
+    }
+
+    window.localStorage.removeItem(TIMELINE_STORAGE_KEY);
     setPaymentGates([]);
     setWorkPackages([]);
     setPendingTimelineDraft(null);
@@ -1394,12 +1632,12 @@ export default function TimelinePage() {
     setShowEstimateSourcePicker(false);
     setIsPlanningControlsLocked(false);
     setShowPaymentGateControls(false);
-      setTimelineSourceEstimateId('');
-      setTimelineSourceEstimateVersion(0);
-      setTimelineSourceEstimateUpdatedAt('');
-      setTimelineSourceEstimateProjectName('');
-      setTimelineSourceEstimateClientName('');
-      setTimelineSourceEstimateGrandTotal(0);
+    setTimelineSourceEstimateId('');
+    setTimelineSourceEstimateVersion(0);
+    setTimelineSourceEstimateUpdatedAt('');
+    setTimelineSourceEstimateProjectName('');
+    setTimelineSourceEstimateClientName('');
+    setTimelineSourceEstimateGrandTotal(0);
     setIsDeleteTimelineDialogOpen(false);
     setActiveTab('overview');
   };
