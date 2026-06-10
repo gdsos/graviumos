@@ -191,6 +191,7 @@ function VendorDetailsPanel({
   onDelete: (vendor: Vendor) => void;
 }) {
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [futureActionMessage, setFutureActionMessage] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -214,7 +215,9 @@ function VendorDetailsPanel({
   const whatsappUrl = getWhatsAppUrl(vendor.phone);
 
   const handleFutureAction = (actionName: string) => {
-    window.alert(`${actionName} will be connected after the related module flow is finalised.`);
+    setFutureActionMessage(
+      `${actionName} will be connected after the related module flow is finalised.`
+    );
   };
 
   const contactIconButtonClass =
@@ -225,6 +228,28 @@ function VendorDetailsPanel({
       ref={panelRef}
       className="hidden overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm lg:block"
     >
+      {futureActionMessage && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+            <p className="text-lg font-semibold text-foreground">
+              Action Not Connected Yet
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {futureActionMessage}
+            </p>
+
+            <div className="mt-6 flex justify-end">
+              <Button
+                type="button"
+                onClick={() => setFutureActionMessage(null)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative border-b border-border p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

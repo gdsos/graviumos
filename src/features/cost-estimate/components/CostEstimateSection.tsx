@@ -721,6 +721,8 @@ export function CostEstimateSection({
         doesCostEstimateUnitMatchSearch(unit, newPresetUnitSearchValue)
       )
     : units;
+  const [masterSourceNotice, setMasterSourceNotice] = useState<string | null>(null);
+
   const handleMasterSourceError = (error: unknown) => {
     const message =
       error instanceof Error
@@ -728,7 +730,7 @@ export function CostEstimateSection({
         : 'Could not save cost estimate master source.';
 
     console.error(message, error);
-    window.alert(message);
+    setMasterSourceNotice(message);
   };
 
   const canAddNewPresetUnit =
@@ -2819,6 +2821,29 @@ export function CostEstimateSection({
         )}
       </div>
     </SectionCard>
+
+      {masterSourceNotice && (
+        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-t-3xl border border-border bg-card p-5 text-card-foreground shadow-xl sm:rounded-3xl">
+            <h2 className="text-lg font-semibold text-foreground">
+              Master Source Sync Failed
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {masterSourceNotice}
+            </p>
+
+            <div className="mt-6 flex justify-end">
+              <Button
+                type="button"
+                onClick={() => setMasterSourceNotice(null)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDialog && (
         <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
