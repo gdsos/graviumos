@@ -453,18 +453,6 @@ export function VendorFormModal({
               />
             </FormField>
 
-            <FormField label="Assigned Projects">
-              <input
-                type="number"
-                min="0"
-                value={form.assignedProjectCount}
-                onChange={event =>
-                  updateForm('assignedProjectCount', event.target.value)
-                }
-                className={inputClass}
-              />
-            </FormField>
-
             <div className="sm:col-span-2">
               <FormField label="Scope of Work" required>
                 <textarea

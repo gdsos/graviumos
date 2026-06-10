@@ -266,6 +266,7 @@ async function fetchProjectTimelineGateRow(projectId: string) {
     .from('project_timelines')
     .select('id, project_id, source_estimate_id, source_estimate_version, source_estimate_grand_total, has_timeline, timeline_confirmed_at, payment_gates')
     .eq('project_id', projectId)
+    .eq('has_timeline', true)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -378,7 +379,22 @@ async function syncFinancePaymentGatesFromTimeline({
 
   if (error) throw error;
 
-  return (data ?? []) as ProjectFinancePaymentGate[];
+  const upsertedGateRows = (data ?? []) as ProjectFinancePaymentGate[];
+
+  if (upsertedGateRows.length > 0) {
+    return upsertedGateRows;
+  }
+
+  const { data: syncedGateRows, error: syncedGateFetchError } = await supabase
+    .from('project_finance_payment_gates')
+    .select('*')
+    .eq('finance_account_id', account.id)
+    .eq('timeline_id', timeline.id)
+    .order('gate_order', { ascending: true });
+
+  if (syncedGateFetchError) throw syncedGateFetchError;
+
+  return (syncedGateRows ?? []) as ProjectFinancePaymentGate[];
 }
 
 

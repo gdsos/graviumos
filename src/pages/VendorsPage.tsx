@@ -57,6 +57,92 @@ interface ProcurementCategoryOption {
   label: string;
 }
 
+interface VendorAssignedProject {
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  workPackageCount: number;
+  latestUpdatedAt: string | null;
+}
+
+type VendorTimelineRow = {
+  project_id: string | null;
+  work_packages: unknown;
+  updated_at: string | null;
+};
+
+type VendorProjectRow = {
+  id: string;
+  name: string | null;
+  client_name?: string | null;
+  clientName?: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getWorkPackageVendorId(value: unknown) {
+  if (!isRecord(value)) return '';
+
+  const vendorId = value.vendorId ?? value.vendor_id;
+
+  return typeof vendorId === 'string' ? vendorId : '';
+}
+
+function buildVendorAssignedProjectsMap(
+  timelineRows: VendorTimelineRow[],
+  projectRows: VendorProjectRow[]
+) {
+  const projectsById = new Map(
+    projectRows.map(project => [project.id, project])
+  );
+  const assignmentMap: Record<string, VendorAssignedProject[]> = {};
+
+  timelineRows.forEach(timeline => {
+    if (!timeline.project_id || !Array.isArray(timeline.work_packages)) return;
+
+    const vendorWorkCounts = new Map<string, number>();
+
+    timeline.work_packages.forEach(workPackage => {
+      const vendorId = getWorkPackageVendorId(workPackage);
+      if (!vendorId) return;
+
+      vendorWorkCounts.set(vendorId, (vendorWorkCounts.get(vendorId) ?? 0) + 1);
+    });
+
+    vendorWorkCounts.forEach((workPackageCount, vendorId) => {
+      const project = projectsById.get(timeline.project_id ?? '');
+      const projectName = project?.name?.trim() || 'Unnamed Project';
+      const clientName =
+        project?.client_name?.trim() ||
+        project?.clientName?.trim() ||
+        '';
+
+      if (!assignmentMap[vendorId]) {
+        assignmentMap[vendorId] = [];
+      }
+
+      assignmentMap[vendorId].push({
+        projectId: timeline.project_id ?? '',
+        projectName,
+        clientName,
+        workPackageCount,
+        latestUpdatedAt: timeline.updated_at,
+      });
+    });
+  });
+
+  Object.keys(assignmentMap).forEach(vendorId => {
+    assignmentMap[vendorId].sort((a, b) =>
+      a.projectName.localeCompare(b.projectName)
+    );
+  });
+
+  return assignmentMap;
+}
+
+
 function formatCategoryLabel(value: string) {
   return value
     .trim()
@@ -181,11 +267,13 @@ function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
 
 function VendorDetailsPanel({
   vendor,
+  assignedProjects,
   onClose,
   onEdit,
   onDelete,
 }: {
   vendor: Vendor | null;
+  assignedProjects: VendorAssignedProject[];
   onClose: () => void;
   onEdit: (vendor: Vendor) => void;
   onDelete: (vendor: Vendor) => void;
@@ -490,8 +578,41 @@ function VendorDetailsPanel({
         <div className="rounded-xl border border-border bg-background p-4">
           <p className="text-xs text-muted-foreground">Assigned Projects</p>
           <p className="mt-1 text-2xl font-semibold text-foreground">
-            {vendor.assignedProjectCount}
+            {assignedProjects.length}
           </p>
+
+          {assignedProjects.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {assignedProjects.slice(0, 4).map(project => (
+                <div
+                  key={project.projectId}
+                  className="rounded-lg border border-border bg-card px-3 py-2"
+                >
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {project.projectName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {[
+                      project.clientName,
+                      `${project.workPackageCount} work package${project.workPackageCount === 1 ? '' : 's'}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' - ')}
+                  </p>
+                </div>
+              ))}
+
+              {assignedProjects.length > 4 && (
+                <p className="text-xs text-muted-foreground">
+                  +{assignedProjects.length - 4} more project{assignedProjects.length - 4 === 1 ? '' : 's'}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              No active Timeline assignments yet.
+            </p>
+          )}
         </div>
       </div>
     </aside>
@@ -524,6 +645,8 @@ export default function VendorsPage() {
   const [modalState, setModalState] = useState<VendorModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [vendorAssignedProjectsByVendorId, setVendorAssignedProjectsByVendorId] =
+    useState<Record<string, VendorAssignedProject[]>>({});
   const {
     showOperationLoading,
     showOperationSuccess,
@@ -534,12 +657,42 @@ export default function VendorsPage() {
     setDataError('');
 
     try {
-      const [nextVendors, nextCategories] = await Promise.all([
+      const [
+        nextVendors,
+        nextCategories,
+        timelinesRes,
+        projectsRes,
+      ] = await Promise.all([
         fetchVendorsMaster(),
         fetchProcurementCategories(),
+        supabase
+          .from('project_timelines')
+          .select('project_id, work_packages, updated_at')
+          .eq('has_timeline', true),
+        supabase
+          .from('projects')
+          .select('id, name, client_name'),
       ]);
 
-      setVendors(nextVendors);
+      if (timelinesRes.error) throw timelinesRes.error;
+      if (projectsRes.error) throw projectsRes.error;
+
+      const assignedProjectsByVendorId = buildVendorAssignedProjectsMap(
+        (timelinesRes.data ?? []) as VendorTimelineRow[],
+        (projectsRes.data ?? []) as VendorProjectRow[]
+      );
+      const vendorsWithAssignmentCounts = nextVendors.map(vendor => ({
+        ...vendor,
+        assignedProjectCount: assignedProjectsByVendorId[vendor.id]?.length ?? 0,
+      }));
+
+      setVendors(vendorsWithAssignmentCounts);
+      setVendorAssignedProjectsByVendorId(assignedProjectsByVendorId);
+      setSelectedVendor(currentVendor =>
+        currentVendor
+          ? vendorsWithAssignmentCounts.find(vendor => vendor.id === currentVendor.id) ?? null
+          : currentVendor
+      );
       setCategoryOptions(
         mergeDropdownOptions(getDefaultCategoryOptions(), nextCategories)
       );
@@ -674,23 +827,28 @@ export default function VendorsPage() {
       const savedVendor = data
         ? mapVendorRecordToVendor(data as VendorRecord)
         : vendor;
+      const savedVendorWithAssignmentCount = {
+        ...savedVendor,
+        assignedProjectCount:
+          vendorAssignedProjectsByVendorId[savedVendor.id]?.length ?? 0,
+      };
 
       setVendors(currentVendors => {
         const exists = currentVendors.some(
-          currentVendor => currentVendor.id === savedVendor.id
+          currentVendor => currentVendor.id === savedVendorWithAssignmentCount.id
         );
 
         if (exists) {
           return currentVendors.map(currentVendor =>
-            currentVendor.id === savedVendor.id ? savedVendor : currentVendor
+            currentVendor.id === savedVendorWithAssignmentCount.id ? savedVendorWithAssignmentCount : currentVendor
           );
         }
 
-        return [savedVendor, ...currentVendors];
+        return [savedVendorWithAssignmentCount, ...currentVendors];
       });
 
       setSelectedVendor(current =>
-        current?.id === savedVendor.id ? savedVendor : current
+        current?.id === savedVendorWithAssignmentCount.id ? savedVendorWithAssignmentCount : current
       );
 
       setModalState(null);
@@ -850,6 +1008,11 @@ export default function VendorsPage() {
 
           <VendorDetailsPanel
             vendor={selectedVendor}
+            assignedProjects={
+              selectedVendor
+                ? vendorAssignedProjectsByVendorId[selectedVendor.id] ?? []
+                : []
+            }
             onClose={() => setSelectedVendor(null)}
             onEdit={selectedVendor =>
               setModalState({ mode: 'edit', vendor: selectedVendor })

@@ -997,6 +997,79 @@ function appendTimelineNote(existingNote: string | undefined, nextNote: string) 
   return trimmedNote ? `${trimmedNote} ${nextNote}` : nextNote;
 }
 
+async function deleteTimelineFinanceGateData(projectId: string) {
+  const { data: gateRows, error: gateFetchError } = await supabase
+    .from('project_finance_payment_gates')
+    .select('id')
+    .eq('project_id', projectId);
+
+  if (gateFetchError) throw gateFetchError;
+
+  const gateIds = (gateRows ?? [])
+    .map(row => String(row.id))
+    .filter(Boolean);
+
+  if (gateIds.length === 0) return;
+
+  const { data: allocationRows, error: allocationFetchError } = await supabase
+    .from('project_cash_receipt_allocations')
+    .select('id, receipt_id')
+    .in('payment_gate_id', gateIds);
+
+  if (allocationFetchError) throw allocationFetchError;
+
+  const receiptIds = Array.from(
+    new Set(
+      (allocationRows ?? [])
+        .map(row => row.receipt_id ? String(row.receipt_id) : '')
+        .filter(Boolean)
+    )
+  );
+
+  const { error: allocationDeleteError } = await supabase
+    .from('project_cash_receipt_allocations')
+    .delete()
+    .in('payment_gate_id', gateIds);
+
+  if (allocationDeleteError) throw allocationDeleteError;
+
+  const { error: gateDeleteError } = await supabase
+    .from('project_finance_payment_gates')
+    .delete()
+    .in('id', gateIds);
+
+  if (gateDeleteError) throw gateDeleteError;
+
+  if (receiptIds.length === 0) return;
+
+  const { data: remainingAllocations, error: remainingAllocationError } = await supabase
+    .from('project_cash_receipt_allocations')
+    .select('receipt_id')
+    .in('receipt_id', receiptIds);
+
+  if (remainingAllocationError) throw remainingAllocationError;
+
+  const receiptIdsStillAllocated = new Set(
+    (remainingAllocations ?? [])
+      .map(row => row.receipt_id ? String(row.receipt_id) : '')
+      .filter(Boolean)
+  );
+
+  const orphanReceiptIds = receiptIds.filter(
+    receiptId => !receiptIdsStillAllocated.has(receiptId)
+  );
+
+  if (orphanReceiptIds.length === 0) return;
+
+  const { error: receiptDeleteError } = await supabase
+    .from('project_cash_receipts')
+    .delete()
+    .in('id', orphanReceiptIds);
+
+  if (receiptDeleteError) throw receiptDeleteError;
+}
+
+
 export default function TimelinePage() {
   const storedTimeline = getStoredTimelineState();
 
@@ -2022,15 +2095,17 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   const handleConfirmDeleteTimeline = async () => {
     if (selectedTimelineProjectId) {
       try {
+        await deleteTimelineFinanceGateData(selectedTimelineProjectId);
         await deleteProjectTimelineState(selectedTimelineProjectId);
       } catch (error) {
-        console.error('Could not delete timeline state from Supabase.', error);
+        console.error('Could not delete timeline state and linked Finance gate data from Supabase.', error);
       }
     }
 
     window.localStorage.removeItem(TIMELINE_STORAGE_KEY);
     setPaymentGates([]);
     setWorkPackages([]);
+    setFinancePaymentGateRows([]);
     setPendingTimelineDraft(null);
     setIgnoredAlertIds([]);
     setHasTimeline(false);
@@ -4249,7 +4324,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                 Delete Timeline?
               </p>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                This will remove the confirmed planned timeline for this project. The approved cost estimate and project revenue will remain unchanged.
+                This will remove the confirmed planned timeline and clear the linked Finance payment gates, cash receipt allocations, and gate receipt records for this timeline. Vendor and item masters will not be deleted.
               </p>
             </div>
 

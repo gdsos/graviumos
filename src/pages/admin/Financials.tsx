@@ -171,6 +171,16 @@ function getFinanceGateWorkflowState(
   };
 }
 
+function getSyncedFinanceGateCount(
+  paymentGates: unknown,
+  fallbackTimelineGateIds: string[]
+) {
+  return Array.isArray(paymentGates)
+    ? paymentGates.length
+    : fallbackTimelineGateIds.length;
+}
+
+
 type NotificationDepartmentRow = {
   id: string;
   code: string | null;
@@ -760,9 +770,9 @@ function FinancialsInner() {
       } catch (syncError) {
         console.error('Unable to auto-sync Finance gates from Timeline', syncError);
       } finally {
-        if (isMounted) {
-          setSyncingProjectId(null);
-        }
+        setSyncingProjectId(current =>
+          current === projectId ? null : current
+        );
       }
     }
 
@@ -779,7 +789,6 @@ function FinancialsInner() {
     selectedApprovedEstimate,
     selectedFinanceAccount,
     selectedProject,
-    syncingProjectId,
   ]);
 
   const handleOpenCashReceiptDraft = (
@@ -997,11 +1006,15 @@ function FinancialsInner() {
         estimateId: selectedApprovedEstimate.id,
         userId: userData.user?.id ?? null,
       });
+      const syncedGateCount = getSyncedFinanceGateCount(
+        result.paymentGates,
+        selectedTimelineGateIds
+      );
 
       setNotice({
         state: 'success',
         heading: 'Finance Account Synced',
-        description: `${selectedProject.name} is now synced from approved estimate v${result.estimate.version}. Revenue ${formatINR(result.account.revenue_amount)} - Estimated COGS ${formatINR(result.account.estimated_cogs_amount)}. ${result.paymentGates.length} payment gate${result.paymentGates.length === 1 ? '' : 's'} synced from Timeline.`,
+        description: `${selectedProject.name} is now synced from approved estimate v${result.estimate.version}. Revenue ${formatINR(result.account.revenue_amount)} - Estimated COGS ${formatINR(result.account.estimated_cogs_amount)}. ${syncedGateCount} payment gate${syncedGateCount === 1 ? '' : 's'} synced from Timeline.`,
       });
 
       await fetchFinanceData();
