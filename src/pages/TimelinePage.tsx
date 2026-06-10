@@ -1,5 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Pencil, Plus, RotateCcw, Save,
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Save,
   Trash2,
 } from 'lucide-react';
 
@@ -1116,6 +1123,53 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     return statusMap;
   }, [financePaymentGateRows]);
 
+  const getFinancePaymentBlockerForWorkPackage = useCallback(
+    (workPackageId: string) => {
+      const blockingGate = paymentGates.find(gate =>
+        gate.blocksWorkPackageIds.includes(workPackageId)
+      );
+
+      if (!blockingGate) return null;
+
+      const financeStatus =
+        financePaymentStatusByTimelineGateId[blockingGate.id];
+
+      if (!financeStatus) {
+        return {
+          title: 'Finance Payment Not Synced',
+          description: `${blockingGate.title} must be synced into Finance and collected before this work action can continue.`,
+        };
+      }
+
+      const isCollected =
+        financeStatus.status === 'paid' ||
+        financeStatus.status === 'overpaid' ||
+        (financeStatus.requiredAmount > 0 &&
+          financeStatus.collectedAmount >= financeStatus.requiredAmount) ||
+        financeStatus.outstandingAmount <= 0;
+
+      if (isCollected) return null;
+
+      return {
+        title: 'Payment Required',
+        description: `${blockingGate.title} is still ${financeStatus.status}. Record and allocate the required cash in Finance before continuing this work action.`,
+      };
+    },
+    [financePaymentStatusByTimelineGateId, paymentGates]
+  );
+
+  const canContinueWorkAction = useCallback(
+    (workPackageId: string) => {
+      const blocker = getFinancePaymentBlockerForWorkPackage(workPackageId);
+
+      if (!blocker) return true;
+
+      setTimelineNoticeDialog(blocker);
+      return false;
+    },
+    [getFinancePaymentBlockerForWorkPackage]
+  );
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1661,7 +1715,6 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     hasSelectedApprovedProjectEstimate &&
     isTimelineEstimateApproved &&
     isContractSigned &&
-    isBookingPaymentCollected &&
     Boolean(timelineStartDate) &&
     isPaymentPercentageMatched;
 
@@ -2272,6 +2325,8 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
       return;
     }
 
+    if (!canContinueWorkAction(workPackageId)) return;
+
     const today = getTodayDateString();
 
     setWorkPackages(currentWorkPackages =>
@@ -2291,6 +2346,8 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   };
 
   const handlePauseWorkPackage = (workPackageId: string) => {
+    if (!canContinueWorkAction(workPackageId)) return;
+
     setTimelineInputDialog({
       mode: 'pause',
       workPackageId,
@@ -2303,6 +2360,8 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   };
 
   const handleResumeWorkPackage = (workPackageId: string) => {
+    if (!canContinueWorkAction(workPackageId)) return;
+
     const today = getTodayDateString();
     const now = new Date().toISOString();
 
@@ -3767,33 +3826,37 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
         ) : (
           <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(260px,0.8fr)_minmax(260px,1fr)]">
             <div className="grid gap-2">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-3">
-                  <input
-                    type="checkbox"
-                    checked={isContractSigned}
-                    onChange={event => setIsContractSigned(event.target.checked)}
-                    disabled={!isTimelineEstimateApproved}
-                    className="h-4 w-4 shrink-0"
-                  />
-                  <span className="text-sm font-medium text-foreground">
-                    Contract Signed
+                <button
+                  type="button"
+                  onClick={() => setIsContractSigned(current => !current)}
+                  disabled={!isTimelineEstimateApproved}
+                  className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isContractSigned
+                      ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-200 dark:hover:bg-emerald-500/20'
+                      : 'border-border bg-background text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-3">
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                        isContractSigned
+                          ? 'border-white/70 bg-white/20 text-white dark:border-emerald-300 dark:bg-emerald-400 dark:text-black'
+                          : 'border-muted-foreground/60'
+                      }`}
+                    >
+                      {isContractSigned ? (
+                        <Check className="h-3 w-3" />
+                      ) : null}
+                    </span>
+                    <span className="text-sm font-medium">
+                      Contract Signed
+                    </span>
                   </span>
-                </label>
 
-                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-3">
-                  <input
-                    type="checkbox"
-                    checked={isBookingPaymentCollected}
-                    onChange={event => setIsBookingPaymentCollected(event.target.checked)}
-                    disabled={!isTimelineEstimateApproved}
-                    className="h-4 w-4 shrink-0"
-                  />
-                  <span className="text-sm font-medium text-foreground">
-                    Booking Paid
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-current/70">
+                    {isContractSigned ? 'Selected' : 'Required'}
                   </span>
-                </label>
-              </div>
+                </button>
 
               <label className="grid gap-1">
                 <span className="text-xs font-medium text-muted-foreground">

@@ -16,6 +16,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, type Project, formatINR } from '@/lib/supabase';
 import { syncProjectFinanceAccountFromApprovedEstimate } from '@/lib/projectFinance';
+import { createNotification } from '@/lib/notifications';
+import { DateInput } from '@/components/common/DateInput';
 
 type FinanceTab = 'overview' | 'project-accounts';
 
@@ -100,6 +102,157 @@ type SyncNotice = {
   heading: string;
   description: string;
 };
+
+type CashReceiptDraft = {
+  paymentGateId: string;
+  amount: string;
+  receiptDate: string;
+  receivedFrom: string;
+  paymentMode: string;
+  referenceNumber: string;
+  description: string;
+  gstTreatment: 'GST' | 'NO_GST';
+};
+
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getFinanceGateStatusFromCollection(requiredAmount: number, collectedAmount: number) {
+  if (collectedAmount <= 0) return 'pending';
+  if (collectedAmount < requiredAmount) return 'partial';
+  if (collectedAmount === requiredAmount) return 'paid';
+
+  return 'overpaid';
+}
+
+function isFinanceGateComplete(gate: ProjectFinancePaymentGateRow) {
+  const outstandingAmount = toNumber(gate.outstanding_amount);
+  const collectedAmount = toNumber(gate.collected_amount);
+  const requiredAmount = toNumber(gate.required_amount);
+
+  return (
+    gate.status === 'paid' ||
+    gate.status === 'overpaid' ||
+    (requiredAmount > 0 && collectedAmount >= requiredAmount) ||
+    outstandingAmount <= 0
+  );
+}
+
+function getFinanceGateWorkflowState(
+  gate: ProjectFinancePaymentGateRow,
+  gateIndex: number,
+  paymentGates: ProjectFinancePaymentGateRow[]
+) {
+  if (isFinanceGateComplete(gate)) {
+    return {
+      state: 'completed' as const,
+      label: 'Completed',
+      helper: 'This payment gate is fully collected.',
+    };
+  }
+
+  const previousGate = paymentGates
+    .slice(0, gateIndex)
+    .find(previous => !isFinanceGateComplete(previous));
+
+  if (previousGate) {
+    return {
+      state: 'locked' as const,
+      label: `Locked`,
+      helper: `Complete Gate ${previousGate.gate_order} before recording this payment.`,
+    };
+  }
+
+  return {
+    state: 'open' as const,
+    label: 'Record Cash',
+    helper: 'Ready to record client cash for this gate.',
+  };
+}
+
+type NotificationDepartmentRow = {
+  id: string;
+  code: string | null;
+  name: string | null;
+};
+
+type NotificationProfileRow = {
+  id: string;
+  department_ids: string[] | null;
+};
+
+async function notifyDesignExecutionPaymentCollected({
+  project,
+  gate,
+  amount,
+}: {
+  project: Project;
+  gate: ProjectFinancePaymentGateRow;
+  amount: number;
+}) {
+  try {
+    const { data: departments, error: departmentsError } = await supabase
+      .from('departments')
+      .select('id, code, name');
+
+    if (departmentsError) throw departmentsError;
+
+    const targetDepartmentIds = ((departments ?? []) as NotificationDepartmentRow[])
+      .filter(department => {
+        const code = (department.code ?? '').toUpperCase();
+        const name = (department.name ?? '').toLowerCase();
+
+        return (
+          ['DE', 'DS', 'EX'].includes(code) ||
+          name.includes('design') ||
+          name.includes('execution')
+        );
+      })
+      .map(department => department.id);
+
+    if (targetDepartmentIds.length === 0) {
+      console.warn('No Design/Execution departments found for payment notification.');
+      return;
+    }
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, department_ids');
+
+    if (profilesError) throw profilesError;
+
+    const recipientIds = Array.from(
+      new Set(
+        ((profiles ?? []) as NotificationProfileRow[])
+          .filter(profile =>
+            (profile.department_ids ?? []).some(departmentId =>
+              targetDepartmentIds.includes(departmentId)
+            )
+          )
+          .map(profile => profile.id)
+      )
+    );
+
+    if (recipientIds.length === 0) {
+      console.warn('No Design/Execution users found for payment notification.');
+      return;
+    }
+
+    const title = `Payment received: ${gate.title}`;
+    const message = `${formatINR(amount)} was recorded for ${project.name}. Timeline actions linked to this gate can continue.`;
+    const link = `/portal/timeline?project=${project.id}`;
+
+    await Promise.allSettled(
+      recipientIds.map(userId =>
+        createNotification(userId, title, message, 'project', link)
+      )
+    );
+  } catch (notificationError) {
+    console.error('Failed to notify Design/Execution team about payment collection', notificationError);
+  }
+}
+
 
 function toNumber(value: unknown, fallback = 0) {
   const numberValue =
@@ -299,6 +452,10 @@ function FinancialsInner() {
   const [loading, setLoading] = useState(true);
   const [syncingProjectId, setSyncingProjectId] = useState<string | null>(null);
   const [autoSyncAttemptKey, setAutoSyncAttemptKey] = useState<string | null>(null);
+  const [cashReceiptDraft, setCashReceiptDraft] = useState<CashReceiptDraft | null>(null);
+  const [isCashPaymentModePickerOpen, setIsCashPaymentModePickerOpen] = useState(false);
+  const [isCashGstPickerOpen, setIsCashGstPickerOpen] = useState(false);
+  const [savingCashReceipt, setSavingCashReceipt] = useState(false);
   const [notice, setNotice] = useState<SyncNotice | null>(null);
   const [error, setError] = useState('');
 
@@ -624,6 +781,194 @@ function FinancialsInner() {
     selectedProject,
     syncingProjectId,
   ]);
+
+  const handleOpenCashReceiptDraft = (
+    gate: ProjectFinancePaymentGateRow,
+    gateIndex: number
+  ) => {
+    if (!selectedProject) return;
+
+    const workflowState = getFinanceGateWorkflowState(
+      gate,
+      gateIndex,
+      selectedPaymentGates
+    );
+
+    if (workflowState.state !== 'open') {
+      setNotice({
+        state: workflowState.state === 'completed' ? 'success' : 'info',
+        heading:
+          workflowState.state === 'completed'
+            ? 'Payment Gate Completed'
+            : 'Previous Gate Required',
+        description: workflowState.helper,
+      });
+      return;
+    }
+
+    const outstandingAmount = toNumber(gate.outstanding_amount);
+    const requiredAmount = toNumber(gate.required_amount);
+    const suggestedAmount = outstandingAmount > 0 ? outstandingAmount : requiredAmount;
+
+    setIsCashPaymentModePickerOpen(false);
+    setIsCashGstPickerOpen(false);
+
+    setCashReceiptDraft({
+      paymentGateId: gate.id,
+      amount: suggestedAmount > 0 ? String(Math.round(suggestedAmount)) : '',
+      receiptDate: getTodayDateString(),
+      receivedFrom: getProjectClientName(selectedProject),
+      paymentMode: 'Bank Transfer',
+      referenceNumber: '',
+      description: `${gate.title} collection`,
+      gstTreatment: 'GST',
+    });
+
+    setNotice(null);
+  };
+
+  const handleSaveCashReceipt = async () => {
+    if (!selectedProject || !selectedFinanceAccount || !cashReceiptDraft) return;
+
+    const selectedGate = selectedPaymentGates.find(
+      gate => gate.id === cashReceiptDraft.paymentGateId
+    );
+
+    if (!selectedGate) {
+      setNotice({
+        state: 'error',
+        heading: 'Payment Gate Missing',
+        description: 'Select a valid payment gate before recording cash received.',
+      });
+      return;
+    }
+
+    const receivedAmount = toNumber(cashReceiptDraft.amount);
+
+    if (receivedAmount <= 0) {
+      setNotice({
+        state: 'error',
+        heading: 'Invalid Receipt Amount',
+        description: 'Enter a received amount greater than zero.',
+      });
+      return;
+    }
+
+    const wasGateAlreadyComplete = isFinanceGateComplete(selectedGate);
+    const requiredAmount = toNumber(selectedGate.required_amount);
+    const previousCollectedAmount = toNumber(selectedGate.collected_amount);
+    const nextCollectedAmount = previousCollectedAmount + receivedAmount;
+    const nextOutstandingAmount = Math.max(requiredAmount - nextCollectedAmount, 0);
+    const overpaymentAmount = Math.max(nextCollectedAmount - requiredAmount, 0);
+    const nextStatus = getFinanceGateStatusFromCollection(
+      requiredAmount,
+      nextCollectedAmount
+    );
+
+    setSavingCashReceipt(true);
+    setNotice(null);
+    setError('');
+
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+
+      const { data: receipt, error: receiptError } = await supabase
+        .from('project_cash_receipts')
+        .insert({
+          finance_account_id: selectedFinanceAccount.id,
+          project_id: selectedProject.id,
+          receipt_date: cashReceiptDraft.receiptDate,
+          received_from: cashReceiptDraft.receivedFrom.trim() || getProjectClientName(selectedProject),
+          description: cashReceiptDraft.description.trim() || `${selectedGate.title} collection`,
+          amount: receivedAmount,
+          gst_treatment: cashReceiptDraft.gstTreatment,
+          payment_mode: cashReceiptDraft.paymentMode.trim() || 'Bank Transfer',
+          reference_number: cashReceiptDraft.referenceNumber.trim(),
+          unallocated_amount: 0,
+          overpayment_amount: overpaymentAmount,
+          carry_forward_confirmed: false,
+          carry_forward_notes: '',
+          created_by: userData.user?.id ?? null,
+        })
+        .select('id')
+        .single();
+
+      if (receiptError) throw receiptError;
+      if (!receipt?.id) throw new Error('Receipt was saved without an ID.');
+
+      const { error: allocationError } = await supabase
+        .from('project_cash_receipt_allocations')
+        .insert({
+          receipt_id: receipt.id,
+          finance_account_id: selectedFinanceAccount.id,
+          project_id: selectedProject.id,
+          payment_gate_id: selectedGate.id,
+          source_payment_gate_id: null,
+          allocation_type: 'gate',
+          allocated_amount: receivedAmount,
+          allocation_order: 1,
+          notes: `${selectedGate.title} allocation`,
+        });
+
+      if (allocationError) throw allocationError;
+
+      const { error: gateUpdateError } = await supabase
+        .from('project_finance_payment_gates')
+        .update({
+          collected_amount: nextCollectedAmount,
+          outstanding_amount: nextOutstandingAmount,
+          carry_forward_out_amount: overpaymentAmount,
+          status: nextStatus,
+          marked_paid_at:
+            nextStatus === 'paid' || nextStatus === 'overpaid'
+              ? new Date().toISOString()
+              : null,
+          marked_paid_by:
+            nextStatus === 'paid' || nextStatus === 'overpaid'
+              ? userData.user?.id ?? null
+              : null,
+        })
+        .eq('id', selectedGate.id);
+
+      if (gateUpdateError) throw gateUpdateError;
+
+      const gateNowComplete = nextStatus === 'paid' || nextStatus === 'overpaid';
+
+      if (!wasGateAlreadyComplete && gateNowComplete) {
+        await notifyDesignExecutionPaymentCollected({
+          project: selectedProject,
+          gate: selectedGate,
+          amount: receivedAmount,
+        });
+      }
+
+      setNotice({
+        state: 'success',
+        heading: 'Cash Received Recorded',
+        description: `${formatINR(receivedAmount)} was allocated to ${selectedGate.title}. Gate status is now ${nextStatus}.`,
+      });
+
+      setIsCashPaymentModePickerOpen(false);
+      setIsCashGstPickerOpen(false);
+      setCashReceiptDraft(null);
+      await fetchFinanceData();
+    } catch (receiptError) {
+      console.error('Could not record cash received', receiptError);
+
+      setNotice({
+        state: 'error',
+        heading: 'Could Not Record Cash Received',
+        description:
+          receiptError instanceof Error
+            ? receiptError.message
+            : 'Unable to record the cash received entry.',
+      });
+    } finally {
+      setSavingCashReceipt(false);
+    }
+  };
 
   const handleSyncFinanceAccount = async () => {
     if (!selectedProject) return;
@@ -1028,6 +1373,277 @@ function FinancialsInner() {
                 </StatusPill>
               </div>
 
+              {cashReceiptDraft && (
+                <div className="mt-5 rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
+                        Record Cash Received
+                      </p>
+                      <h4 className="mt-1 text-base font-semibold text-foreground">
+                        Allocate receipt to payment gate
+                      </h4>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCashReceiptDraft(null)}
+                      className="text-left text-xs font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:text-right"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-12 md:items-start">
+                    <div className="grid min-w-0 gap-2 md:col-span-6">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Payment Gate
+                      </span>
+                      <div className="flex h-11 w-full items-center rounded-lg border border-border bg-background/70 px-3 text-sm text-foreground">
+                        <span className="truncate">
+                          {(() => {
+                            const selectedGate = selectedPaymentGates.find(
+                              gate => gate.id === cashReceiptDraft.paymentGateId
+                            );
+
+                            return selectedGate
+                              ? `${selectedGate.gate_order}. ${selectedGate.title}`
+                              : 'Selected payment gate';
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <label className="grid min-w-0 gap-2 md:col-span-3">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Amount
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={cashReceiptDraft.amount}
+                        onChange={event =>
+                          setCashReceiptDraft(current =>
+                            current
+                              ? {
+                                  ...current,
+                                  amount: event.target.value,
+                                }
+                              : current
+                          )
+                        }
+                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none"
+                        placeholder="0"
+                      />
+                    </label>
+
+                    <label className="grid min-w-0 gap-2 md:col-span-3">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Receipt Date
+                      </span>
+                      <DateInput
+                        value={cashReceiptDraft.receiptDate}
+                        onChange={value =>
+                          setCashReceiptDraft(current =>
+                            current
+                              ? {
+                                  ...current,
+                                  receiptDate: value,
+                                }
+                              : current
+                          )
+                        }
+                        placeholder="Select receipt date"
+                        popoverMode="fixed"
+                        className="min-w-0 [&>button]:h-11 [&>button]:w-full [&>button]:rounded-lg [&>button]:px-3 [&>button]:text-sm"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-12 md:items-start">
+                    <label className="grid min-w-0 gap-2 md:col-span-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Received From
+                      </span>
+                      <div className="flex h-11 w-full items-center rounded-lg border border-border bg-background/70 px-3 text-sm text-foreground">
+                        <span className="truncate">
+                          {cashReceiptDraft.receivedFrom || 'Client'}
+                        </span>
+                      </div>
+                    </label>
+
+                    <div className="relative grid min-w-0 gap-2 md:col-span-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Payment Mode
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setIsCashPaymentModePickerOpen(current => !current)
+                        }
+                        className="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40"
+                      >
+                        <span className="truncate">
+                          {cashReceiptDraft.paymentMode || 'Select payment mode'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </button>
+
+                      {isCashPaymentModePickerOpen && (
+                        <div className="absolute left-0 right-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+                          {[
+                            'Bank Transfer',
+                            'Cash',
+                            'UPI',
+                            'Bank Remittance',
+                            'Cheque',
+                            'Credit/Debit Card',
+                          ].map(option => {
+                            const isSelected = cashReceiptDraft.paymentMode === option;
+
+                            return (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => {
+                                  setCashReceiptDraft(current =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          paymentMode: option,
+                                        }
+                                      : current
+                                  );
+                                  setIsCashPaymentModePickerOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
+                                  isSelected
+                                    ? 'bg-foreground text-background'
+                                    : 'hover:bg-muted'
+                                }`}
+                              >
+                                <span>{option}</span>
+                                {isSelected && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <label className="grid min-w-0 gap-2 md:col-span-4">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Reference No.
+                      </span>
+                      <input
+                        value={cashReceiptDraft.referenceNumber}
+                        onChange={event =>
+                          setCashReceiptDraft(current =>
+                            current
+                              ? {
+                                  ...current,
+                                  referenceNumber: event.target.value,
+                                }
+                              : current
+                          )
+                        }
+                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none"
+                        placeholder="Optional"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-12 md:items-start">
+                    <label className="grid min-w-0 gap-2 md:col-span-10">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Description
+                      </span>
+                      <input
+                        value={cashReceiptDraft.description}
+                        onChange={event =>
+                          setCashReceiptDraft(current =>
+                            current
+                              ? {
+                                  ...current,
+                                  description: event.target.value,
+                                }
+                              : current
+                          )
+                        }
+                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none"
+                        placeholder="Receipt note"
+                      />
+                    </label>
+
+                    <div className="relative grid min-w-0 gap-2 md:col-span-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        GST
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsCashGstPickerOpen(current => !current)}
+                        className="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40"
+                      >
+                        <span>
+                          {cashReceiptDraft.gstTreatment === 'GST' ? 'GST' : 'No GST'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </button>
+
+                      {isCashGstPickerOpen && (
+                        <div className="absolute left-0 right-0 top-full z-[80] mt-2 rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+                          {[
+                            { value: 'GST' as const, label: 'GST' },
+                            { value: 'NO_GST' as const, label: 'No GST' },
+                          ].map(option => {
+                            const isSelected = cashReceiptDraft.gstTreatment === option.value;
+
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => {
+                                  setCashReceiptDraft(current =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          gstTreatment: option.value,
+                                        }
+                                      : current
+                                  );
+                                  setIsCashGstPickerOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
+                                  isSelected
+                                    ? 'bg-foreground text-background'
+                                    : 'hover:bg-muted'
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleSaveCashReceipt}
+                      disabled={savingCashReceipt}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-transparent bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingCashReceipt ? 'Saving...' : 'Record Receipt'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {selectedPaymentGates.length === 0 ? (
                 <div className="mt-5 rounded-2xl border border-dashed border-border bg-background p-5">
                   <p className="text-sm font-semibold text-foreground">
@@ -1039,7 +1655,7 @@ function FinancialsInner() {
                 </div>
               ) : (
                 <div className="mt-5 space-y-3">
-                  {selectedPaymentGates.map(gate => {
+                  {selectedPaymentGates.map((gate, gateIndex) => {
                     const requiredAmount = toNumber(gate.required_amount);
                     const collectedAmount = toNumber(gate.collected_amount);
                     const outstandingAmount = toNumber(gate.outstanding_amount);
@@ -1053,6 +1669,11 @@ function FinancialsInner() {
                         : gate.status === 'partial'
                           ? 'info'
                           : 'warning';
+                    const workflowState = getFinanceGateWorkflowState(
+                      gate,
+                      gateIndex,
+                      selectedPaymentGates
+                    );
 
                     return (
                       <div
@@ -1107,6 +1728,36 @@ function FinancialsInner() {
                             className="h-full rounded-full bg-emerald-600 dark:bg-emerald-400"
                             style={{ width: `${progress}%` }}
                           />
+                        </div>
+
+                        <div className="mt-4 flex justify-end">
+                          {workflowState.state === 'completed' ? (
+                            <div
+                              title={workflowState.helper}
+                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm text-emerald-700 dark:text-emerald-300 sm:w-auto"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              Completed
+                            </div>
+                          ) : workflowState.state === 'locked' ? (
+                            <div
+                              title={workflowState.helper}
+                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground sm:w-auto"
+                            >
+                              <Lock className="h-4 w-4" />
+                              Locked
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              title={workflowState.helper}
+                              onClick={() => handleOpenCashReceiptDraft(gate, gateIndex)}
+                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm text-foreground transition hover:bg-muted sm:w-auto"
+                            >
+                              <CircleDollarSign className="h-4 w-4" />
+                              Record Cash
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
