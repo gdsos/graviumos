@@ -3333,7 +3333,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                             workPackage.actualStartDate ?? ''
                           )} - ${formatDate(actualEndDate ?? '')}`}
                         >
-                          <span className="pointer-events-none absolute left-1/2 top-0 z-[220] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/status-segment:opacity-100">
+                          <span className="pointer-events-none absolute bottom-full left-1/2 z-[300] mb-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/status-segment:opacity-100">
                             {formatScheduleTickDate(workPackage.actualStartDate ?? '')} -{' '}
                             {formatScheduleTickDate(actualEndDate ?? '')}
                           </span>
@@ -3370,9 +3370,9 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                                   event.stopPropagation();
                                   setScheduleDisplayMode('status');
                                 }}
-                                className={`group/phase-segment absolute bottom-7 h-6 cursor-pointer overflow-visible rounded-none border shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                                className={`group/phase-segment absolute bottom-7 h-6 cursor-pointer overflow-visible rounded-none border border-black/10 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                                   segment.kind === 'paused'
-                                    ? 'border-white/20 bg-transparent'
+                                    ? 'border-white/25 bg-transparent'
                                     : getActualActiveScheduleBarTone()
                                 }`}
                                 style={{
@@ -3380,13 +3380,13 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                                   ...(segment.kind === 'paused'
                                     ? {
                                         backgroundImage:
-                                          'repeating-linear-gradient(135deg, rgba(226,232,240,0.78) 0 8px, transparent 8px 16px)',
+                                          'repeating-linear-gradient(135deg, rgba(245,245,245,0.82) 0 8px, transparent 8px 16px)',
                                       }
                                     : null),
                                 }}
                                 title={segmentTitle}
                               >
-                                <span className="pointer-events-none absolute left-1/2 top-0 z-[220] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/phase-segment:opacity-100">
+                                <span className="pointer-events-none absolute bottom-full left-1/2 z-[300] mb-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/phase-segment:opacity-100">
                                   {segment.kind === 'paused' ? 'Paused' : 'Active'}{' '}
                                   {formatScheduleTickDate(segment.startDate)} -{' '}
                                   {segment.kind === 'paused' &&
@@ -3425,7 +3425,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                                   delaySegment.reason
                                 }`}
                               >
-                                <span className="pointer-events-none absolute left-1/2 top-0 z-[220] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/delay-segment:opacity-100">
+                                <span className="pointer-events-none absolute bottom-full left-1/2 z-[300] mb-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/delay-segment:opacity-100">
                                   Delay {formatScheduleTickDate(delaySegment.startDate)} -{' '}
                                   {delaySegment.status === 'open'
                                     ? 'Ongoing'
@@ -3438,7 +3438,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                       ) : null}
 
                       <div
-                        className="absolute top-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
+                        className="pointer-events-none absolute top-1 z-[40] rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
                         style={{
                           left: `calc(${plannedBarStyle.left} + ${plannedBarStyle.width})`,
                           transform: 'translateX(-100%)',
@@ -3449,7 +3449,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
                       {actualBarStyle && actualEndDate ? (
                         <div
-                          className="absolute bottom-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
+                          className="pointer-events-none absolute bottom-1 z-[40] rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
                           style={{
                             left: `calc(${actualBarStyle.left} + ${actualBarStyle.width})`,
                             transform: 'translateX(-100%)',
