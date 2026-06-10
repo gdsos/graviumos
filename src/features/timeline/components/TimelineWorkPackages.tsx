@@ -61,6 +61,54 @@ function formatLabel(value: string) {
     .join(' ');
 }
 
+function formatTimelineDateTime(value?: string, fallbackDate?: string) {
+  const rawValue = value ?? fallbackDate;
+
+  if (!rawValue) return 'Not set';
+
+  const parsedDate = new Date(value ?? `${fallbackDate}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) return rawValue;
+
+  if (!value && fallbackDate) {
+    return parsedDate.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  return parsedDate.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatPauseDuration(startAt?: string, endAt?: string) {
+  if (!startAt || !endAt) return null;
+
+  const startDate = new Date(startAt);
+  const endDate = new Date(endAt);
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return null;
+  }
+
+  const diffMinutes = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+  const hours = Math.floor(diffMinutes / 60);
+  const minutes = diffMinutes % 60;
+
+  if (hours > 0 && minutes > 0) return `${hours} hr ${minutes} min`;
+  if (hours > 0) return `${hours} hr`;
+
+  return `${minutes} min`;
+}
+
+
 function getStatusVariant(status: WorkPackage['status']) {
   if (status === 'completed') return 'success';
   if (status === 'delayed') return 'danger';
@@ -791,6 +839,7 @@ function WorkPackageRow({
   onEditPrerequisites: (workPackageId: string) => void;
   onCloseDependencyEditor: () => void;
 }) {
+  const [isPauseHistoryOpen, setIsPauseHistoryOpen] = useState(false);
   const vendorName = getVendorName(workPackage.vendorId, vendors);
   const latestPauseReason = getLatestPauseReason(workPackage);
   const titleParts = getWorkPackageTitleParts(workPackage.title);
@@ -973,20 +1022,88 @@ const secondaryActions = getSecondaryActions({
           <div className="min-w-0">
             {workPackage.overrideReason ? (
               <p className="truncate text-sm text-red-600 dark:text-red-300">
-                {workPackage.overrideReason}
+                Delay: {workPackage.overrideReason}
               </p>
             ) : latestPauseReason ? (
               <p className="truncate text-sm text-amber-700 dark:text-amber-300">
-                {latestPauseReason}
+                Latest pause: {latestPauseReason}
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">Clear</p>
             )}
 
             {workPackage.pausePeriods.length > 0 && (
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {workPackage.pausePeriods.length} pause(s)
-              </p>
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsPauseHistoryOpen(current => !current)}
+                  className="text-left text-xs font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {isPauseHistoryOpen ? 'Hide' : 'View'} {workPackage.pausePeriods.length} pause(s)
+                </button>
+
+                {isPauseHistoryOpen && (
+                  <div className="mt-2 grid gap-2 rounded-xl border border-border bg-background p-2">
+                    {workPackage.pausePeriods.map((pausePeriod, pauseIndex) => {
+                      const durationLabel = formatPauseDuration(
+                        pausePeriod.pauseStartAt,
+                        pausePeriod.pauseEndAt
+                      );
+
+                      return (
+                        <div
+                          key={pausePeriod.id}
+                          className="rounded-lg border border-border bg-card px-2 py-2 text-xs"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-semibold text-foreground">
+                              Pause {pauseIndex + 1}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground">
+                              {pausePeriod.pauseEnd ? 'Closed' : 'Open'}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 text-muted-foreground">
+                            From:{' '}
+                            <span className="font-medium text-foreground">
+                              {formatTimelineDateTime(
+                                pausePeriod.pauseStartAt,
+                                pausePeriod.pauseStart
+                              )}
+                            </span>
+                          </p>
+
+                          <p className="mt-1 text-muted-foreground">
+                            To:{' '}
+                            <span className="font-medium text-foreground">
+                              {pausePeriod.pauseEnd
+                                ? formatTimelineDateTime(
+                                    pausePeriod.pauseEndAt,
+                                    pausePeriod.pauseEnd
+                                  )
+                                : 'Still paused'}
+                            </span>
+                          </p>
+
+                          {durationLabel && (
+                            <p className="mt-1 text-muted-foreground">
+                              Duration:{' '}
+                              <span className="font-medium text-foreground">
+                                {durationLabel}
+                              </span>
+                            </p>
+                          )}
+
+                          <p className="mt-1 leading-5 text-amber-700 dark:text-amber-300">
+                            {pausePeriod.reason}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

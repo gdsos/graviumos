@@ -70,7 +70,9 @@ export interface PaymentGate {
 export interface PausePeriod {
   id: string;
   pauseStart: string;
+  pauseStartAt?: string;
   pauseEnd?: string;
+  pauseEndAt?: string;
   reason: string;
   createdBy: string;
 }

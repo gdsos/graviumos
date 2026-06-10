@@ -578,24 +578,155 @@ function getScheduleDateTicks(
   return ticks;
 }
 
-function getWorkPackageBarStyle(
-  workPackage: WorkPackage,
+function getScheduleDateRangeBarStyle(
+  startDate: string,
+  endDate: string,
   timelineStartDate: string,
   dayWidth: number
 ) {
-  const offsetDays = Math.max(
-    0,
-    getDayDifference(timelineStartDate, workPackage.estimatedStartDate)
-  );
-  const durationDays = Math.max(
-    1,
-    getDayDifference(workPackage.estimatedStartDate, workPackage.estimatedEndDate) + 1
-  );
+  const offsetDays = Math.max(0, getDayDifference(timelineStartDate, startDate));
+  const durationDays = Math.max(1, getDayDifference(startDate, endDate) + 1);
 
   return {
     left: `${SCHEDULE_CHART_LEFT_PADDING + offsetDays * dayWidth}px`,
     width: `${Math.max(dayWidth, durationDays * dayWidth)}px`,
   };
+}
+
+function getWorkPackageBarStyle(
+  workPackage: WorkPackage,
+  timelineStartDate: string,
+  dayWidth: number
+) {
+  return getScheduleDateRangeBarStyle(
+    workPackage.estimatedStartDate,
+    workPackage.estimatedEndDate,
+    timelineStartDate,
+    dayWidth
+  );
+}
+
+function getActualWorkPackageEndDate(workPackage: WorkPackage, today: string) {
+  if (!workPackage.actualStartDate) return null;
+
+  return workPackage.actualEndDate ?? today;
+}
+
+type WorkPackageScheduleSegmentKind = 'active' | 'paused';
+
+type WorkPackageScheduleSegment = {
+  id: string;
+  kind: WorkPackageScheduleSegmentKind;
+  startDate: string;
+  endDate: string;
+};
+
+function getActualWorkPackageBarStyle(
+  workPackage: WorkPackage,
+  timelineStartDate: string,
+  dayWidth: number,
+  today: string
+) {
+  const actualEndDate = getActualWorkPackageEndDate(workPackage, today);
+
+  if (!workPackage.actualStartDate || !actualEndDate) return null;
+
+  return getScheduleDateRangeBarStyle(
+    workPackage.actualStartDate,
+    actualEndDate,
+    timelineStartDate,
+    dayWidth
+  );
+}
+
+function getPreviousDate(date: string) {
+  return addDaysToDate(date, -1);
+}
+
+function getNextDate(date: string) {
+  return addDaysToDate(date, 1);
+}
+
+function isDateBeforeOrSame(startDate: string, endDate: string) {
+  return getDayDifference(startDate, endDate) >= 0;
+}
+
+function getActualWorkPackageScheduleSegments(
+  workPackage: WorkPackage,
+  today: string
+): WorkPackageScheduleSegment[] {
+  const actualStartDate = workPackage.actualStartDate;
+  const actualEndDate = getActualWorkPackageEndDate(workPackage, today);
+
+  if (!actualStartDate || !actualEndDate) return [];
+
+  const segments: WorkPackageScheduleSegment[] = [];
+  let cursorDate = actualStartDate;
+
+  const sortedPausePeriods = [...workPackage.pausePeriods].sort((first, second) =>
+    first.pauseStart.localeCompare(second.pauseStart)
+  );
+
+  sortedPausePeriods.forEach((pausePeriod, index) => {
+    if (!pausePeriod.pauseStart) return;
+
+    const isLatestPausePeriod = index === sortedPausePeriods.length - 1;
+    const isOpenPause =
+      !pausePeriod.pauseEnd || (workPackage.status === 'paused' && isLatestPausePeriod);
+
+    const pauseStartDate =
+      pausePeriod.pauseStart < actualStartDate ? actualStartDate : pausePeriod.pauseStart;
+
+    const resumeDate = pausePeriod.pauseEnd ?? today;
+    const rawPauseEndDate = isOpenPause ? actualEndDate : getPreviousDate(resumeDate);
+    const pauseEndDate =
+      rawPauseEndDate > actualEndDate ? actualEndDate : rawPauseEndDate;
+
+    if (!isDateBeforeOrSame(pauseStartDate, actualEndDate)) return;
+
+    const activeEndDate = getPreviousDate(pauseStartDate);
+
+    if (isDateBeforeOrSame(cursorDate, activeEndDate)) {
+      segments.push({
+        id: `${workPackage.id}-active-before-pause-${index}`,
+        kind: 'active',
+        startDate: cursorDate,
+        endDate: activeEndDate,
+      });
+    }
+
+    if (isDateBeforeOrSame(pauseStartDate, pauseEndDate)) {
+      segments.push({
+        id: `${workPackage.id}-paused-${pausePeriod.id ?? index}`,
+        kind: 'paused',
+        startDate: pauseStartDate,
+        endDate: pauseEndDate,
+      });
+    }
+
+    cursorDate = isOpenPause ? getNextDate(pauseEndDate) : resumeDate;
+  });
+
+  if (workPackage.status === 'paused') {
+    return segments;
+  }
+
+  if (isDateBeforeOrSame(cursorDate, actualEndDate)) {
+    segments.push({
+      id: `${workPackage.id}-active-after-pauses`,
+      kind: 'active',
+      startDate: cursorDate,
+      endDate: actualEndDate,
+    });
+  }
+
+  return segments;
+}
+
+function getActualActiveScheduleBarTone(status: WorkPackageStatus) {
+  if (status === 'paused') return getScheduleBarTone('in_progress');
+
+  return getScheduleBarTone(status);
 }
 
 function getScheduleBarTone(status: WorkPackageStatus) {
@@ -620,6 +751,24 @@ function getScheduleBarTone(status: WorkPackageStatus) {
   }
 
   return 'bg-gradient-to-r from-[#603B2A] via-[#555D3A] to-[#2F2F2F]';
+}
+
+function formatScheduleFinanceStatus(status?: string | null) {
+  if (status === 'paid' || status === 'received') return 'Received';
+  if (status === 'partial') return 'Partial';
+  if (status === 'overpaid') return 'Overpaid';
+  if (status === 'cancelled') return 'Cancelled';
+  if (status === 'overdue') return 'Overdue';
+
+  return 'Pending';
+}
+
+function getScheduleFinanceStatusVariant(status?: string | null) {
+  if (status === 'paid' || status === 'received') return 'success';
+  if (status === 'partial' || status === 'overpaid') return 'warning';
+  if (status === 'cancelled' || status === 'overdue') return 'danger';
+
+  return 'outline';
 }
 
 function getPaymentGateScheduleTone(index: number) {
@@ -1296,13 +1445,22 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
       };
     }
 
+    const today = getTodayDateString();
+
     const startDates = workPackages
-      .map(workPackage => workPackage.estimatedStartDate)
+      .flatMap(workPackage => [
+        workPackage.estimatedStartDate,
+        workPackage.actualStartDate,
+      ])
       .filter(Boolean)
       .sort();
 
     const endDates = workPackages
-      .map(workPackage => workPackage.estimatedEndDate)
+      .flatMap(workPackage => [
+        workPackage.estimatedEndDate,
+        workPackage.actualEndDate,
+        workPackage.actualStartDate && !workPackage.actualEndDate ? today : undefined,
+      ])
       .filter(Boolean)
       .sort();
 
@@ -2013,6 +2171,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
   const handleResumeWorkPackage = (workPackageId: string) => {
     const today = getTodayDateString();
+    const now = new Date().toISOString();
 
     setWorkPackages(currentWorkPackages =>
       currentWorkPackages.map(workPackage => {
@@ -2023,7 +2182,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
           status: workPackage.actualStartDate ? 'in_progress' : 'ready',
           pausePeriods: workPackage.pausePeriods.map((pausePeriod, index, array) =>
             index === array.length - 1 && !pausePeriod.pauseEnd
-              ? { ...pausePeriod, pauseEnd: today }
+              ? { ...pausePeriod, pauseEnd: today, pauseEndAt: now }
               : pausePeriod
           ),
           notes: appendTimelineNote(workPackage.notes, `Work resumed on ${today}.`),
@@ -2034,6 +2193,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
   const handleCompleteWorkPackage = (workPackageId: string) => {
     const today = getTodayDateString();
+    const now = new Date().toISOString();
 
     setWorkPackages(currentWorkPackages =>
       currentWorkPackages.map(workPackage => {
@@ -2048,7 +2208,9 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
           actualDurationDays: getActualDurationDays(actualStartDate, today),
           status: 'completed',
           pausePeriods: workPackage.pausePeriods.map(pausePeriod =>
-            pausePeriod.pauseEnd ? pausePeriod : { ...pausePeriod, pauseEnd: today }
+            pausePeriod.pauseEnd
+              ? pausePeriod
+              : { ...pausePeriod, pauseEnd: today, pauseEndAt: now }
           ),
           notes: appendTimelineNote(workPackage.notes, `Work completed on ${today}.`),
         };
@@ -2092,6 +2254,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     if (!reason) return;
 
     const today = getTodayDateString();
+    const now = new Date().toISOString();
     const { mode, workPackageId } = timelineInputDialog;
 
     if (mode === 'pause') {
@@ -2107,6 +2270,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
               {
                 id: `pause-${workPackage.id}-${Date.now()}`,
                 pauseStart: today,
+                pauseStartAt: now,
                 reason,
                 createdBy: 'Admin',
               },
@@ -2646,6 +2810,30 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                 <span className="mx-2 text-muted-foreground/50">/</span>
                 {formatINR(activeTimelineProject.revenue)}
               </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1">
+                  <span className="h-2 w-5 rounded-full border border-border bg-muted" />
+                  Planned
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1">
+                  <span className="h-2 w-5 rounded-full bg-foreground" />
+                  Actual
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1">
+                  <span
+                    className="h-2 w-5 rounded-full border border-black/20"
+                    style={{
+                      backgroundImage:
+                        'repeating-linear-gradient(135deg, #facc15 0 6px, #1f2937 6px 12px)',
+                    }}
+                  />
+                  Paused
+                </span>
+                <span className="text-muted-foreground/70">
+                  Actual extends to today until completed.
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-background p-1 sm:justify-start">
@@ -2842,10 +3030,21 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
             <div>
               {workPackages.map((workPackage, rowIndex) => {
-                const barStyle = getWorkPackageBarStyle(
+                const plannedBarStyle = getWorkPackageBarStyle(
                   workPackage,
                   timelineStartDate,
                   dayWidth
+                );
+                const actualBarStyle = getActualWorkPackageBarStyle(
+                  workPackage,
+                  timelineStartDate,
+                  dayWidth,
+                  today
+                );
+                const actualEndDate = getActualWorkPackageEndDate(workPackage, today);
+                const actualSegments = getActualWorkPackageScheduleSegments(
+                  workPackage,
+                  today
                 );
 
                 return (
@@ -2870,15 +3069,25 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                             Assigned to: {workPackage.assigneeName}
                           </p>
                           <p className="mt-1 text-[11px] font-medium text-muted-foreground">
-                            {formatScheduleTickDate(workPackage.estimatedStartDate)} -{' '}
+                            Plan: {formatScheduleTickDate(workPackage.estimatedStartDate)} -{' '}
                             {formatScheduleTickDate(workPackage.estimatedEndDate)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">
+                            Actual:{' '}
+                            {workPackage.actualStartDate
+                              ? `${formatScheduleTickDate(workPackage.actualStartDate)} - ${
+                                  workPackage.actualEndDate
+                                    ? formatScheduleTickDate(workPackage.actualEndDate)
+                                    : 'Today'
+                                }`
+                              : 'Not started'}
                           </p>
                         </div>
                       </div>
                     </div>
 
                     <div
-                      className="relative h-[76px] bg-background"
+                      className="relative h-[96px] bg-background"
                       style={{ width: `${scheduleCanvasWidth}px` }}
                     >
                       {dateTicks.map(tick => (
@@ -2908,24 +3117,73 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                       })}
 
                       <div
-                        className={`absolute top-1/2 h-6 -translate-y-1/2 rounded-none border border-black/10 shadow-sm ${getScheduleBarTone(
-                          workPackage.status
-                        )}`}
-                        style={barStyle}
-                        title={`${workPackage.title}: ${formatDate(
+                        className="absolute top-6 h-4 rounded-none border border-border/80 bg-muted/80 shadow-sm"
+                        style={plannedBarStyle}
+                        title={`Planned ${workPackage.title}: ${formatDate(
                           workPackage.estimatedStartDate
                         )} - ${formatDate(workPackage.estimatedEndDate)}`}
                       />
 
+                      {actualSegments.map(segment => {
+                        const segmentStyle = getScheduleDateRangeBarStyle(
+                          segment.startDate,
+                          segment.endDate,
+                          timelineStartDate,
+                          dayWidth
+                        );
+
+                        const segmentTitle =
+                          segment.kind === 'paused'
+                            ? `Paused ${workPackage.title}: ${formatDate(
+                                segment.startDate
+                              )} - ${formatDate(segment.endDate)}`
+                            : `Actual ${workPackage.title}: ${formatDate(
+                                segment.startDate
+                              )} - ${formatDate(segment.endDate)}`;
+
+                        return (
+                          <div
+                            key={segment.id}
+                            className={`absolute bottom-7 h-6 rounded-none border border-black/10 shadow-sm ${
+                              segment.kind === 'paused'
+                                ? 'bg-yellow-400'
+                                : getActualActiveScheduleBarTone(workPackage.status)
+                            }`}
+                            style={{
+                              ...segmentStyle,
+                              ...(segment.kind === 'paused'
+                                ? {
+                                    backgroundImage:
+                                      'repeating-linear-gradient(135deg, #facc15 0 10px, #1f2937 10px 20px)',
+                                  }
+                                : null),
+                            }}
+                            title={segmentTitle}
+                          />
+                        );
+                      })}
+
                       <div
-                        className="absolute bottom-2 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
+                        className="absolute top-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
                         style={{
-                          left: `calc(${barStyle.left} + ${barStyle.width})`,
+                          left: `calc(${plannedBarStyle.left} + ${plannedBarStyle.width})`,
                           transform: 'translateX(-100%)',
                         }}
                       >
-                        {formatScheduleTickDate(workPackage.estimatedEndDate)}
+                        Plan {formatScheduleTickDate(workPackage.estimatedEndDate)}
                       </div>
+
+                      {actualBarStyle && actualEndDate ? (
+                        <div
+                          className="absolute bottom-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
+                          style={{
+                            left: `calc(${actualBarStyle.left} + ${actualBarStyle.width})`,
+                            transform: 'translateX(-100%)',
+                          }}
+                        >
+                          Actual {formatScheduleTickDate(actualEndDate)}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -2940,29 +3198,75 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
               Payment Gate Markers
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Gate markers show scheduled collection points. Edit gate dates from the Payment Gates tab.
+              Gate markers show scheduled collection points with Finance collection status.
             </p>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {paymentGates.map((paymentGate, paymentGateIndex) => {
               const paymentGateTone = getPaymentGateScheduleTone(paymentGateIndex);
+              const financeStatus = financePaymentStatusByTimelineGateId[paymentGate.id];
+              const displayStatus = financeStatus?.status ?? paymentGate.status;
+              const displayAmount = financeStatus?.requiredAmount ?? paymentGate.amount;
+              const collectedAmount = financeStatus?.collectedAmount ?? 0;
+              const outstandingAmount =
+                financeStatus?.outstandingAmount ?? displayAmount;
 
               return (
-                <span
+                <div
                   key={paymentGate.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1"
+                  className="min-w-0 rounded-2xl border border-border bg-background p-3 text-sm text-foreground"
                 >
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${paymentGateTone.badge}`}
-                  >
-                    {paymentGateIndex + 1}
-                  </span>
-                  <span>
-                    {paymentGate.title}: {formatINR(paymentGate.amount)} -{' '}
-                    {formatScheduleTickDate(paymentGate.dueDate)}
-                  </span>
-                </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Gate {paymentGateIndex + 1}
+                      </p>
+                      <p className="mt-1 truncate font-semibold">
+                        {paymentGate.title}
+                      </p>
+                    </div>
+
+                    <StatusBadge variant={getScheduleFinanceStatusVariant(displayStatus)}>
+                      {formatScheduleFinanceStatus(displayStatus)}
+                    </StatusBadge>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Required</span>
+                      <span className="font-semibold text-foreground">
+                        {formatINR(displayAmount)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Collected</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                        {formatINR(collectedAmount)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Outstanding</span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-300">
+                        {formatINR(outstandingAmount)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Due</span>
+                      <span className="font-semibold text-foreground">
+                        {formatScheduleTickDate(paymentGate.dueDate)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <span className={`h-2 w-2 rounded-full ${paymentGateTone.badge}`} />
+                    <span>{paymentGate.blocksWorkPackageIds.length} blocked package(s)</span>
+                  </div>
+                </div>
               );
             })}
           </div>
