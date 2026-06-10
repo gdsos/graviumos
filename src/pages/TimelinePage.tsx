@@ -266,6 +266,15 @@ type FinanceTimelinePaymentGateRow = {
 
 type TimelineInputDialogMode = 'pause' | 'mark_delayed' | 'update_delay';
 
+type TimelineDelayOwner =
+  | 'client'
+  | 'vendor'
+  | 'gravium'
+  | 'site_condition'
+  | 'payment'
+  | 'material'
+  | 'other';
+
 type TimelineInputDialogState = {
   mode: TimelineInputDialogMode;
   workPackageId: string;
@@ -273,6 +282,9 @@ type TimelineInputDialogState = {
   description: string;
   label: string;
   value: string;
+  delayOwner?: TimelineDelayOwner;
+  delayImpactDays?: string;
+  delayExpectedRecoveryDate?: string;
   confirmLabel: string;
 };
 
@@ -280,6 +292,26 @@ type TimelineNoticeDialogState = {
   title: string;
   description: string;
 };
+
+const timelineDelayOwnerOptions: Array<{
+  value: TimelineDelayOwner;
+  label: string;
+}> = [
+  { value: 'client', label: 'Client' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'gravium', label: 'Gravium' },
+  { value: 'site_condition', label: 'Site Condition' },
+  { value: 'payment', label: 'Payment' },
+  { value: 'material', label: 'Material' },
+  { value: 'other', label: 'Other' },
+];
+
+function getTimelineDelayOwnerLabel(value?: TimelineDelayOwner) {
+  return (
+    timelineDelayOwnerOptions.find(option => option.value === value)?.label ??
+    'Select Source'
+  );
+}
 
 
 function mapProjectTimelineRowToStoredState(row: ProjectTimelineRow): StoredTimelineState {
@@ -947,6 +979,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   >([]);
   const [timelineInputDialog, setTimelineInputDialog] =
     useState<TimelineInputDialogState | null>(null);
+  const [isDelayOwnerPickerOpen, setIsDelayOwnerPickerOpen] = useState(false);
   const [timelineNoticeDialog, setTimelineNoticeDialog] =
     useState<TimelineNoticeDialogState | null>(null);
 
@@ -2219,18 +2252,36 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   };
 
   const handleMarkWorkPackageDelayed = (workPackageId: string) => {
+    setIsDelayOwnerPickerOpen(false);
+
+    const currentWorkPackage = workPackages.find(
+      workPackage => workPackage.id === workPackageId
+    );
+
     setTimelineInputDialog({
       mode: 'mark_delayed',
       workPackageId,
-      title: 'Mark Work Package Delayed',
-      description: 'Add the delay reason for this work package.',
+      title: 'Flag Delay / Risk',
+      description:
+        'Use this when work is still moving, but it is behind plan or at risk of missing the planned end date.',
       label: 'Delay reason',
-      value: '',
-      confirmLabel: 'Mark Delayed',
+      value: currentWorkPackage?.delayInfo?.reason ?? currentWorkPackage?.overrideReason ?? '',
+      delayOwner: currentWorkPackage?.delayInfo?.owner ?? 'material',
+      delayImpactDays:
+        currentWorkPackage?.delayInfo?.impactDays !== undefined
+          ? String(currentWorkPackage.delayInfo.impactDays)
+          : '1',
+      delayExpectedRecoveryDate:
+        currentWorkPackage?.delayInfo?.expectedRecoveryDate ??
+        currentWorkPackage?.estimatedEndDate ??
+        getTodayDateString(),
+      confirmLabel: 'Flag Delay',
     });
   };
 
   const handleUpdateDelayReason = (workPackageId: string) => {
+    setIsDelayOwnerPickerOpen(false);
+
     const currentWorkPackage = workPackages.find(
       workPackage => workPackage.id === workPackageId
     );
@@ -2238,12 +2289,53 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     setTimelineInputDialog({
       mode: 'update_delay',
       workPackageId,
-      title: 'Update Delay Reason',
-      description: 'Update the current delay reason for this work package.',
+      title: 'Update Delay / Risk',
+      description:
+        'Update the delay source, impact days, recovery date, or reason.',
       label: 'Delay reason',
-      value: currentWorkPackage?.overrideReason ?? '',
-      confirmLabel: 'Save Reason',
+      value: currentWorkPackage?.delayInfo?.reason ?? currentWorkPackage?.overrideReason ?? '',
+      delayOwner: currentWorkPackage?.delayInfo?.owner ?? 'material',
+      delayImpactDays:
+        currentWorkPackage?.delayInfo?.impactDays !== undefined
+          ? String(currentWorkPackage.delayInfo.impactDays)
+          : '1',
+      delayExpectedRecoveryDate:
+        currentWorkPackage?.delayInfo?.expectedRecoveryDate ??
+        currentWorkPackage?.estimatedEndDate ??
+        getTodayDateString(),
+      confirmLabel: 'Save Delay',
     });
+  };
+
+  const handleResolveWorkPackageDelay = (workPackageId: string) => {
+    const today = getTodayDateString();
+    const now = new Date().toISOString();
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(workPackage => {
+        if (workPackage.id !== workPackageId) return workPackage;
+
+        return {
+          ...workPackage,
+          status:
+            workPackage.status === 'completed'
+              ? 'completed'
+              : workPackage.actualStartDate
+                ? 'in_progress'
+                : 'ready',
+          overrideReason: undefined,
+          delayInfo: workPackage.delayInfo
+            ? {
+                ...workPackage.delayInfo,
+                status: 'resolved',
+                resolvedAt: now,
+                updatedAt: now,
+              }
+            : undefined,
+          notes: appendTimelineNote(workPackage.notes, `Delay resolved on ${today}.`),
+        };
+      })
+    );
   };
 
   const handleConfirmTimelineInputDialog = () => {
@@ -2281,39 +2373,44 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
       );
     }
 
-    if (mode === 'mark_delayed') {
+    if (mode === 'mark_delayed' || mode === 'update_delay') {
+      const delayOwner = timelineInputDialog.delayOwner ?? 'material';
+      const delayImpactDays = Math.max(
+        0,
+        Number(timelineInputDialog.delayImpactDays ?? '0') || 0
+      );
+      const delayExpectedRecoveryDate =
+        timelineInputDialog.delayExpectedRecoveryDate || today;
+
       setWorkPackages(currentWorkPackages =>
-        currentWorkPackages.map(workPackage =>
-          workPackage.id === workPackageId
-            ? {
-                ...workPackage,
-                status: 'delayed',
-                overrideReason: reason,
-                notes: appendTimelineNote(
-                  workPackage.notes,
-                  `Marked delayed on ${today}: ${reason}`
-                ),
-              }
-            : workPackage
-        )
+        currentWorkPackages.map(workPackage => {
+          if (workPackage.id !== workPackageId) return workPackage;
+
+          const flaggedAt = workPackage.delayInfo?.flaggedAt ?? now;
+
+          return {
+            ...workPackage,
+            status: workPackage.status === 'completed' ? workPackage.status : 'delayed',
+            overrideReason: reason,
+            delayInfo: {
+              reason,
+              owner: delayOwner,
+              impactDays: delayImpactDays,
+              expectedRecoveryDate: delayExpectedRecoveryDate,
+              status: 'open',
+              flaggedAt,
+              updatedAt: now,
+            },
+            notes: appendTimelineNote(
+              workPackage.notes,
+              `${mode === 'mark_delayed' ? 'Flagged delay' : 'Updated delay'} on ${today}: ${reason}`
+            ),
+          };
+        })
       );
     }
 
-    if (mode === 'update_delay') {
-      setWorkPackages(currentWorkPackages =>
-        currentWorkPackages.map(workPackage =>
-          workPackage.id === workPackageId
-            ? {
-                ...workPackage,
-                status:
-                  workPackage.status === 'completed' ? workPackage.status : 'delayed',
-                overrideReason: reason,
-              }
-            : workPackage
-        )
-      );
-    }
-
+    setIsDelayOwnerPickerOpen(false);
     setTimelineInputDialog(null);
   };
 
@@ -3303,6 +3400,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
           onCompleteWork={handleCompleteWorkPackage}
           onMarkDelayed={handleMarkWorkPackageDelayed}
           onUpdateDelayReason={handleUpdateDelayReason}
+          onResolveDelay={handleResolveWorkPackageDelay}
           onUpdatePrerequisites={handleUpdateWorkPackageDependencies}
                     vendors={vendorRecords}
             onAssignVendor={handleAssignWorkPackageVendor}
@@ -3673,7 +3771,16 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
       {timelineNoticeDialog && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+          <div
+            className="rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl"
+            style={{
+              width:
+                timelineInputDialog?.mode === 'mark_delayed' ||
+                timelineInputDialog?.mode === 'update_delay'
+                  ? 'min(920px, calc(100vw - 32px))'
+                  : 'min(32rem, calc(100vw - 32px))',
+            }}
+          >
             <div>
               <p className="text-lg font-semibold text-foreground">
                 {timelineNoticeDialog.title}
@@ -3697,7 +3804,7 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
       {timelineInputDialog && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+          <div className="w-full max-w-[920px] rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
             <div>
               <p className="text-lg font-semibold text-foreground">
                 {timelineInputDialog.title}
@@ -3707,34 +3814,175 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
               </p>
             </div>
 
-            <label className="mt-5 grid gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {timelineInputDialog.label}
-              </span>
-              <textarea
-                value={timelineInputDialog.value}
-                onChange={event =>
-                  setTimelineInputDialog(current =>
-                    current
-                      ? {
-                          ...current,
-                          value: event.target.value,
-                        }
-                      : current
-                  )
-                }
-                rows={4}
-                autoFocus
-                className="min-h-28 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                placeholder="Enter reason..."
-              />
-            </label>
+            {timelineInputDialog.mode === 'mark_delayed' ||
+            timelineInputDialog.mode === 'update_delay' ? (
+              <>
+                <div className="mt-5 grid gap-3 md:grid-cols-[minmax(320px,1fr)_96px_220px]">
+                  <div className="relative grid gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Delay Source
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsDelayOwnerPickerOpen(current => !current)}
+                      className="flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-border bg-background px-3 text-left text-sm font-medium text-foreground outline-none transition hover:border-foreground/40"
+                    >
+                      <span className="truncate">
+                        {getTimelineDelayOwnerLabel(
+                          timelineInputDialog.delayOwner ?? 'material'
+                        )}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 shrink-0 border-b border-r border-muted-foreground transition ${
+                          isDelayOwnerPickerOpen ? '-rotate-135' : 'rotate-45'
+                        }`}
+                      />
+                    </button>
+
+                    {isDelayOwnerPickerOpen && (
+                      <div className="absolute left-0 right-0 top-full z-[10020] mt-2 overflow-hidden rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+                        {timelineDelayOwnerOptions.map(option => {
+                          const isSelected =
+                            (timelineInputDialog.delayOwner ?? 'material') === option.value;
+
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setTimelineInputDialog(current =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        delayOwner: option.value,
+                                      }
+                                    : current
+                                );
+                                setIsDelayOwnerPickerOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                                isSelected
+                                  ? 'bg-foreground text-background'
+                                  : 'hover:bg-muted'
+                              }`}
+                            >
+                              <span className="truncate">{option.label}</span>
+                              {isSelected ? (
+                                <span
+                                  aria-hidden="true"
+                                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-current"
+                                />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="grid gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Impact
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={timelineInputDialog.delayImpactDays ?? ''}
+                      onChange={event =>
+                        setTimelineInputDialog(current =>
+                          current
+                            ? {
+                                ...current,
+                                delayImpactDays: event.target.value,
+                              }
+                            : current
+                        )
+                      }
+                      className="h-11 w-full rounded-2xl border border-border bg-background px-3 text-center text-sm font-semibold text-foreground outline-none transition focus:border-foreground"
+                      placeholder="0"
+                    />
+                  </label>
+
+                  <label className="grid min-w-0 gap-2 md:w-[220px]">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Recovery Date
+                    </span>
+                    <DateInput
+                      value={timelineInputDialog.delayExpectedRecoveryDate ?? ''}
+                      onChange={value =>
+                        setTimelineInputDialog(current =>
+                          current
+                            ? {
+                                ...current,
+                                delayExpectedRecoveryDate: value,
+                              }
+                            : current
+                        )
+                      }
+                      placeholder="Select date"
+                      popoverMode="fixed"
+                    />
+                  </label>
+                </div>
+
+                <label className="mt-4 grid gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Delay Reason
+                  </span>
+                  <textarea
+                    value={timelineInputDialog.value}
+                    onChange={event =>
+                      setTimelineInputDialog(current =>
+                        current
+                          ? {
+                              ...current,
+                              value: event.target.value,
+                            }
+                          : current
+                      )
+                    }
+                    rows={3}
+                    autoFocus
+                    className="min-h-24 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    placeholder="Enter reason..."
+                  />
+                </label>
+              </>
+            ) : (
+              <label className="mt-5 grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  {timelineInputDialog.label}
+                </span>
+                <textarea
+                  value={timelineInputDialog.value}
+                  onChange={event =>
+                    setTimelineInputDialog(current =>
+                      current
+                        ? {
+                            ...current,
+                            value: event.target.value,
+                          }
+                        : current
+                    )
+                  }
+                  rows={4}
+                  autoFocus
+                  className="min-h-28 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  placeholder="Enter reason..."
+                />
+              </label>
+            )}
 
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setTimelineInputDialog(null)}
+                onClick={() => {
+                  setIsDelayOwnerPickerOpen(false);
+                  setTimelineInputDialog(null);
+                }}
               >
                 Cancel
               </Button>

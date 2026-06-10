@@ -77,6 +77,28 @@ export interface PausePeriod {
   createdBy: string;
 }
 
+export type WorkPackageDelayOwner =
+  | 'client'
+  | 'vendor'
+  | 'gravium'
+  | 'site_condition'
+  | 'payment'
+  | 'material'
+  | 'other';
+
+export type WorkPackageDelayStatus = 'open' | 'resolved';
+
+export interface WorkPackageDelayInfo {
+  reason: string;
+  owner: WorkPackageDelayOwner;
+  impactDays: number;
+  expectedRecoveryDate: string;
+  status: WorkPackageDelayStatus;
+  flaggedAt: string;
+  updatedAt?: string;
+  resolvedAt?: string;
+}
+
 export interface WorkPackage {
   id: string;
   projectId: string;
@@ -104,6 +126,7 @@ export interface WorkPackage {
 
   manualOverrideEnabled: boolean;
   overrideReason?: string;
+  delayInfo?: WorkPackageDelayInfo;
   notes?: string;
 }
 

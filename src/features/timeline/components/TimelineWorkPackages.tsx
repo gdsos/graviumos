@@ -38,6 +38,7 @@ interface TimelineWorkPackagesProps {
   onCompleteWork?: (workPackageId: string) => void;
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
+  onResolveDelay?: (workPackageId: string) => void;
   onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
 }
 
@@ -149,6 +150,29 @@ function isActiveOrUpcoming(workPackage: WorkPackage) {
 function getLatestPauseReason(workPackage: WorkPackage) {
   return workPackage.pausePeriods[workPackage.pausePeriods.length - 1]?.reason;
 }
+
+function getActiveDelayInfo(workPackage: WorkPackage) {
+  if (workPackage.delayInfo?.status === 'open') return workPackage.delayInfo;
+
+  if (workPackage.overrideReason) {
+    return {
+      reason: workPackage.overrideReason,
+      owner: undefined,
+      impactDays: undefined,
+      expectedRecoveryDate: undefined,
+      status: 'open',
+    };
+  }
+
+  return null;
+}
+
+function formatDelayOwner(owner?: string) {
+  if (!owner) return 'Not Set';
+
+  return formatLabel(owner);
+}
+
 
 function getWorkPackageTitleParts(title: string) {
   const separatorIndex = title.indexOf(' - ');
@@ -364,6 +388,7 @@ function getSecondaryActions({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onResolveDelay,
 }: TimelineWorkPackagesProps & {
   workPackage: WorkPackage;
 }): WorkPackageAction[] {
@@ -413,17 +438,25 @@ function getSecondaryActions({
 
   if (!isCompleted && workPackage.status !== 'delayed') {
     actions.push({
-      label: 'Mark Delayed',
+      label: 'Flag Delay',
       icon: AlertTriangle,
       onClick: () => onMarkDelayed?.(workPackage.id),
     });
   }
 
-  if (workPackage.status === 'delayed' || workPackage.overrideReason) {
+  if (workPackage.status === 'delayed' || workPackage.overrideReason || workPackage.delayInfo) {
     actions.push({
-      label: 'Delay Reason',
+      label: 'Update Delay',
       icon: MessageSquareText,
       onClick: () => onUpdateDelayReason?.(workPackage.id),
+    });
+  }
+
+  if (workPackage.status === 'delayed' || workPackage.delayInfo?.status === 'open') {
+    actions.push({
+      label: 'Resolve Delay',
+      icon: CheckCircle2,
+      onClick: () => onResolveDelay?.(workPackage.id),
     });
   }
 
@@ -830,6 +863,7 @@ function WorkPackageRow({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onResolveDelay,
   onUpdatePrerequisites,
   vendors,
   onAssignVendor,
@@ -842,6 +876,7 @@ function WorkPackageRow({
   const [isPauseHistoryOpen, setIsPauseHistoryOpen] = useState(false);
   const vendorName = getVendorName(workPackage.vendorId, vendors);
   const latestPauseReason = getLatestPauseReason(workPackage);
+  const activeDelayInfo = getActiveDelayInfo(workPackage);
   const titleParts = getWorkPackageTitleParts(workPackage.title);
 const secondaryActions = getSecondaryActions({
     workPackage,
@@ -852,6 +887,7 @@ const secondaryActions = getSecondaryActions({
     onCompleteWork,
     onMarkDelayed,
     onUpdateDelayReason,
+    onResolveDelay,
   });
   const dependencyPreview = getDependencyPreview(workPackage, workPackages);
   const dependencyWorkPackages = getDependencyWorkPackages(workPackage, workPackages);
@@ -898,11 +934,11 @@ const secondaryActions = getSecondaryActions({
             </span>
           </div>
 
-          {(workPackage.overrideReason || latestPauseReason) && (
+          {(activeDelayInfo || latestPauseReason) && (
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Issue</span>
               <span className="line-clamp-1 text-right font-medium text-red-600 dark:text-red-300">
-                {workPackage.overrideReason ?? latestPauseReason}
+                {activeDelayInfo?.reason ?? latestPauseReason}
               </span>
             </div>
           )}
@@ -1020,10 +1056,35 @@ const secondaryActions = getSecondaryActions({
 
         <div className="block">
           <div className="min-w-0">
-            {workPackage.overrideReason ? (
-              <p className="truncate text-sm text-red-600 dark:text-red-300">
-                Delay: {workPackage.overrideReason}
-              </p>
+            {activeDelayInfo ? (
+              <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-2">
+                <p className="line-clamp-2 text-sm font-semibold text-red-600 dark:text-red-300">
+                  Delay: {activeDelayInfo.reason}
+                </p>
+
+                <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                  <p>
+                    Source:{' '}
+                    <span className="font-medium text-foreground">
+                      {formatDelayOwner(activeDelayInfo.owner)}
+                    </span>
+                  </p>
+                  <p>
+                    Impact:{' '}
+                    <span className="font-medium text-foreground">
+                      {activeDelayInfo.impactDays ?? 0} day(s)
+                    </span>
+                  </p>
+                  <p>
+                    Recovery:{' '}
+                    <span className="font-medium text-foreground">
+                      {activeDelayInfo.expectedRecoveryDate
+                        ? formatDisplayDate(activeDelayInfo.expectedRecoveryDate)
+                        : 'Not set'}
+                    </span>
+                  </p>
+                </div>
+              </div>
             ) : latestPauseReason ? (
               <p className="truncate text-sm text-amber-700 dark:text-amber-300">
                 Latest pause: {latestPauseReason}
@@ -1173,6 +1234,7 @@ function WorkPackageGroup({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onResolveDelay,
   onUpdatePrerequisites,
   vendors,
   onAssignVendor,
@@ -1191,6 +1253,7 @@ function WorkPackageGroup({
   onCompleteWork?: (workPackageId: string) => void;
   onMarkDelayed?: (workPackageId: string) => void;
   onUpdateDelayReason?: (workPackageId: string) => void;
+  onResolveDelay?: (workPackageId: string) => void;
   onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
   vendors?: TimelineVendorOption[];
   onAssignVendor?: (workPackageId: string, vendorId?: string) => void;
@@ -1233,6 +1296,7 @@ function WorkPackageGroup({
             onCompleteWork={onCompleteWork}
             onMarkDelayed={onMarkDelayed}
             onUpdateDelayReason={onUpdateDelayReason}
+            onResolveDelay={onResolveDelay}
             onUpdatePrerequisites={onUpdatePrerequisites}
             vendors={vendors}
             onAssignVendor={onAssignVendor}
@@ -1253,6 +1317,7 @@ export function TimelineWorkPackages({
   onCompleteWork,
   onMarkDelayed,
   onUpdateDelayReason,
+  onResolveDelay,
   onUpdatePrerequisites,
   vendors,
   onAssignVendor,
@@ -1289,6 +1354,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
+        onResolveDelay={onResolveDelay}
         onUpdatePrerequisites={onUpdatePrerequisites}
         vendors={vendors}
         onAssignVendor={onAssignVendor}
@@ -1309,6 +1375,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
+        onResolveDelay={onResolveDelay}
         onUpdatePrerequisites={onUpdatePrerequisites}
         vendors={vendors}
         onAssignVendor={onAssignVendor}
@@ -1329,6 +1396,7 @@ export function TimelineWorkPackages({
         onCompleteWork={onCompleteWork}
         onMarkDelayed={onMarkDelayed}
         onUpdateDelayReason={onUpdateDelayReason}
+        onResolveDelay={onResolveDelay}
         onUpdatePrerequisites={onUpdatePrerequisites}
         vendors={vendors}
         onAssignVendor={onAssignVendor}
