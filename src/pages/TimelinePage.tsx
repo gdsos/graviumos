@@ -755,10 +755,102 @@ function getActualWorkPackageScheduleSegments(
   return segments;
 }
 
-function getActualActiveScheduleBarTone(status: WorkPackageStatus) {
-  if (status === 'paused') return getScheduleBarTone('in_progress');
+type WorkPackageDelayScheduleSegment = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: NonNullable<WorkPackage['delayInfo']>['status'];
+};
 
-  return getScheduleBarTone(status);
+function getDateOnlyFromDateTime(value?: string, fallbackDate?: string) {
+  if (value && value.length >= 10) return value.slice(0, 10);
+
+  return fallbackDate ?? '';
+}
+
+function getDelayInfoId(workPackageId: string, existingId?: string) {
+  return existingId ?? `delay-${workPackageId}-${Date.now()}`;
+}
+
+function upsertWorkPackageDelayHistory(
+  delayHistory: WorkPackage['delayHistory'] | undefined,
+  delayInfo: NonNullable<WorkPackage['delayInfo']>
+) {
+  const nextDelayHistory = [...(delayHistory ?? [])];
+  const delayInfoId = getDelayInfoId('history', delayInfo.id);
+  const existingIndex = nextDelayHistory.findIndex(
+    historyItem => historyItem.id === delayInfoId
+  );
+  const normalizedDelayInfo = {
+    ...delayInfo,
+    id: delayInfoId,
+  };
+
+  if (existingIndex >= 0) {
+    nextDelayHistory[existingIndex] = normalizedDelayInfo;
+  } else {
+    nextDelayHistory.push(normalizedDelayInfo);
+  }
+
+  return nextDelayHistory.sort((first, second) =>
+    first.flaggedAt.localeCompare(second.flaggedAt)
+  );
+}
+
+function getWorkPackageDelayHistory(workPackage: WorkPackage) {
+  const historyById = new Map<string, NonNullable<WorkPackage['delayInfo']>>();
+
+  (workPackage.delayHistory ?? []).forEach((delayItem, index) => {
+    const delayItemId = delayItem.id ?? `legacy-delay-${workPackage.id}-${index}`;
+
+    historyById.set(delayItemId, {
+      ...delayItem,
+      id: delayItemId,
+    });
+  });
+
+  if (workPackage.delayInfo) {
+    const delayInfoId = getDelayInfoId(workPackage.id, workPackage.delayInfo.id);
+
+    historyById.set(delayInfoId, {
+      ...workPackage.delayInfo,
+      id: delayInfoId,
+    });
+  }
+
+  return Array.from(historyById.values()).sort((first, second) =>
+    first.flaggedAt.localeCompare(second.flaggedAt)
+  );
+}
+
+function getWorkPackageDelayScheduleSegments(
+  workPackage: WorkPackage,
+  today: string
+): WorkPackageDelayScheduleSegment[] {
+  return getWorkPackageDelayHistory(workPackage)
+    .map((delayInfo, index) => {
+      const startDate = getDateOnlyFromDateTime(delayInfo.flaggedAt, today);
+      const endDate =
+        delayInfo.status === 'resolved'
+          ? getDateOnlyFromDateTime(delayInfo.resolvedAt, startDate)
+          : today;
+
+      if (!startDate || !endDate) return null;
+
+      return {
+        id: delayInfo.id ?? `delay-segment-${workPackage.id}-${index}`,
+        startDate,
+        endDate,
+        reason: delayInfo.reason,
+        status: delayInfo.status,
+      };
+    })
+    .filter((segment): segment is WorkPackageDelayScheduleSegment => Boolean(segment));
+}
+
+function getActualActiveScheduleBarTone() {
+  return getScheduleBarTone('in_progress');
 }
 
 function getScheduleBarTone(status: WorkPackageStatus) {
@@ -957,6 +1049,8 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     new Date().toISOString().slice(0, 10)
   );
   const [scheduleZoom, setScheduleZoom] = useState(1);
+  const [scheduleDisplayMode, setScheduleDisplayMode] =
+    useState<'status' | 'phase'>('status');
   const [scheduleViewportWidth, setScheduleViewportWidth] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingScheduleScrollLeftRef = useRef<number | null>(null);
@@ -1484,6 +1578,9 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
       .flatMap(workPackage => [
         workPackage.estimatedStartDate,
         workPackage.actualStartDate,
+        ...getWorkPackageDelayScheduleSegments(workPackage, today).map(
+          delaySegment => delaySegment.startDate
+        ),
       ])
       .filter(Boolean)
       .sort();
@@ -1493,6 +1590,9 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
         workPackage.estimatedEndDate,
         workPackage.actualEndDate,
         workPackage.actualStartDate && !workPackage.actualEndDate ? today : undefined,
+        ...getWorkPackageDelayScheduleSegments(workPackage, today).map(
+          delaySegment => delaySegment.endDate
+        ),
       ])
       .filter(Boolean)
       .sort();
@@ -2315,6 +2415,16 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
       currentWorkPackages.map(workPackage => {
         if (workPackage.id !== workPackageId) return workPackage;
 
+        const nextDelayInfo = workPackage.delayInfo
+          ? {
+              ...workPackage.delayInfo,
+              id: getDelayInfoId(workPackage.id, workPackage.delayInfo.id),
+              status: 'resolved' as const,
+              resolvedAt: now,
+              updatedAt: now,
+            }
+          : undefined;
+
         return {
           ...workPackage,
           status:
@@ -2324,14 +2434,10 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                 ? 'in_progress'
                 : 'ready',
           overrideReason: undefined,
-          delayInfo: workPackage.delayInfo
-            ? {
-                ...workPackage.delayInfo,
-                status: 'resolved',
-                resolvedAt: now,
-                updatedAt: now,
-              }
-            : undefined,
+          delayInfo: nextDelayInfo,
+          delayHistory: nextDelayInfo
+            ? upsertWorkPackageDelayHistory(workPackage.delayHistory, nextDelayInfo)
+            : workPackage.delayHistory,
           notes: appendTimelineNote(workPackage.notes, `Delay resolved on ${today}.`),
         };
       })
@@ -2387,20 +2493,27 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
           if (workPackage.id !== workPackageId) return workPackage;
 
           const flaggedAt = workPackage.delayInfo?.flaggedAt ?? now;
+          const delayInfoId = getDelayInfoId(workPackage.id, workPackage.delayInfo?.id);
+          const nextDelayInfo = {
+            id: delayInfoId,
+            reason,
+            owner: delayOwner,
+            impactDays: delayImpactDays,
+            expectedRecoveryDate: delayExpectedRecoveryDate,
+            status: 'open' as const,
+            flaggedAt,
+            updatedAt: now,
+          };
 
           return {
             ...workPackage,
             status: workPackage.status === 'completed' ? workPackage.status : 'delayed',
             overrideReason: reason,
-            delayInfo: {
-              reason,
-              owner: delayOwner,
-              impactDays: delayImpactDays,
-              expectedRecoveryDate: delayExpectedRecoveryDate,
-              status: 'open',
-              flaggedAt,
-              updatedAt: now,
-            },
+            delayInfo: nextDelayInfo,
+            delayHistory: upsertWorkPackageDelayHistory(
+              workPackage.delayHistory,
+              nextDelayInfo
+            ),
             notes: appendTimelineNote(
               workPackage.notes,
               `${mode === 'mark_delayed' ? 'Flagged delay' : 'Updated delay'} on ${today}: ${reason}`
@@ -2908,29 +3021,6 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                 {formatINR(activeTimelineProject.revenue)}
               </p>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1">
-                  <span className="h-2 w-5 rounded-full border border-border bg-muted" />
-                  Planned
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1">
-                  <span className="h-2 w-5 rounded-full bg-foreground" />
-                  Actual
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1">
-                  <span
-                    className="h-2 w-5 rounded-full border border-black/20"
-                    style={{
-                      backgroundImage:
-                        'repeating-linear-gradient(135deg, #facc15 0 6px, #1f2937 6px 12px)',
-                    }}
-                  />
-                  Paused
-                </span>
-                <span className="text-muted-foreground/70">
-                  Actual extends to today until completed.
-                </span>
-              </div>
             </div>
 
             <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-background p-1 sm:justify-start">
@@ -3143,6 +3233,10 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                   workPackage,
                   today
                 );
+                const delaySegments = getWorkPackageDelayScheduleSegments(
+                  workPackage,
+                  today
+                );
 
                 return (
                   <div
@@ -3221,44 +3315,127 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                         )} - ${formatDate(workPackage.estimatedEndDate)}`}
                       />
 
-                      {actualSegments.map(segment => {
-                        const segmentStyle = getScheduleDateRangeBarStyle(
-                          segment.startDate,
-                          segment.endDate,
-                          timelineStartDate,
-                          dayWidth
-                        );
+                      {scheduleDisplayMode === 'status' && actualBarStyle ? (
+                        <button
+                          type="button"
+                          onPointerDown={event => event.stopPropagation()}
+                          onMouseDown={event => event.stopPropagation()}
+                          onTouchStart={event => event.stopPropagation()}
+                          onClick={event => {
+                            event.stopPropagation();
+                            setScheduleDisplayMode('phase');
+                          }}
+                          className={`group/status-segment absolute bottom-7 h-6 cursor-pointer overflow-visible rounded-none border border-black/10 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${getScheduleBarTone(
+                            workPackage.status
+                          )}`}
+                          style={actualBarStyle}
+                          title={`Status ${workPackage.title}: ${formatDate(
+                            workPackage.actualStartDate ?? ''
+                          )} - ${formatDate(actualEndDate ?? '')}`}
+                        >
+                          <span className="pointer-events-none absolute left-1/2 top-0 z-[220] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/status-segment:opacity-100">
+                            {formatScheduleTickDate(workPackage.actualStartDate ?? '')} -{' '}
+                            {formatScheduleTickDate(actualEndDate ?? '')}
+                          </span>
+                        </button>
+                      ) : null}
 
-                        const segmentTitle =
-                          segment.kind === 'paused'
-                            ? `Paused ${workPackage.title}: ${formatDate(
-                                segment.startDate
-                              )} - ${formatDate(segment.endDate)}`
-                            : `Actual ${workPackage.title}: ${formatDate(
-                                segment.startDate
-                              )} - ${formatDate(segment.endDate)}`;
+                      {scheduleDisplayMode === 'phase' ? (
+                        <>
+                          {actualSegments.map(segment => {
+                            const segmentStyle = getScheduleDateRangeBarStyle(
+                              segment.startDate,
+                              segment.endDate,
+                              timelineStartDate,
+                              dayWidth
+                            );
 
-                        return (
-                          <div
-                            key={segment.id}
-                            className={`absolute bottom-7 h-6 rounded-none border border-black/10 shadow-sm ${
+                            const segmentTitle =
                               segment.kind === 'paused'
-                                ? 'bg-yellow-400'
-                                : getActualActiveScheduleBarTone(workPackage.status)
-                            }`}
-                            style={{
-                              ...segmentStyle,
-                              ...(segment.kind === 'paused'
-                                ? {
-                                    backgroundImage:
-                                      'repeating-linear-gradient(135deg, #facc15 0 10px, #1f2937 10px 20px)',
-                                  }
-                                : null),
-                            }}
-                            title={segmentTitle}
-                          />
-                        );
-                      })}
+                                ? `Paused ${workPackage.title}: ${formatDate(
+                                    segment.startDate
+                                  )} - ${formatDate(segment.endDate)}`
+                                : `Active ${workPackage.title}: ${formatDate(
+                                    segment.startDate
+                                  )} - ${formatDate(segment.endDate)}`;
+
+                            return (
+                              <button
+                                key={segment.id}
+                                type="button"
+                                onPointerDown={event => event.stopPropagation()}
+                                onMouseDown={event => event.stopPropagation()}
+                                onTouchStart={event => event.stopPropagation()}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setScheduleDisplayMode('status');
+                                }}
+                                className={`group/phase-segment absolute bottom-7 h-6 cursor-pointer overflow-visible rounded-none border shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                                  segment.kind === 'paused'
+                                    ? 'border-white/20 bg-transparent'
+                                    : getActualActiveScheduleBarTone()
+                                }`}
+                                style={{
+                                  ...segmentStyle,
+                                  ...(segment.kind === 'paused'
+                                    ? {
+                                        backgroundImage:
+                                          'repeating-linear-gradient(135deg, rgba(226,232,240,0.78) 0 8px, transparent 8px 16px)',
+                                      }
+                                    : null),
+                                }}
+                                title={segmentTitle}
+                              >
+                                <span className="pointer-events-none absolute left-1/2 top-0 z-[220] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/phase-segment:opacity-100">
+                                  {segment.kind === 'paused' ? 'Paused' : 'Active'}{' '}
+                                  {formatScheduleTickDate(segment.startDate)} -{' '}
+                                  {segment.kind === 'paused' &&
+                                  workPackage.status === 'paused'
+                                    ? 'Ongoing'
+                                    : formatScheduleTickDate(segment.endDate)}
+                                </span>
+                              </button>
+                            );
+                          })}
+
+                          {delaySegments.map(delaySegment => {
+                            const delaySegmentStyle = getScheduleDateRangeBarStyle(
+                              delaySegment.startDate,
+                              delaySegment.endDate,
+                              timelineStartDate,
+                              dayWidth
+                            );
+
+                            return (
+                              <button
+                                key={delaySegment.id}
+                                type="button"
+                                onPointerDown={event => event.stopPropagation()}
+                                onMouseDown={event => event.stopPropagation()}
+                                onTouchStart={event => event.stopPropagation()}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setScheduleDisplayMode('status');
+                                }}
+                                className="group/delay-segment absolute bottom-7 h-6 cursor-pointer overflow-visible rounded-none border border-red-950/30 bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                style={delaySegmentStyle}
+                                title={`Delay ${workPackage.title}: ${formatDate(
+                                  delaySegment.startDate
+                                )} - ${formatDate(delaySegment.endDate)} - ${
+                                  delaySegment.reason
+                                }`}
+                              >
+                                <span className="pointer-events-none absolute left-1/2 top-0 z-[220] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-lg transition group-hover/delay-segment:opacity-100">
+                                  Delay {formatScheduleTickDate(delaySegment.startDate)} -{' '}
+                                  {delaySegment.status === 'open'
+                                    ? 'Ongoing'
+                                    : formatScheduleTickDate(delaySegment.endDate)}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </>
+                      ) : null}
 
                       <div
                         className="absolute top-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground shadow-sm"
@@ -3468,6 +3645,8 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
                 <Trash2 className="h-4 w-4" />
                 <span className="whitespace-nowrap">Delete Timeline</span>
               </Button>
+
+
             </div>
           ) : null
         }

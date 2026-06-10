@@ -89,6 +89,7 @@ export type WorkPackageDelayOwner =
 export type WorkPackageDelayStatus = 'open' | 'resolved';
 
 export interface WorkPackageDelayInfo {
+  id?: string;
   reason: string;
   owner: WorkPackageDelayOwner;
   impactDays: number;
@@ -127,6 +128,7 @@ export interface WorkPackage {
   manualOverrideEnabled: boolean;
   overrideReason?: string;
   delayInfo?: WorkPackageDelayInfo;
+  delayHistory?: WorkPackageDelayInfo[];
   notes?: string;
 }
 

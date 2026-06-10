@@ -173,6 +173,36 @@ function formatDelayOwner(owner?: string) {
   return formatLabel(owner);
 }
 
+function getDelayHistoryEntries(workPackage: WorkPackage) {
+  const delayHistoryById = new Map<string, NonNullable<WorkPackage['delayInfo']>>();
+
+  (workPackage.delayHistory ?? []).forEach((delayItem, index) => {
+    const delayItemId = delayItem.id ?? `legacy-delay-${workPackage.id}-${index}`;
+
+    delayHistoryById.set(delayItemId, {
+      ...delayItem,
+      id: delayItemId,
+    });
+  });
+
+  if (workPackage.delayInfo) {
+    const delayInfoId = workPackage.delayInfo.id ?? `current-delay-${workPackage.id}`;
+
+    delayHistoryById.set(delayInfoId, {
+      ...workPackage.delayInfo,
+      id: delayInfoId,
+    });
+  }
+
+  return Array.from(delayHistoryById.values()).sort((first, second) =>
+    first.flaggedAt.localeCompare(second.flaggedAt)
+  );
+}
+
+function formatDelayDateTime(value?: string) {
+  return formatTimelineDateTime(value, value?.slice(0, 10));
+}
+
 
 function getWorkPackageTitleParts(title: string) {
   const separatorIndex = title.indexOf(' - ');
@@ -873,10 +903,13 @@ function WorkPackageRow({
   onEditPrerequisites: (workPackageId: string) => void;
   onCloseDependencyEditor: () => void;
 }) {
-  const [isPauseHistoryOpen, setIsPauseHistoryOpen] = useState(false);
+  const [historyModalTab, setHistoryModalTab] = useState<'pause' | 'delay' | null>(null);
   const vendorName = getVendorName(workPackage.vendorId, vendors);
   const latestPauseReason = getLatestPauseReason(workPackage);
   const activeDelayInfo = getActiveDelayInfo(workPackage);
+  const delayHistoryEntries = getDelayHistoryEntries(workPackage);
+  const hasHistoryEntries =
+    workPackage.pausePeriods.length > 0 || delayHistoryEntries.length > 0;
   const titleParts = getWorkPackageTitleParts(workPackage.title);
 const secondaryActions = getSecondaryActions({
     workPackage,
@@ -1093,77 +1126,23 @@ const secondaryActions = getSecondaryActions({
               <p className="text-sm text-muted-foreground">Clear</p>
             )}
 
-            {workPackage.pausePeriods.length > 0 && (
-              <div className="mt-1">
+            {hasHistoryEntries && (
+              <div className="mt-2 grid gap-1">
                 <button
                   type="button"
-                  onClick={() => setIsPauseHistoryOpen(current => !current)}
-                  className="text-left text-xs font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  onClick={() =>
+                    setHistoryModalTab(
+                      workPackage.pausePeriods.length > 0 ? 'pause' : 'delay'
+                    )
+                  }
+                  className="inline-flex text-left text-xs font-semibold text-muted-foreground underline-offset-4 transition hover:text-foreground hover:underline"
                 >
-                  {isPauseHistoryOpen ? 'Hide' : 'View'} {workPackage.pausePeriods.length} pause(s)
+                  View All
                 </button>
-
-                {isPauseHistoryOpen && (
-                  <div className="mt-2 grid gap-2 rounded-xl border border-border bg-background p-2">
-                    {workPackage.pausePeriods.map((pausePeriod, pauseIndex) => {
-                      const durationLabel = formatPauseDuration(
-                        pausePeriod.pauseStartAt,
-                        pausePeriod.pauseEndAt
-                      );
-
-                      return (
-                        <div
-                          key={pausePeriod.id}
-                          className="rounded-lg border border-border bg-card px-2 py-2 text-xs"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="font-semibold text-foreground">
-                              Pause {pauseIndex + 1}
-                            </span>
-                            <span className="shrink-0 text-muted-foreground">
-                              {pausePeriod.pauseEnd ? 'Closed' : 'Open'}
-                            </span>
-                          </div>
-
-                          <p className="mt-1 text-muted-foreground">
-                            From:{' '}
-                            <span className="font-medium text-foreground">
-                              {formatTimelineDateTime(
-                                pausePeriod.pauseStartAt,
-                                pausePeriod.pauseStart
-                              )}
-                            </span>
-                          </p>
-
-                          <p className="mt-1 text-muted-foreground">
-                            To:{' '}
-                            <span className="font-medium text-foreground">
-                              {pausePeriod.pauseEnd
-                                ? formatTimelineDateTime(
-                                    pausePeriod.pauseEndAt,
-                                    pausePeriod.pauseEnd
-                                  )
-                                : 'Still paused'}
-                            </span>
-                          </p>
-
-                          {durationLabel && (
-                            <p className="mt-1 text-muted-foreground">
-                              Duration:{' '}
-                              <span className="font-medium text-foreground">
-                                {durationLabel}
-                              </span>
-                            </p>
-                          )}
-
-                          <p className="mt-1 leading-5 text-amber-700 dark:text-amber-300">
-                            {pausePeriod.reason}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <p className="text-[11px] text-muted-foreground">
+                  {workPackage.pausePeriods.length} pause(s) ?{' '}
+                  {delayHistoryEntries.length} delay(s)
+                </p>
               </div>
             )}
           </div>
@@ -1204,6 +1183,190 @@ const secondaryActions = getSecondaryActions({
           />
         </div>
       </div>
+
+      {historyModalTab && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-[2rem] border border-border bg-card p-5 text-card-foreground shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-foreground">
+                  Pause / Delay History
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {titleParts.areaName}
+                  {titleParts.workName ? ` - ${titleParts.workName}` : ''}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setHistoryModalTab(null)}
+                className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-border bg-background p-1">
+              <button
+                type="button"
+                onClick={() => setHistoryModalTab('pause')}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  historyModalTab === 'pause'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                Pauses ({workPackage.pausePeriods.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryModalTab('delay')}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  historyModalTab === 'delay'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                Delays ({delayHistoryEntries.length})
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[55vh] overflow-y-auto pr-1">
+              {historyModalTab === 'pause' ? (
+                workPackage.pausePeriods.length > 0 ? (
+                  <div className="grid gap-3">
+                    {workPackage.pausePeriods.map((pausePeriod, pauseIndex) => {
+                      const durationLabel = formatPauseDuration(
+                        pausePeriod.pauseStartAt,
+                        pausePeriod.pauseEndAt
+                      );
+
+                      return (
+                        <div
+                          key={pausePeriod.id}
+                          className="rounded-2xl border border-border bg-background p-4 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="font-semibold text-foreground">
+                              Pause {pauseIndex + 1}
+                            </p>
+                            <StatusBadge
+                              variant={pausePeriod.pauseEnd ? 'outline' : 'warning'}
+                            >
+                              {pausePeriod.pauseEnd ? 'Closed' : 'Open'}
+                            </StatusBadge>
+                          </div>
+
+                          <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                            <p>
+                              From:{' '}
+                              <span className="font-medium text-foreground">
+                                {formatTimelineDateTime(
+                                  pausePeriod.pauseStartAt,
+                                  pausePeriod.pauseStart
+                                )}
+                              </span>
+                            </p>
+                            <p>
+                              To:{' '}
+                              <span className="font-medium text-foreground">
+                                {pausePeriod.pauseEnd
+                                  ? formatTimelineDateTime(
+                                      pausePeriod.pauseEndAt,
+                                      pausePeriod.pauseEnd
+                                    )
+                                  : 'Still paused'}
+                              </span>
+                            </p>
+                            <p>
+                              Duration:{' '}
+                              <span className="font-medium text-foreground">
+                                {durationLabel ?? 'Not available'}
+                              </span>
+                            </p>
+                          </div>
+
+                          <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-sm leading-6 text-amber-700 dark:text-amber-300">
+                            {pausePeriod.reason}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+                    No pause history recorded for this work package.
+                  </p>
+                )
+              ) : delayHistoryEntries.length > 0 ? (
+                <div className="grid gap-3">
+                  {delayHistoryEntries.map((delayItem, delayIndex) => (
+                    <div
+                      key={delayItem.id ?? `delay-${delayIndex}`}
+                      className="rounded-2xl border border-border bg-background p-4 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-semibold text-foreground">
+                          Delay {delayIndex + 1}
+                        </p>
+                        <StatusBadge
+                          variant={delayItem.status === 'resolved' ? 'success' : 'danger'}
+                        >
+                          {formatLabel(delayItem.status)}
+                        </StatusBadge>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                        <p>
+                          Source:{' '}
+                          <span className="font-medium text-foreground">
+                            {formatDelayOwner(delayItem.owner)}
+                          </span>
+                        </p>
+                        <p>
+                          Impact:{' '}
+                          <span className="font-medium text-foreground">
+                            {delayItem.impactDays} day(s)
+                          </span>
+                        </p>
+                        <p>
+                          Flagged:{' '}
+                          <span className="font-medium text-foreground">
+                            {formatDelayDateTime(delayItem.flaggedAt)}
+                          </span>
+                        </p>
+                        <p>
+                          Resolved:{' '}
+                          <span className="font-medium text-foreground">
+                            {delayItem.resolvedAt
+                              ? formatDelayDateTime(delayItem.resolvedAt)
+                              : 'Open'}
+                          </span>
+                        </p>
+                        <p className="lg:col-span-2">
+                          Recovery:{' '}
+                          <span className="font-medium text-foreground">
+                            {formatDisplayDate(delayItem.expectedRecoveryDate)}
+                          </span>
+                        </p>
+                      </div>
+
+                      <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm leading-6 text-red-600 dark:text-red-300">
+                        {delayItem.reason}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+                  No delay history recorded for this work package.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isDependencyEditorOpen && (
         <div className="hidden border-b border-border bg-muted/20 px-4 py-3 xl:block">
