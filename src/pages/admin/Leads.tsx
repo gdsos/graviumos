@@ -233,7 +233,23 @@ export default function Leads({
     fetchLeads();
   };
 
+  function canDeleteLead(lead: LeadWithProfile) {
+    const isConvertedLead =
+      lead.status === 'Converted' || Boolean(lead.converted_project_id);
+
+    if (isConvertedLead) {
+      return isAdmin();
+    }
+
+    return isAdmin() || (isDeptHead() && isMS());
+  }
+
   const openDeleteLeadModal = (lead: LeadWithProfile) => {
+    if (!canDeleteLead(lead)) {
+      setError('Converted leads can only be deleted by an Admin.');
+      return;
+    }
+
     setDeleteTarget(lead);
   };
 
@@ -274,6 +290,12 @@ export default function Leads({
     if (!deleteTarget) return;
 
     setError('');
+
+    if (!canDeleteLead(deleteTarget)) {
+      setError('Converted leads can only be deleted by an Admin.');
+      setDeleteTarget(null);
+      return;
+    }
 
     const notificationsDeleted = await deleteLeadRelatedNotifications(deleteTarget);
 

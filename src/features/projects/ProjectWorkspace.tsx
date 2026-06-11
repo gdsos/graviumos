@@ -89,6 +89,134 @@ function createProjectLinks(mode: ProjectWorkspaceMode, projectId: string) {
   ];
 }
 
+type ProjectDeleteMutationResult = {
+  error: { message: string } | null;
+};
+
+function throwProjectDeleteError(
+  result: ProjectDeleteMutationResult,
+  step: string
+) {
+  if (result.error) {
+    throw new Error(`${step}: ${result.error.message}`);
+  }
+}
+
+async function convertProjectCostEstimatesToUnassignedDraft(projectId: string) {
+  throwProjectDeleteError(
+    await supabase
+      .from('cost_estimates')
+      .update({
+        project_id: null,
+        project_name: 'Unassigned Draft',
+        client_name: null,
+        status: 'draft',
+        approved_snapshot: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('project_id', projectId),
+    'Could not convert linked cost estimates to unassigned drafts'
+  );
+}
+
+async function deleteProjectFinanceDependents(projectId: string) {
+  const { data: gateRows, error: gateFetchError } = await supabase
+    .from('project_finance_payment_gates')
+    .select('id')
+    .eq('project_id', projectId);
+
+  if (gateFetchError) {
+    throw new Error(`Could not fetch project finance gates: ${gateFetchError.message}`);
+  }
+
+  const gateIds = (gateRows ?? [])
+    .map(row => String(row.id))
+    .filter(Boolean);
+
+  if (gateIds.length > 0) {
+    throwProjectDeleteError(
+      await supabase
+        .from('project_cash_receipt_allocations')
+        .delete()
+        .in('payment_gate_id', gateIds),
+      'Could not delete cash receipt allocations linked to payment gates'
+    );
+
+    throwProjectDeleteError(
+      await supabase
+        .from('project_finance_payment_gates')
+        .delete()
+        .in('id', gateIds),
+      'Could not delete project finance payment gates'
+    );
+  }
+
+  throwProjectDeleteError(
+    await supabase
+      .from('project_cash_receipt_allocations')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project cash receipt allocations'
+  );
+
+  throwProjectDeleteError(
+    await supabase
+      .from('project_cash_receipts')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project cash receipts'
+  );
+
+  throwProjectDeleteError(
+    await supabase
+      .from('project_vendor_payments')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project vendor payments'
+  );
+
+  throwProjectDeleteError(
+    await supabase
+      .from('project_cogs_entries')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project COGS entries'
+  );
+
+  throwProjectDeleteError(
+    await supabase
+      .from('project_vendor_accounts')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project vendor accounts'
+  );
+
+  throwProjectDeleteError(
+    await supabase
+      .from('project_finance_accounts')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project finance account'
+  );
+}
+
+async function deleteProjectTimelineDependents(projectId: string) {
+  throwProjectDeleteError(
+    await supabase
+      .from('project_timelines')
+      .delete()
+      .eq('project_id', projectId),
+    'Could not delete project timeline'
+  );
+}
+
+async function deleteProjectDependentRecords(projectId: string) {
+  await convertProjectCostEstimatesToUnassignedDraft(projectId);
+  await deleteProjectFinanceDependents(projectId);
+  await deleteProjectTimelineDependents(projectId);
+}
+
+
 export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const { profile, isAdmin } = useAuth();
 
@@ -485,42 +613,50 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       linkedLead = (leadData as Lead | null) || null;
     }
 
-    const { error: deleteError } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', targetId);
+    try {
+      await deleteProjectDependentRecords(targetId);
 
-    if (deleteError) {
-      setError(deleteError.message);
-      setDeleteTarget(null);
-      return;
-    }
+      const { error: deleteError } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', targetId);
 
-    if (linkedLead) {
-      const { error: leadUpdateError } = await supabase
-        .from('leads')
-        .update({
-          status: 'Qualified',
-          converted_project_id: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', linkedLead.id);
-
-      if (leadUpdateError) {
-        setError(leadUpdateError.message);
-        return;
+      if (deleteError) {
+        throw deleteError;
       }
 
-      await deleteProjectRequestNotifications(linkedLead);
+      if (linkedLead) {
+        const { error: leadUpdateError } = await supabase
+          .from('leads')
+          .update({
+            status: 'Qualified',
+            converted_project_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', linkedLead.id);
+
+        if (leadUpdateError) {
+          throw leadUpdateError;
+        }
+
+        await deleteProjectRequestNotifications(linkedLead);
+      }
+
+      setProjects(current => current.filter(project => project.id !== targetId));
+      setSelectedProject(current => (current?.id === targetId ? null : current));
+      setDeleteTarget(null);
+      setFloatingMenu(null);
+
+      await fetchProjects();
+      await fetchProjectRequests();
+    } catch (deleteLifecycleError) {
+      setError(
+        deleteLifecycleError instanceof Error
+          ? deleteLifecycleError.message
+          : 'Could not delete project and linked records.'
+      );
+      setDeleteTarget(null);
     }
-
-    setProjects(current => current.filter(project => project.id !== targetId));
-    setSelectedProject(current => (current?.id === targetId ? null : current));
-    setDeleteTarget(null);
-    setFloatingMenu(null);
-
-    await fetchProjects();
-    await fetchProjectRequests();
   };
 
   const deleteProjectRequestNotifications = async (lead: Lead) => {
@@ -700,7 +836,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          This will remove the project. Existing finance migration data should be reviewed before deleting production data.
+          This will remove the project, erase linked Timeline and Finance workspace data, and convert linked Cost Estimates back to Unassigned Drafts. Vendor and item masters will not be deleted.
         </p>
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
