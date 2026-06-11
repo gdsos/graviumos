@@ -1244,6 +1244,106 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   );
 
   useEffect(() => {
+    if (financePaymentGateRows.length === 0 || paymentGates.length === 0) return;
+
+    setPaymentGates(currentPaymentGates => {
+      let didChange = false;
+
+      const nextPaymentGates = currentPaymentGates.map(paymentGate => {
+        const financeStatus = financePaymentStatusByTimelineGateId[paymentGate.id];
+
+        if (!financeStatus) return paymentGate;
+
+        const isCollected =
+          financeStatus.status === 'paid' ||
+          financeStatus.status === 'overpaid' ||
+          (financeStatus.requiredAmount > 0 &&
+            financeStatus.collectedAmount >= financeStatus.requiredAmount) ||
+          financeStatus.outstandingAmount <= 0;
+
+        const nextStatus = isCollected ? 'received' : 'pending';
+        const nextReceivedDate = isCollected
+          ? paymentGate.receivedDate ?? getTodayDateString()
+          : undefined;
+
+        if (
+          paymentGate.status === nextStatus &&
+          paymentGate.receivedDate === nextReceivedDate
+        ) {
+          return paymentGate;
+        }
+
+        didChange = true;
+
+        return {
+          ...paymentGate,
+          status: nextStatus as PaymentGate['status'],
+          receivedDate: nextReceivedDate,
+        };
+      });
+
+      return didChange ? nextPaymentGates : currentPaymentGates;
+    });
+
+    setWorkPackages(currentWorkPackages => {
+      let didChange = false;
+
+      const nextWorkPackages = currentWorkPackages.map(workPackage => {
+        if (workPackage.status !== 'blocked_by_payment') return workPackage;
+
+        const blockingGate = paymentGates.find(paymentGate =>
+          paymentGate.blocksWorkPackageIds.includes(workPackage.id) ||
+          paymentGate.id === workPackage.paymentGateId
+        );
+
+        if (!blockingGate) return workPackage;
+
+        const financeStatus = financePaymentStatusByTimelineGateId[blockingGate.id];
+
+        if (!financeStatus) return workPackage;
+
+        const isCollected =
+          financeStatus.status === 'paid' ||
+          financeStatus.status === 'overpaid' ||
+          (financeStatus.requiredAmount > 0 &&
+            financeStatus.collectedAmount >= financeStatus.requiredAmount) ||
+          financeStatus.outstandingAmount <= 0;
+
+        if (!isCollected) return workPackage;
+
+        const hasIncompleteDependencies = workPackage.dependsOnWorkPackageIds.some(
+          dependencyId => {
+            const dependency = currentWorkPackages.find(
+              candidate => candidate.id === dependencyId
+            );
+
+            return dependency?.status !== 'completed';
+          }
+        );
+
+        didChange = true;
+
+        return {
+          ...workPackage,
+          status: hasIncompleteDependencies
+            ? ('blocked_by_dependency' as const)
+            : ('ready' as const),
+          notes: appendTimelineNote(
+            workPackage.notes,
+            `${blockingGate.title} cleared in Finance. Payment blocker released.`
+          ),
+        };
+      });
+
+      return didChange ? nextWorkPackages : currentWorkPackages;
+    });
+  }, [
+    financePaymentGateRows.length,
+    financePaymentStatusByTimelineGateId,
+    paymentGates,
+  ]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function fetchFinancePaymentGateRows() {
@@ -2388,19 +2488,18 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
 
     if (!currentWorkPackage) return;
 
-    if (
-      currentWorkPackage.status === 'blocked_by_payment' ||
-      currentWorkPackage.status === 'blocked_by_dependency'
-    ) {
+    if (currentWorkPackage.status === 'blocked_by_payment') {
+      if (!canContinueWorkAction(workPackageId)) return;
+    } else if (currentWorkPackage.status === 'blocked_by_dependency') {
       setTimelineNoticeDialog({
         title: 'Work Package Blocked',
         description:
-          'This work package is blocked. Clear the payment or dependency blocker before starting work.',
+          'This work package is blocked. Clear the dependency blocker before starting work.',
       });
       return;
+    } else if (!canContinueWorkAction(workPackageId)) {
+      return;
     }
-
-    if (!canContinueWorkAction(workPackageId)) return;
 
     const today = getTodayDateString();
 

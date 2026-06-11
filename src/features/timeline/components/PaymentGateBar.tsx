@@ -173,54 +173,51 @@ export function PaymentGateBar({
                 className={`pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`}
               />
 
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                </div>
+              <div className="min-h-[7rem]">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                  </div>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Gate {index + 1}
                       </p>
-                      <h3 className="mt-1 text-base font-semibold text-foreground">
-                        {paymentGate.title}
-                      </h3>
+
+                      <StatusBadge variant={getPaymentVariant(displayStatus)}>
+                        {formatPaymentStatus(displayStatus)}
+                      </StatusBadge>
                     </div>
 
-                    <StatusBadge variant={getPaymentVariant(displayStatus)}>
-                      {formatPaymentStatus(displayStatus)}
-                    </StatusBadge>
+                    <h3 className="mt-1 line-clamp-2 text-base font-semibold text-foreground">
+                      {paymentGate.title}
+                    </h3>
                   </div>
-
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
-                    {paymentGate.description}
-                  </p>
                 </div>
+
+                <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                  {paymentGate.description}
+                </p>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-border bg-card p-3">
-                <div className="flex items-start justify-between gap-4">
-                  <span className="text-xs text-muted-foreground">Amount</span>
-                  <span className="text-right text-sm font-semibold text-foreground">
+              <div className="mt-4 rounded-2xl border border-border bg-card p-3">
+                <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3">
+                  <dt className="text-xs text-muted-foreground">Amount</dt>
+                  <dd className="min-w-max text-right text-sm font-semibold text-foreground">
                     {formatINR(financeStatus?.requiredAmount ?? paymentGate.amount)}
-                  </span>
-                </div>
+                  </dd>
 
-                <div className="mt-3 flex items-start justify-between gap-4">
-                  <span className="text-xs text-muted-foreground">Due Date</span>
-                  <span className="text-right text-sm font-medium text-foreground">
+                  <dt className="text-xs text-muted-foreground">Due Date</dt>
+                  <dd className="min-w-max text-right text-sm font-medium text-foreground">
                     {formatDate(paymentGate.dueDate)}
-                  </span>
-                </div>
+                  </dd>
 
-                <div className="mt-3 flex items-start justify-between gap-4">
-                  <span className="text-xs text-muted-foreground">Blocks</span>
-                  <span className="text-right text-sm font-medium text-foreground">
+                  <dt className="text-xs text-muted-foreground">Blocks</dt>
+                  <dd className="min-w-max text-right text-sm font-medium text-foreground">
                     {paymentGate.blocksWorkPackageIds.length} work package(s)
-                  </span>
-                </div>
+                  </dd>
+                </dl>
               </div>
 
               <div className="mt-auto pt-4">

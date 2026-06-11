@@ -180,11 +180,14 @@ export function generateTimelineAlerts(
       type: 'payment_blocker',
       severity: paymentGate.status === 'overdue' ? 'danger' : 'warning',
       title: `${paymentGate.title} is ${paymentGate.status}`,
-      description: `${paymentGate.blocksWorkPackageIds.length} work package(s) are blocked until this payment is marked received.`,
+      description:
+        paymentGate.status === 'overdue'
+          ? `${paymentGate.blocksWorkPackageIds.length} work package(s) are blocked. Shift affected packages while this overdue payment is cleared.`
+          : `${paymentGate.blocksWorkPackageIds.length} work package(s) are blocked. Shift affected packages by 1 day if collection is not happening today.`,
       relatedWorkPackageIds: paymentGate.blocksWorkPackageIds,
       relatedPaymentGateIds: [paymentGate.id],
-      suggestedShiftDays: paymentGate.status === 'overdue' ? 3 : undefined,
-      canApplySuggestion: paymentGate.status === 'overdue',
+      suggestedShiftDays: paymentGate.status === 'overdue' ? 3 : 1,
+      canApplySuggestion: true,
     });
   });
 
