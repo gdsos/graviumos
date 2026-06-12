@@ -96,7 +96,7 @@ export function IntelligentAssistPanel({
                       </p>
 
                       {alert.suggestedShiftDays && (
-                        <p className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                        <p className="mt-3 inline-flex w-40 max-w-full items-center rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                           Suggested shift: {alert.suggestedShiftDays} day(s)
                         </p>
                       )}

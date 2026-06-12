@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Check,
   ChevronDown,
@@ -9,7 +16,6 @@ import {
   Save,
   Trash2,
 } from 'lucide-react';
-
 import { PageHeader } from '@/components/common/PageHeader';
 import { SectionCard } from '@/components/common/SectionCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -300,6 +306,15 @@ type TimelineNoticeDialogState = {
   description: string;
 };
 
+type TimelineShiftSnapshot = {
+  id: string;
+  alertId: string;
+  label: string;
+  shiftDays: number;
+  workPackages: WorkPackage[];
+  paymentGates: PaymentGate[];
+};
+
 const timelineDelayOwnerOptions: Array<{
   value: TimelineDelayOwner;
   label: string;
@@ -560,13 +575,18 @@ function formatScheduleTickDate(dateString: string) {
 }
 
 function addDaysToDate(dateString: string, days: number) {
-  const date = new Date(dateString);
+  const [year, month, day] = dateString.split('-').map(Number);
 
-  if (Number.isNaN(date.getTime())) return dateString;
+  if (!year || !month || !day) return dateString;
 
-  date.setDate(date.getDate() + days);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
 
-  return date.toISOString().slice(0, 10);
+  const nextYear = date.getUTCFullYear();
+  const nextMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const nextDay = String(date.getUTCDate()).padStart(2, '0');
+
+  return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
 function getSchedulePointLeft(
@@ -1157,7 +1177,9 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   const [timelineNoticeDialog, setTimelineNoticeDialog] =
     useState<TimelineNoticeDialogState | null>(null);
 
-  const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
+
+  const [lastTimelineShiftSnapshot, setLastTimelineShiftSnapshot] = useState<TimelineShiftSnapshot | null>(null);
+const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     setHasTimeline(nextTimelineState.hasTimeline);
     setPaymentGates(nextTimelineState.paymentGates);
     setWorkPackages(nextTimelineState.workPackages);
@@ -1869,6 +1891,37 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     return uniqueAlerts.filter(alert => !ignoredAlertIds.includes(alert.id));
   }, [generatedAlerts, hasActiveTimeline, ignoredAlertIds]);
 
+  const timelineTabActionCounts = useMemo((): Partial<Record<TimelineTab, number>> => {
+    const workActionCount = workPackages.filter(workPackage =>
+      ['blocked_by_payment', 'blocked_by_dependency', 'delayed', 'paused'].includes(
+        workPackage.status
+      )
+    ).length;
+
+    const paymentActionCount = paymentGates.filter(
+      paymentGate => paymentGate.status !== 'received'
+    ).length;
+
+    const scheduleActionCount = workPackages.filter(workPackage =>
+      workPackage.status === 'delayed' ||
+      workPackage.status === 'paused' ||
+      workPackage.delayInfo?.status === 'open'
+    ).length;
+
+    return {
+      overview: isTimelineLockedByEstimateChange ? 1 : 0,
+      work: workActionCount,
+      payments: paymentActionCount,
+      schedule: scheduleActionCount,
+      alerts: alerts.length,
+    };
+  }, [
+    alerts.length,
+    isTimelineLockedByEstimateChange,
+    paymentGates,
+    workPackages,
+  ]);
+
   const paymentPercentageValues = {
     booking: bookingPaymentPercent === '' ? 0 : Number(bookingPaymentPercent) || 0,
     stageOne:
@@ -1943,12 +1996,155 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     );
   };
 
-  const handleApplySuggestion = (alert: TimelineAlert) => {
+  const shiftTimelineDate = (dateValue: string, shiftDays: number) => {
+    if (shiftDays === 0) return dateValue;
+
+    return addDaysToDate(dateValue, shiftDays);
+  };
+
+  const handleUndoLastTimelineShift = () => {
+    if (!lastTimelineShiftSnapshot) return;
+
+    const previousWorkPackages = new Map(
+      lastTimelineShiftSnapshot.workPackages.map(workPackage => [
+        workPackage.id,
+        workPackage,
+      ])
+    );
+    const previousPaymentGates = new Map(
+      lastTimelineShiftSnapshot.paymentGates.map(paymentGate => [
+        paymentGate.id,
+        paymentGate,
+      ])
+    );
+
+    setWorkPackages(currentWorkPackages =>
+      currentWorkPackages.map(
+        workPackage => previousWorkPackages.get(workPackage.id) ?? workPackage
+      )
+    );
+
+    setPaymentGates(currentPaymentGates =>
+      currentPaymentGates.map(
+        paymentGate => previousPaymentGates.get(paymentGate.id) ?? paymentGate
+      )
+    );
+
+    setIgnoredAlertIds(current =>
+      current.filter(alertId => alertId !== lastTimelineShiftSnapshot.alertId)
+    );
+
+    setLastTimelineShiftSnapshot(null);
+    setActiveTab('schedule');
+
     setTimelineNoticeDialog({
-      title: 'Timeline Assist',
-      description: `Timeline shift assistant will be added later. Suggested shift: ${
-        alert.suggestedShiftDays ?? 0
-      } day(s).`,
+      title: 'Timeline Shift Undone',
+      description: `Restored ${lastTimelineShiftSnapshot.workPackages.length} work package(s) and ${lastTimelineShiftSnapshot.paymentGates.length} payment gate(s) from the last shift.`,
+    });
+  };
+
+  const handleApplySuggestion = (alert: TimelineAlert) => {
+    if (!alert.canApplySuggestion) {
+      setTimelineNoticeDialog({
+        title: 'Shift Not Ready',
+        description:
+          'This suggestion is only a warning for now. Apply shift becomes available on the gate due date if payment is still pending.',
+      });
+      return;
+    }
+
+    const shiftDays = alert.suggestedShiftDays ?? 0;
+    const affectedWorkPackageIds = new Set(alert.relatedWorkPackageIds ?? []);
+    const affectedPaymentGateIds = new Set(alert.relatedPaymentGateIds ?? []);
+
+    const shiftableWorkPackages = workPackages.filter(
+      workPackage =>
+        affectedWorkPackageIds.has(workPackage.id) &&
+        workPackage.status !== 'completed' &&
+        workPackage.status !== 'in_progress' &&
+        !workPackage.actualStartDate
+    );
+
+    const shiftablePaymentGates = paymentGates.filter(
+      paymentGate =>
+        affectedPaymentGateIds.has(paymentGate.id) &&
+        paymentGate.status !== 'received'
+    );
+
+    if (
+      shiftDays === 0 ||
+      (shiftableWorkPackages.length === 0 && shiftablePaymentGates.length === 0)
+    ) {
+      setTimelineNoticeDialog({
+        title: 'No Shift Applied',
+        description:
+          'This suggestion has no shiftable future work packages or payment gates. Started/completed work was left unchanged.',
+      });
+      return;
+    }
+
+    const shiftedWorkPackageIds = new Set(
+      shiftableWorkPackages.map(workPackage => workPackage.id)
+    );
+    const shiftedPaymentGateIds = new Set(
+      shiftablePaymentGates.map(paymentGate => paymentGate.id)
+    );
+
+    setLastTimelineShiftSnapshot({
+      id: `timeline-shift-${Date.now()}`,
+      alertId: alert.id,
+      label: alert.title,
+      shiftDays,
+      workPackages: shiftableWorkPackages,
+      paymentGates: shiftablePaymentGates,
+    });
+
+    if (shiftedWorkPackageIds.size > 0) {
+      setWorkPackages(currentWorkPackages =>
+        currentWorkPackages.map(workPackage => {
+          if (!shiftedWorkPackageIds.has(workPackage.id)) return workPackage;
+
+          return {
+            ...workPackage,
+            estimatedStartDate: shiftTimelineDate(
+              workPackage.estimatedStartDate,
+              shiftDays
+            ),
+            estimatedEndDate: shiftTimelineDate(
+              workPackage.estimatedEndDate,
+              shiftDays
+            ),
+            notes: appendTimelineNote(
+              workPackage.notes,
+              `Timeline Assist shifted this package by ${shiftDays} day(s) from alert: ${alert.title}.`
+            ),
+          };
+        })
+      );
+    }
+
+    if (shiftedPaymentGateIds.size > 0) {
+      setPaymentGates(currentPaymentGates =>
+        currentPaymentGates.map(paymentGate => {
+          if (!shiftedPaymentGateIds.has(paymentGate.id)) return paymentGate;
+
+          return {
+            ...paymentGate,
+            dueDate: shiftTimelineDate(paymentGate.dueDate, shiftDays),
+          };
+        })
+      );
+    }
+
+    setIgnoredAlertIds(current =>
+      current.includes(alert.id) ? current : [...current, alert.id]
+    );
+
+    setActiveTab('schedule');
+
+    setTimelineNoticeDialog({
+      title: 'Timeline Shift Applied',
+      description: `Shifted ${shiftableWorkPackages.length} future work package(s) and ${shiftablePaymentGates.length} upcoming payment gate(s) by ${shiftDays} day(s). Started and completed work were not changed.`,
     });
   };
 
@@ -3834,11 +4030,39 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     }
 
     return (
-      <IntelligentAssistPanel
-        alerts={alerts}
-        onApplySuggestion={handleApplySuggestion}
-        onIgnoreAlert={handleIgnoreAlert}
-      />
+      <div className="grid min-w-0 gap-3">
+        {lastTimelineShiftSnapshot && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-foreground">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="font-semibold">Last shift applied</p>
+                <p className="mt-1 text-muted-foreground">
+                  {lastTimelineShiftSnapshot.label} shifted by{' '}
+                  {lastTimelineShiftSnapshot.shiftDays} day(s). Undo if the client paid
+                  after the shift was applied.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleUndoLastTimelineShift}
+                className="shrink-0 gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span className="whitespace-nowrap">Undo Last Shift</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <IntelligentAssistPanel
+          alerts={alerts}
+          onApplySuggestion={handleApplySuggestion}
+          onIgnoreAlert={handleIgnoreAlert}
+        />
+      </div>
     );
   };
 
@@ -4480,31 +4704,6 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
       {!showCreateWizard && hasActiveTimeline && (
         <>
 
-          <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
-            <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
-              {tabs.map(tab => {
-                const isActive = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`rounded-xl px-2 py-2.5 text-xs font-medium transition sm:text-sm ${
-                      tab.id === 'schedule' ? 'hidden sm:block ' : ''
-                    }${
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {blockedWorkPackages.length > 0 && (
             <div className="mb-5 min-w-0 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
               <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -4528,6 +4727,43 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
               </div>
             </div>
           )}
+
+          <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
+            <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
+              {tabs.map(tab => {
+                const isActive = activeTab === tab.id;
+                const actionCount = timelineTabActionCounts[tab.id] ?? 0;
+                const actionCountLabel = actionCount > 99 ? '99+' : String(actionCount);
+
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition sm:gap-2 sm:text-sm ${
+                      tab.id === 'schedule' ? 'hidden sm:inline-flex ' : ''
+                    }${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+
+                    {actionCount > 0 && (
+                      <span
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-600 text-center text-[10px] font-bold leading-none text-white tabular-nums shadow-sm dark:bg-red-500 dark:text-white"
+                        aria-label={`${actionCountLabel} action${actionCount === 1 ? '' : 's'}`}
+                      >
+                        {actionCountLabel}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
 
           <div className="min-w-0">{renderTabContent()}</div>
         </>

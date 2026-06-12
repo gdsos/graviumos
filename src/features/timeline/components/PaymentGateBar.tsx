@@ -5,8 +5,8 @@ import {
   CircleDashed,
   LockKeyhole,
   Pencil,
+  Save,
 } from 'lucide-react';
-
 import { DateInput } from '@/components/common/DateInput';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import type { PaymentGate } from '../types';
@@ -128,8 +128,17 @@ export function PaymentGateBar({
               onClick={() => setShowGateDateControls(current => !current)}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-foreground px-3 py-2 text-sm font-medium text-background transition hover:opacity-90 sm:w-auto"
             >
-              <Pencil className="h-4 w-4" />
-              {showGateDateControls ? 'Hide Gate Dates' : 'Edit Gate Dates'}
+              {showGateDateControls ? (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Save Gate Dates</span>
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4" />
+                  <span>Edit Gate Dates</span>
+                </>
+              )}
             </button>
           </div>
         ) : null}

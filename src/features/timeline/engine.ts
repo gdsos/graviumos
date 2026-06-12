@@ -74,6 +74,33 @@ export function getPausedWorkPackages(workPackages: WorkPackage[]) {
   );
 }
 
+export function getDependencyClusterWorkPackageIds(
+  workPackages: WorkPackage[],
+  seedWorkPackageIds: string[]
+) {
+  const clusterIds = new Set(seedWorkPackageIds);
+  let didAddWorkPackage = true;
+
+  while (didAddWorkPackage) {
+    didAddWorkPackage = false;
+
+    workPackages.forEach(workPackage => {
+      if (clusterIds.has(workPackage.id)) return;
+
+      const dependsOnCluster = workPackage.dependsOnWorkPackageIds.some(
+        dependencyId => clusterIds.has(dependencyId)
+      );
+
+      if (!dependsOnCluster) return;
+
+      clusterIds.add(workPackage.id);
+      didAddWorkPackage = true;
+    });
+  }
+
+  return Array.from(clusterIds);
+}
+
 export function getDelayedWorkPackages(workPackages: WorkPackage[]) {
   return workPackages.filter(workPackage => {
     if (workPackage.status === 'delayed') return true;
@@ -161,11 +188,85 @@ export function calculateTimelineSummary(
   };
 }
 
+
+function getCalendarDayDifference(startDate: string, endDate: string) {
+  const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+  const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+    return 0;
+  }
+
+  const start = Date.UTC(startYear, startMonth - 1, startDay);
+  const end = Date.UTC(endYear, endMonth - 1, endDay);
+
+  return Math.round((end - start) / (24 * 60 * 60 * 1000));
+}
+
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function isBookingPaymentGate(paymentGate: PaymentGate, gateIndex: number) {
+  return paymentGate.type === 'execution_booking' || gateIndex === 0;
+}
+
+function canShiftWorkPackage(workPackage: WorkPackage) {
+  return (
+    workPackage.status !== 'completed' &&
+    workPackage.status !== 'in_progress' &&
+    !workPackage.actualStartDate
+  );
+}
+
+function getPaymentGateShiftScope(
+  workPackages: WorkPackage[],
+  paymentGates: PaymentGate[],
+  paymentGate: PaymentGate
+) {
+  const gateIndex = paymentGates.findIndex(candidate => candidate.id === paymentGate.id);
+  const bookingGate = isBookingPaymentGate(paymentGate, gateIndex);
+
+  const relatedWorkPackageIds = workPackages
+    .filter(workPackage => {
+      if (!canShiftWorkPackage(workPackage)) return false;
+
+      if (bookingGate) return true;
+
+      return workPackage.estimatedStartDate >= paymentGate.dueDate;
+    })
+    .map(workPackage => workPackage.id);
+
+  const relatedPaymentGateIds = paymentGates
+    .filter(candidate => {
+      if (candidate.status === 'received') return false;
+
+      if (bookingGate) return true;
+
+      return candidate.dueDate >= paymentGate.dueDate;
+    })
+    .map(candidate => candidate.id);
+
+  return {
+    bookingGate,
+    relatedWorkPackageIds,
+    relatedPaymentGateIds,
+  };
+}
+
+
 export function generateTimelineAlerts(
   workPackages: WorkPackage[],
   paymentGates: PaymentGate[]
 ): TimelineAlert[] {
   const alerts: TimelineAlert[] = [];
+
+  const today = getTodayDateString();
 
   const pendingPaymentGates = paymentGates.filter(
     paymentGate =>
@@ -174,20 +275,47 @@ export function generateTimelineAlerts(
   );
 
   pendingPaymentGates.forEach(paymentGate => {
+    const daysUntilDue = getCalendarDayDifference(today, paymentGate.dueDate);
+    const isDueOrOverdue = daysUntilDue <= 0;
+    const isInsideWarningWindow = daysUntilDue <= 3;
+    const {
+      bookingGate,
+      relatedWorkPackageIds,
+      relatedPaymentGateIds,
+    } = getPaymentGateShiftScope(workPackages, paymentGates, paymentGate);
+
+    if (!bookingGate && !isInsideWarningWindow) return;
+
+    const suggestedShiftDays = isDueOrOverdue
+      ? Math.max(1, Math.abs(daysUntilDue) + 1)
+      : undefined;
+    const directBlockedCount = paymentGate.blocksWorkPackageIds.length;
+    const shiftScopeLabel = bookingGate
+      ? 'the full remaining plan'
+      : 'work packages and payment gates starting from this gate';
+    const dueLabel =
+      daysUntilDue > 0
+        ? `due in ${daysUntilDue} day(s)`
+        : daysUntilDue === 0
+          ? 'due today'
+          : `overdue by ${Math.abs(daysUntilDue)} day(s)`;
+
     alerts.push({
       id: `payment-alert-${paymentGate.id}`,
       projectId: paymentGate.projectId,
       type: 'payment_blocker',
-      severity: paymentGate.status === 'overdue' ? 'danger' : 'warning',
-      title: `${paymentGate.title} is ${paymentGate.status}`,
-      description:
-        paymentGate.status === 'overdue'
-          ? `${paymentGate.blocksWorkPackageIds.length} work package(s) are blocked. Shift affected packages while this overdue payment is cleared.`
-          : `${paymentGate.blocksWorkPackageIds.length} work package(s) are blocked. Shift affected packages by 1 day if collection is not happening today.`,
-      relatedWorkPackageIds: paymentGate.blocksWorkPackageIds,
-      relatedPaymentGateIds: [paymentGate.id],
-      suggestedShiftDays: paymentGate.status === 'overdue' ? 3 : 1,
-      canApplySuggestion: true,
+      severity: isDueOrOverdue ? 'danger' : 'warning',
+      title: `${paymentGate.title} is ${dueLabel}`,
+      description: isDueOrOverdue
+        ? `${directBlockedCount} direct work package(s) are blocked. Apply shift to move ${shiftScopeLabel} while this payment is pending.`
+        : `${directBlockedCount} direct work package(s) may be blocked soon. This gate is ${dueLabel}; Apply shift will unlock on the due date if payment is still pending.`,
+      relatedWorkPackageIds,
+      relatedPaymentGateIds,
+      suggestedShiftDays,
+      canApplySuggestion:
+        isDueOrOverdue &&
+        (suggestedShiftDays ?? 0) > 0 &&
+        (relatedWorkPackageIds.length > 0 || relatedPaymentGateIds.length > 0),
     });
   });
 
