@@ -465,6 +465,8 @@ function FinancialsInner() {
   const [cashReceiptDraft, setCashReceiptDraft] = useState<CashReceiptDraft | null>(null);
   const [isCashPaymentModePickerOpen, setIsCashPaymentModePickerOpen] = useState(false);
   const [isCashGstPickerOpen, setIsCashGstPickerOpen] = useState(false);
+  const cashPaymentModePickerRef = useRef<HTMLDivElement | null>(null);
+  const cashGstPickerRef = useRef<HTMLDivElement | null>(null);
   const [savingCashReceipt, setSavingCashReceipt] = useState(false);
   const [notice, setNotice] = useState<SyncNotice | null>(null);
   const [error, setError] = useState('');
@@ -542,6 +544,38 @@ function FinancialsInner() {
   useEffect(() => {
     fetchFinanceData();
   }, [fetchFinanceData]);
+
+  useEffect(() => {
+    if (!isCashPaymentModePickerOpen && !isCashGstPickerOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) return;
+
+      if (
+        isCashPaymentModePickerOpen &&
+        cashPaymentModePickerRef.current &&
+        !cashPaymentModePickerRef.current.contains(target)
+      ) {
+        setIsCashPaymentModePickerOpen(false);
+      }
+
+      if (
+        isCashGstPickerOpen &&
+        cashGstPickerRef.current &&
+        !cashGstPickerRef.current.contains(target)
+      ) {
+        setIsCashGstPickerOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isCashGstPickerOpen, isCashPaymentModePickerOpen]);
 
   useEffect(() => {
     const channel = supabase
@@ -1485,7 +1519,7 @@ function FinancialsInner() {
                       </div>
                     </label>
 
-                    <div className="relative grid min-w-0 gap-2 md:col-span-4">
+                    <div ref={cashPaymentModePickerRef} className="relative grid min-w-0 gap-2 md:col-span-4">
                       <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Payment Mode
                       </span>
@@ -1591,7 +1625,7 @@ function FinancialsInner() {
                       />
                     </label>
 
-                    <div className="relative grid min-w-0 gap-2 md:col-span-2">
+                    <div ref={cashGstPickerRef} className="relative grid min-w-0 gap-2 md:col-span-2">
                       <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         GST
                       </span>

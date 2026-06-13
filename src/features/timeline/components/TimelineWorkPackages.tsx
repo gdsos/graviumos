@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Link2,
   MessageSquareText,
   MoreHorizontal,
@@ -734,10 +734,12 @@ function VendorAssignmentPicker({
   workPackage,
   vendors = [],
   onAssignVendor,
+  mode = 'full',
 }: {
   workPackage: WorkPackage;
   vendors?: TimelineVendorOption[];
   onAssignVendor?: (workPackageId: string, vendorId?: string) => void;
+  mode?: 'full' | 'icon';
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [query, setQuery] = useState('');
@@ -765,12 +767,19 @@ function VendorAssignmentPicker({
 
   const openPicker = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
+    const menuWidth = 280;
 
     if (rect) {
+      const rawLeft = mode === 'icon' ? rect.right - menuWidth : rect.left;
+      const safeLeft =
+        typeof window === 'undefined'
+          ? rawLeft
+          : Math.min(Math.max(12, rawLeft), window.innerWidth - menuWidth - 12);
+
       setMenuPosition({
         top: rect.bottom + 8,
-        left: rect.left,
-        width: Math.max(280, rect.width),
+        left: safeLeft,
+        width: mode === 'icon' ? menuWidth : Math.max(menuWidth, rect.width),
       });
     }
 
@@ -798,10 +807,12 @@ function VendorAssignmentPicker({
   }
 
   return (
-    <div className="min-w-0">
+    <div className={mode === 'icon' ? 'shrink-0' : 'min-w-0'}>
       <button
         ref={buttonRef}
         type="button"
+        aria-label={`Change vendor for ${displayName}`}
+        title="Change vendor"
         onClick={() => {
           if (isOpen) {
             setIsOpen(false);
@@ -809,21 +820,39 @@ function VendorAssignmentPicker({
             openPicker();
           }
         }}
-        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+        className={
+          mode === 'icon'
+            ? 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition hover:bg-muted hover:text-foreground'
+            : 'flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted'
+        }
       >
-        <span className="truncate">{displayName}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">Change</span>
+        {mode === 'icon' ? (
+          <ChevronDown className="h-4 w-4" />
+        ) : (
+          <>
+            <span className="truncate">{displayName}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">Change</span>
+          </>
+        )}
       </button>
 
       {isOpen && (
-        <div
-          className="fixed z-[220] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl"
-          style={{
-            top: menuPosition.top,
-            left: menuPosition.left,
-            width: menuPosition.width,
-          }}
-        >
+        <>
+          <button
+            type="button"
+            aria-label="Close vendor picker"
+            className="fixed inset-0 z-[219] cursor-default bg-transparent"
+            onClick={() => setIsOpen(false)}
+          />
+
+          <div
+            className="fixed z-[220] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl"
+            style={{
+              top: menuPosition.top,
+              left: menuPosition.left,
+              width: menuPosition.width,
+            }}
+          >
           <input
             value={query}
             onChange={event => setQuery(event.target.value)}
@@ -856,26 +885,19 @@ function VendorAssignmentPicker({
             )}
           </div>
 
-          <div className="mt-2 flex gap-2 border-t border-border pt-2">
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-            >
-              Close
-            </button>
-
-            {workPackage.vendorId && (
+          {workPackage.vendorId && (
+            <div className="mt-2 border-t border-border pt-2">
               <button
                 type="button"
                 onClick={handleClearVendor}
-                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted"
               >
                 Clear
               </button>
-            )}
+            </div>
+          )}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
@@ -931,17 +953,19 @@ const secondaryActions = getSecondaryActions({
     <>
       <article className="border-b border-border px-3 py-3 last:border-b-0 xl:hidden">
         <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 min-w-0">
               <p className="truncate text-base font-semibold text-foreground">
                 {titleParts.areaName}
               </p>
-              <StatusBadge variant={getStatusVariant(workPackage.status)}>
-                {formatLabel(workPackage.status)}
-              </StatusBadge>
-              <StatusBadge variant={getPriorityVariant(workPackage.priority)}>
-                {formatLabel(workPackage.priority)}
-              </StatusBadge>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                <StatusBadge variant={getStatusVariant(workPackage.status)}>
+                  {formatLabel(workPackage.status)}
+                </StatusBadge>
+                <StatusBadge variant={getPriorityVariant(workPackage.priority)}>
+                  {formatLabel(workPackage.priority)}
+                </StatusBadge>
+              </div>
             </div>
 
             {titleParts.workName && (
@@ -949,6 +973,26 @@ const secondaryActions = getSecondaryActions({
                 {titleParts.workName}
               </p>
             )}
+
+            <div className="mt-3 flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-background/60 p-3 text-sm">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Vendor
+                </p>
+                <p className="mt-0.5 truncate text-sm font-medium text-foreground">
+                  {vendorName ?? workPackage.assigneeName ?? 'Assign Vendor'}
+                </p>
+              </div>
+
+              {onAssignVendor ? (
+                <VendorAssignmentPicker
+                  workPackage={workPackage}
+                  vendors={vendors}
+                  onAssignVendor={onAssignVendor}
+                  mode="icon"
+                />
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -1028,7 +1072,7 @@ const secondaryActions = getSecondaryActions({
 
       </article>
 
-      <div className="hidden min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_156px_152px] xl:items-center xl:gap-4 xl:px-4">
+      <div className="hidden min-w-0 gap-3 border-b border-border px-3 py-3 last:border-b-0 xl:grid xl:grid-cols-[minmax(220px,1.3fr)_minmax(105px,0.55fr)_minmax(105px,0.55fr)_minmax(118px,0.65fr)_minmax(120px,0.55fr)_minmax(112px,0.45fr)] xl:items-center xl:gap-3 xl:px-4">
         <div className="min-w-0">
           <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
             <p className="mr-1 truncate text-base font-semibold text-foreground">
@@ -1049,19 +1093,16 @@ const secondaryActions = getSecondaryActions({
             </p>
           )}
 
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            Vendor: {vendorName ?? workPackage.assigneeName}
-          </p>
-              <div className="mt-2">
-                <VendorAssignmentPicker
-                  workPackage={workPackage}
-                  vendors={vendors}
-                  onAssignVendor={onAssignVendor}
-                />
-              </div>
+          <div className="mt-2">
+            <VendorAssignmentPicker
+              workPackage={workPackage}
+              vendors={vendors}
+              onAssignVendor={onAssignVendor}
+            />
+          </div>
         </div>
 
-        <div className="block">
+        <div className="min-w-0">
           <div className="space-y-1 text-sm">
             <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
               <span className="text-muted-foreground">From</span>
@@ -1074,7 +1115,7 @@ const secondaryActions = getSecondaryActions({
           </div>
         </div>
 
-        <div className="block">
+        <div className="min-w-0">
           <div className="space-y-1 text-sm">
             <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-2 text-foreground">
               <span className="text-muted-foreground">From</span>
@@ -1087,7 +1128,7 @@ const secondaryActions = getSecondaryActions({
           </div>
         </div>
 
-        <div className="block">
+        <div className="min-w-0">
           <div className="min-w-0">
             {activeDelayInfo ? (
               <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-2">
@@ -1436,7 +1477,7 @@ function WorkPackageGroup({
       <div className="rounded-2xl border border-border bg-card">
         <div className="overflow-x-auto">
           <div className="min-w-full">
-            <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[minmax(300px,1.5fr)_150px_150px_minmax(150px,0.8fr)_156px_152px] xl:gap-4">
+            <div className="hidden border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[minmax(220px,1.3fr)_minmax(105px,0.55fr)_minmax(105px,0.55fr)_minmax(118px,0.65fr)_minmax(120px,0.55fr)_minmax(112px,0.45fr)] xl:gap-3">
               <span>Work Package</span>
               <span>Planned</span>
               <span>Actual</span>
