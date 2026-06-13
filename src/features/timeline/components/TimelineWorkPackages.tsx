@@ -324,10 +324,40 @@ function DependencyEditor({
   onUpdatePrerequisites?: (workPackageId: string, dependencyIds: string[]) => void;
   onClose: () => void;
 }) {
+  const [dependencySearch, setDependencySearch] = useState('');
   const selectedDependencyIds = new Set(workPackage.dependsOnWorkPackageIds);
   const availablePrerequisites = workPackages.filter(candidate =>
     canSelectAsDependency({ workPackage, candidate })
   );
+  const selectedDependencies = availablePrerequisites.filter(candidate =>
+    selectedDependencyIds.has(candidate.id)
+  );
+  const normalizedSearch = dependencySearch.trim().toLowerCase();
+
+  const filteredPrerequisites = availablePrerequisites
+    .filter(candidate => {
+      if (!normalizedSearch) return true;
+
+      const label = getWorkPackageDisplayName(candidate).toLowerCase();
+      const status = formatLabel(candidate.status).toLowerCase();
+      const priority = formatLabel(candidate.priority).toLowerCase();
+
+      return (
+        label.includes(normalizedSearch) ||
+        status.includes(normalizedSearch) ||
+        priority.includes(normalizedSearch)
+      );
+    })
+    .sort((first, second) => {
+      const firstSelected = selectedDependencyIds.has(first.id);
+      const secondSelected = selectedDependencyIds.has(second.id);
+
+      if (firstSelected !== secondSelected) return firstSelected ? -1 : 1;
+
+      return getWorkPackageDisplayName(first).localeCompare(
+        getWorkPackageDisplayName(second)
+      );
+    });
 
   const handleToggleDependency = (dependencyId: string) => {
     if (!onUpdatePrerequisites) return;
@@ -341,9 +371,15 @@ function DependencyEditor({
     onUpdatePrerequisites(workPackage.id, nextDependencyIds);
   };
 
+  const handleClearDependencies = () => {
+    if (!onUpdatePrerequisites) return;
+
+    onUpdatePrerequisites(workPackage.id, []);
+  };
+
   return (
     <div className="mt-3 rounded-2xl border border-border bg-muted/30 p-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">
             Edit Dependencies
@@ -353,56 +389,114 @@ function DependencyEditor({
           </p>
         </div>
 
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={onClose}
-          className="w-full sm:w-auto"
-        >
-          Done
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          {selectedDependencies.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleClearDependencies}
+              className="flex-1 sm:flex-none"
+            >
+              Clear
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 sm:flex-none"
+          >
+            Done
+          </Button>
+        </div>
       </div>
 
+      <div className="mt-3 grid gap-2 rounded-xl border border-border bg-background/70 p-3 text-xs text-muted-foreground sm:grid-cols-3">
+        <p>
+          Selected:{' '}
+          <span className="font-semibold text-foreground">
+            {selectedDependencies.length}
+          </span>
+        </p>
+        <p>
+          Available:{' '}
+          <span className="font-semibold text-foreground">
+            {availablePrerequisites.length}
+          </span>
+        </p>
+        <p className="sm:text-right">
+          Target:{' '}
+          <span className="font-semibold text-foreground">
+            {getWorkPackageDisplayName(workPackage)}
+          </span>
+        </p>
+      </div>
+
+      <input
+        value={dependencySearch}
+        onChange={event => setDependencySearch(event.target.value)}
+        placeholder="Search prerequisites"
+        className="mt-3 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground"
+      />
+
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {availablePrerequisites.length > 0 ? (
-          availablePrerequisites.map(candidate => {
+        {filteredPrerequisites.length > 0 ? (
+          filteredPrerequisites.map(candidate => {
             const isSelected = selectedDependencyIds.has(candidate.id);
+            const candidateUnlockCount = getDependentWorkPackages(
+              candidate,
+              workPackages
+            ).length;
 
             return (
               <button
                 key={candidate.id}
                 type="button"
                 onClick={() => handleToggleDependency(candidate.id)}
-                className={`flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                className={`flex min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                   isSelected
                     ? 'border-primary bg-primary/10 text-foreground'
                     : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <span
-                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[10px] font-bold ${
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
                     isSelected
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-card'
                   }`}
                 >
-                  {isSelected ? 'On' : ''}
+                  {isSelected ? <CheckCircle2 className="h-3.5 w-3.5" /> : ''}
                 </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">
+
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">
                     {getWorkPackageDisplayName(candidate)}
                   </span>
-                  <span className="mt-0.5 block text-xs">
-                    Status: {formatLabel(candidate.status)}
+
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <StatusBadge variant={getStatusVariant(candidate.status)}>
+                      {formatLabel(candidate.status)}
+                    </StatusBadge>
+                    <StatusBadge variant={getPriorityVariant(candidate.priority)}>
+                      {formatLabel(candidate.priority)}
+                    </StatusBadge>
+                  </span>
+
+                  <span className="mt-1 block text-xs">
+                    Unlocks {candidateUnlockCount} package
+                    {candidateUnlockCount === 1 ? '' : 's'}
                   </span>
                 </span>
               </button>
             );
           })
         ) : (
-          <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-            No other work packages are available for dependency linking.
+          <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground sm:col-span-2">
+            No matching prerequisites found.
           </p>
         )}
       </div>
