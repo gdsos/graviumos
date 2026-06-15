@@ -1,4 +1,5 @@
 import {
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -304,6 +305,13 @@ type TimelineInputDialogState = {
 type TimelineNoticeDialogState = {
   title: string;
   description: string;
+};
+
+type ScheduleRescheduleDragState = {
+  workPackageId: string;
+  startClientX: number;
+  dayWidth: number;
+  shiftDays: number;
 };
 
 type TimelineShiftSnapshot = {
@@ -986,6 +994,60 @@ function distributePaymentGatesAcrossTimeline(
   });
 }
 
+function getScheduleDependencyClusterIds(
+  workPackageId: string,
+  allWorkPackages: WorkPackage[]
+) {
+  const clusterIds = new Set<string>([workPackageId]);
+  let didAddPackage = true;
+
+  while (didAddPackage) {
+    didAddPackage = false;
+
+    allWorkPackages.forEach(candidate => {
+      if (clusterIds.has(candidate.id)) return;
+
+      const dependsOnCluster = candidate.dependsOnWorkPackageIds.some(dependencyId =>
+        clusterIds.has(dependencyId)
+      );
+
+      if (dependsOnCluster) {
+        clusterIds.add(candidate.id);
+        didAddPackage = true;
+      }
+    });
+  }
+
+  return clusterIds;
+}
+
+function canShiftWorkPackageEstimatedSchedule(workPackage: WorkPackage) {
+  return (
+    !workPackage.actualStartDate &&
+    !workPackage.actualEndDate &&
+    workPackage.status !== 'completed' &&
+    workPackage.status !== 'in_progress' &&
+    workPackage.status !== 'paused'
+  );
+}
+
+function shiftWorkPackageEstimatedSchedule(
+  workPackage: WorkPackage,
+  shiftDays: number
+): WorkPackage {
+  return {
+    ...workPackage,
+    estimatedStartDate: addDaysToDate(workPackage.estimatedStartDate, shiftDays),
+    estimatedEndDate: addDaysToDate(workPackage.estimatedEndDate, shiftDays),
+  };
+}
+
+function formatScheduleShiftDays(shiftDays: number) {
+  if (shiftDays === 0) return '0 days';
+
+  return `${shiftDays > 0 ? '+' : ''}${shiftDays} day${Math.abs(shiftDays) === 1 ? '' : 's'}`;
+}
+
 function getNextStatusAfterPaymentUnlock(
   workPackage: WorkPackage,
   allWorkPackages: WorkPackage[]
@@ -1151,8 +1213,11 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   const [scheduleZoom, setScheduleZoom] = useState(1);
   const [scheduleDisplayMode, setScheduleDisplayMode] =
     useState<'status' | 'phase'>('status');
+  const [scheduleRescheduleDrag, setScheduleRescheduleDrag] =
+    useState<ScheduleRescheduleDragState | null>(null);
   const [scheduleViewportWidth, setScheduleViewportWidth] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const scheduleRescheduleDragRef = useRef<ScheduleRescheduleDragState | null>(null);
   const pendingScheduleScrollLeftRef = useRef<number | null>(null);
   const scheduleDragStartXRef = useRef<number | null>(null);
   const scheduleDragStartScrollLeftRef = useRef(0);
@@ -1814,7 +1879,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     ]
   );
   const timelineDateRange = useMemo(() => {
-    if (workPackages.length === 0) {
+    if (workPackages.length === 0 && paymentGates.length === 0) {
       return {
         startDate: activeTimelineProject.startDate,
         endDate: activeTimelineProject.currentProjectedHandoverDate,
@@ -1823,26 +1888,30 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
     const today = getTodayDateString();
 
-    const startDates = workPackages
-      .flatMap(workPackage => [
-        workPackage.estimatedStartDate,
-        workPackage.actualStartDate,
-        ...getWorkPackageDelayScheduleSegments(workPackage, today).map(
-          delaySegment => delaySegment.startDate
-        ),
-      ])
+    const workPackageStartDates = workPackages.flatMap(workPackage => [
+      workPackage.estimatedStartDate,
+      workPackage.actualStartDate,
+      ...getWorkPackageDelayScheduleSegments(workPackage, today).map(
+        delaySegment => delaySegment.startDate
+      ),
+    ]);
+
+    const workPackageEndDates = workPackages.flatMap(workPackage => [
+      workPackage.estimatedEndDate,
+      workPackage.actualEndDate,
+      workPackage.actualStartDate && !workPackage.actualEndDate ? today : undefined,
+      ...getWorkPackageDelayScheduleSegments(workPackage, today).map(
+        delaySegment => delaySegment.endDate
+      ),
+    ]);
+
+    const paymentGateDates = paymentGates.map(paymentGate => paymentGate.dueDate);
+
+    const startDates = [...workPackageStartDates, ...paymentGateDates]
       .filter(Boolean)
       .sort();
 
-    const endDates = workPackages
-      .flatMap(workPackage => [
-        workPackage.estimatedEndDate,
-        workPackage.actualEndDate,
-        workPackage.actualStartDate && !workPackage.actualEndDate ? today : undefined,
-        ...getWorkPackageDelayScheduleSegments(workPackage, today).map(
-          delaySegment => delaySegment.endDate
-        ),
-      ])
+    const endDates = [...workPackageEndDates, ...paymentGateDates]
       .filter(Boolean)
       .sort();
 
@@ -1855,6 +1924,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
   }, [
     activeTimelineProject.currentProjectedHandoverDate,
     activeTimelineProject.startDate,
+    paymentGates,
     workPackages,
   ]);
 
@@ -3385,6 +3455,129 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     );
   };
 
+  const handleScheduleRescheduleCommit = useCallback(
+    (workPackageId: string, shiftDays: number) => {
+      if (shiftDays === 0) return;
+
+      const clusterIds = getScheduleDependencyClusterIds(
+        workPackageId,
+        workPackages
+      );
+      const clusterPackages = workPackages.filter(workPackage =>
+        clusterIds.has(workPackage.id)
+      );
+      const lockedPackages = clusterPackages.filter(
+        workPackage => !canShiftWorkPackageEstimatedSchedule(workPackage)
+      );
+
+      if (lockedPackages.length > 0) {
+        setTimelineNoticeDialog({
+          title: 'Schedule Shift Blocked',
+          description: `${lockedPackages[0].title} has already started or is completed. Started work packages are protected from estimated date shifts.`,
+        });
+        return;
+      }
+
+      setWorkPackages(currentWorkPackages =>
+        currentWorkPackages.map(workPackage =>
+          clusterIds.has(workPackage.id)
+            ? shiftWorkPackageEstimatedSchedule(workPackage, shiftDays)
+            : workPackage
+        )
+      );
+
+    },
+    [workPackages]
+  );
+
+  const handleScheduleReschedulePointerDown = (
+    workPackage: WorkPackage,
+    dayWidth: number,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const clusterIds = getScheduleDependencyClusterIds(
+      workPackage.id,
+      workPackages
+    );
+    const clusterPackages = workPackages.filter(candidate =>
+      clusterIds.has(candidate.id)
+    );
+    const lockedPackages = clusterPackages.filter(
+      candidate => !canShiftWorkPackageEstimatedSchedule(candidate)
+    );
+
+    if (lockedPackages.length > 0) {
+      setTimelineNoticeDialog({
+        title: 'Schedule Shift Blocked',
+        description: `${lockedPackages[0].title} has already started or is completed. Started work packages are protected from estimated date shifts.`,
+      });
+      return;
+    }
+
+    const nextDragState = {
+      workPackageId: workPackage.id,
+      startClientX: event.clientX,
+      dayWidth,
+      shiftDays: 0,
+    };
+
+    scheduleRescheduleDragRef.current = nextDragState;
+    setScheduleRescheduleDrag(nextDragState);
+  };
+
+  useEffect(() => {
+    if (!scheduleRescheduleDrag) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const currentDrag = scheduleRescheduleDragRef.current;
+      if (!currentDrag) return;
+
+      const shiftDays = Math.round(
+        (event.clientX - currentDrag.startClientX) / currentDrag.dayWidth
+      );
+
+      const nextDragState = {
+        ...currentDrag,
+        shiftDays,
+      };
+
+      scheduleRescheduleDragRef.current = nextDragState;
+      setScheduleRescheduleDrag(nextDragState);
+    };
+
+    const handlePointerUp = () => {
+      const currentDrag = scheduleRescheduleDragRef.current;
+
+      scheduleRescheduleDragRef.current = null;
+      setScheduleRescheduleDrag(null);
+
+      if (!currentDrag || currentDrag.shiftDays === 0) return;
+
+      handleScheduleRescheduleCommit(
+        currentDrag.workPackageId,
+        currentDrag.shiftDays
+      );
+    };
+
+    const handlePointerCancel = () => {
+      scheduleRescheduleDragRef.current = null;
+      setScheduleRescheduleDrag(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+    };
+  }, [handleScheduleRescheduleCommit, scheduleRescheduleDrag]);
+
   const renderScheduleView = () => {
     const timelineStartDate = timelineDateRange.startDate;
     const timelineEndDate = timelineDateRange.endDate;
@@ -3415,6 +3608,14 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
       todayOffsetDays * dayWidth +
       dayWidth / 2;
     const scheduleZoomPercent = Math.round(scheduleZoom * 100);
+    const scheduleRescheduleClusterIds = scheduleRescheduleDrag
+      ? getScheduleDependencyClusterIds(
+          scheduleRescheduleDrag.workPackageId,
+          workPackages
+        )
+      : new Set<string>();
+    const scheduleRescheduleShiftPixels =
+      (scheduleRescheduleDrag?.shiftDays ?? 0) * dayWidth;
 
     const handleScheduleZoom = (nextZoom: number) => {
       const normalizedZoom = clampScheduleZoom(nextZoom);
@@ -3632,11 +3833,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                     }`}
                     style={{ left: `${tick.left}px` }}
                   >
-                    <span
-                      className={`absolute top-2 whitespace-nowrap text-[11px] font-semibold text-foreground ${
-                        tick.isEnd ? 'right-2 text-right' : 'left-2'
-                      }`}
-                    >
+                    <span className="absolute left-2 top-2 whitespace-nowrap text-[11px] font-semibold text-foreground">
                       {formatScheduleTickDate(tick.date)}
                     </span>
                   </div>
@@ -3666,6 +3863,18 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                   workPackage,
                   today
                 );
+                const scheduleMoveClusterIds = getScheduleDependencyClusterIds(
+                  workPackage.id,
+                  workPackages
+                );
+                const scheduleMoveLinkedCount = Math.max(
+                  0,
+                  scheduleMoveClusterIds.size - 1
+                );
+                const isScheduleRescheduleClusterMember =
+                  scheduleRescheduleClusterIds.has(workPackage.id);
+                const canRescheduleWorkPackage =
+                  canShiftWorkPackageEstimatedSchedule(workPackage);
 
                 return (
                   <div
@@ -3702,6 +3911,13 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                                 }`
                               : 'Not started'}
                           </p>
+
+                          {scheduleMoveLinkedCount > 0 ? (
+                            <p className="mt-0.5 text-[11px] font-semibold text-primary">
+                              Reschedules with {scheduleMoveLinkedCount} linked package
+                              {scheduleMoveLinkedCount === 1 ? '' : 's'}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -3736,13 +3952,52 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                         );
                       })}
 
-                      <div
-                        className="absolute top-6 h-4 rounded-none border border-border/80 bg-muted/80 shadow-sm"
-                        style={plannedBarStyle}
-                        title={`Planned ${workPackage.title}: ${formatDate(
-                          workPackage.estimatedStartDate
-                        )} - ${formatDate(workPackage.estimatedEndDate)}`}
-                      />
+                      <button
+                        type="button"
+                        onPointerDown={event =>
+                          handleScheduleReschedulePointerDown(
+                            workPackage,
+                            dayWidth,
+                            event
+                          )
+                        }
+                        onClick={event => event.stopPropagation()}
+                        className={`group/planned-bar absolute top-6 h-4 rounded-none border border-border/80 bg-muted/80 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                          canRescheduleWorkPackage
+                            ? 'cursor-ew-resize hover:bg-foreground/25'
+                            : 'cursor-not-allowed opacity-60'
+                        } ${
+                          isScheduleRescheduleClusterMember
+                            ? 'z-[45] ring-2 ring-primary/60'
+                            : ''
+                        }`}
+                        style={{
+                          ...plannedBarStyle,
+                          transform: isScheduleRescheduleClusterMember
+                            ? `translateX(${scheduleRescheduleShiftPixels}px)`
+                            : undefined,
+                        }}
+                        title={
+                          canRescheduleWorkPackage
+                            ? `Drag planned bar to shift ${workPackage.title}${
+                                scheduleMoveLinkedCount > 0
+                                  ? ` with ${scheduleMoveLinkedCount} linked package${
+                                      scheduleMoveLinkedCount === 1 ? '' : 's'
+                                    }`
+                                  : ''
+                              }`
+                            : `${workPackage.title} has started or is completed, so planned dates are locked.`
+                        }
+                      >
+                        <span className="pointer-events-none absolute bottom-full left-1/2 z-[300] mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-lg group-hover/planned-bar:block">
+                          {scheduleRescheduleDrag &&
+                          isScheduleRescheduleClusterMember
+                            ? formatScheduleShiftDays(
+                                scheduleRescheduleDrag.shiftDays
+                              )
+                            : 'Drag to reschedule'}
+                        </span>
+                      </button>
 
                       {scheduleDisplayMode === 'status' && actualBarStyle ? (
                         <button
