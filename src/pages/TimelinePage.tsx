@@ -3585,7 +3585,8 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     };
   }, [handleScheduleRescheduleCommit, scheduleRescheduleDrag]);
 
-  const renderScheduleView = () => {
+  const renderScheduleView = (options?: { mobileOverlay?: boolean }) => {
+    const isMobileScheduleOverlay = options?.mobileOverlay ?? false;
     const timelineStartDate = timelineDateRange.startDate;
     const timelineEndDate = timelineDateRange.endDate;
     const totalDays = getDayDifference(timelineStartDate, timelineEndDate) + 1;
@@ -3640,7 +3641,13 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     };
 
     return (
-      <section className="min-w-0 overflow-hidden rounded-[1.75rem] border border-border bg-card text-card-foreground shadow-sm">
+      <section
+        className={
+          isMobileScheduleOverlay
+            ? 'flex h-full min-w-0 flex-col overflow-hidden rounded-[1.25rem] border border-border bg-card text-card-foreground shadow-sm'
+            : 'min-w-0 overflow-hidden rounded-[1.75rem] border border-border bg-card text-card-foreground shadow-sm'
+        }
+      >
         <div className="border-b border-border bg-card px-4 py-4 sm:px-5">
           <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -3696,14 +3703,21 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
         <div
           ref={scheduleScrollRef}
-          className="min-w-0 cursor-grab select-none overflow-x-auto overflow-y-hidden overscroll-x-contain bg-background active:cursor-grabbing"
+          className={`min-w-0 cursor-grab select-none overflow-x-auto bg-background active:cursor-grabbing ${
+            isMobileScheduleOverlay
+              ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain'
+              : 'overflow-y-hidden overscroll-x-contain'
+          }`}
           style={{
-            touchAction: 'pan-x',
+            touchAction: 'none',
             overflowX: scheduleZoom <= 1 ? 'hidden' : 'auto',
           }}
           onPointerDown={event => {
-            if (event.pointerType === 'touch' || event.button !== 0) return;
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            if (event.pointerType !== 'mouse' && event.pointerType !== 'touch') return;
+            if (event.pointerType === 'touch' && schedulePinchDistanceRef.current) return;
 
+            event.preventDefault();
             scheduleIsDraggingRef.current = true;
             scheduleDragStartXRef.current = event.clientX;
             scheduleDragStartScrollLeftRef.current = event.currentTarget.scrollLeft;
@@ -3713,6 +3727,8 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
             if (!scheduleIsDraggingRef.current || scheduleDragStartXRef.current === null) {
               return;
             }
+
+            event.preventDefault();
 
             const deltaX = event.clientX - scheduleDragStartXRef.current;
 
@@ -3733,6 +3749,10 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
           }}
           onTouchStart={event => {
             if (event.touches.length !== 2) return;
+
+            event.preventDefault();
+            scheduleIsDraggingRef.current = false;
+            scheduleDragStartXRef.current = null;
 
             const [firstTouch, secondTouch] = Array.from(event.touches);
             schedulePinchDistanceRef.current = Math.hypot(
@@ -3961,13 +3981,15 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
                       <button
                         type="button"
-                        onPointerDown={event =>
+                        onPointerDown={event => {
+                          if (event.pointerType === 'touch') return;
+
                           handleScheduleReschedulePointerDown(
                             workPackage,
                             dayWidth,
                             event
-                          )
-                        }
+                          );
+                        }}
                         onClick={event => event.stopPropagation()}
                         className={`group/planned-bar absolute top-6 h-4 rounded-none border border-border/80 bg-muted/80 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                           canRescheduleWorkPackage
@@ -4155,27 +4177,6 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
               })}
             </div>
 
-            <div
-              className={`pointer-events-none absolute inset-y-1 left-1 z-[20] flex w-10 items-center justify-start rounded-l-2xl bg-gradient-to-r from-card via-card/85 to-transparent transition-opacity sm:hidden ${
-                mobileTimelineTabsScrollHint.left ? 'opacity-100' : 'opacity-0'
-              }`}
-              aria-hidden="true"
-            >
-              <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground shadow-sm">
-                &lt;
-              </span>
-            </div>
-
-            <div
-              className={`pointer-events-none absolute inset-y-1 right-1 z-[20] flex w-10 items-center justify-end rounded-r-2xl bg-gradient-to-l from-card via-card/85 to-transparent transition-opacity sm:hidden ${
-                mobileTimelineTabsScrollHint.right ? 'opacity-100' : 'opacity-0'
-              }`}
-              aria-hidden="true"
-            >
-              <span className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground shadow-sm">
-                &gt;
-              </span>
-            </div>
           </div>
         </div>
 
@@ -4293,6 +4294,67 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     };
   }, [activeTab, updateMobileTimelineTabsScrollHint]);
 
+  const handleOpenMobileScheduleOverlay = useCallback(() => {
+    setIsMobileScheduleOverlayOpen(true);
+
+    window.requestAnimationFrame(() => {
+      void (async () => {
+        try {
+          await document.documentElement.requestFullscreen?.();
+        } catch {
+          // Fullscreen is required by some browsers before orientation lock.
+        }
+
+        const orientation = window.screen.orientation as unknown as {
+          lock?: (orientation: string) => Promise<void>;
+        };
+
+        try {
+          await orientation.lock?.('landscape-primary');
+        } catch {
+          try {
+            await orientation.lock?.('landscape');
+          } catch {
+            // Browser may not support orientation lock.
+          }
+        }
+      })();
+    });
+  }, []);
+
+  const handleCloseMobileScheduleOverlay = useCallback(() => {
+    setIsMobileScheduleOverlayOpen(false);
+
+    const orientation = window.screen.orientation as unknown as {
+      unlock?: () => void;
+    };
+
+    try {
+      orientation.unlock?.();
+    } catch {
+      // Ignore unsupported orientation unlock.
+    }
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileScheduleOverlayOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [isMobileScheduleOverlayOpen]);
+
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
@@ -4356,7 +4418,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
                 <Button
                   type="button"
-                  onClick={() => setIsMobileScheduleOverlayOpen(true)}
+                  onClick={handleOpenMobileScheduleOverlay}
                   className="w-full bg-foreground text-background hover:bg-foreground/90"
                 >
                   View Schedule
@@ -4371,34 +4433,29 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
           {isMobileScheduleOverlayOpen ? (
             <div className="fixed inset-0 z-[999] overflow-hidden bg-background text-foreground sm:hidden">
-              <div className="absolute left-1/2 top-1/2 flex h-[100dvw] w-[100dvh] -translate-x-1/2 -translate-y-1/2 rotate-90 flex-col overflow-hidden bg-background">
+              <div className="flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-background">
                 <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground">
                       Schedule View
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Swipe sideways to move across dates.
+                      Swipe to pan. Pinch to zoom.
                     </p>
                   </div>
 
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsMobileScheduleOverlayOpen(false)}
+                    onClick={handleCloseMobileScheduleOverlay}
                     className="h-9 shrink-0 rounded-xl px-3 text-xs"
                   >
                     Close
                   </Button>
                 </div>
 
-                <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
-                  <div className="h-full overflow-auto overscroll-contain p-2 [&_.schedule-payment-gate-footer]:hidden">
-                    <div className="min-w-[1180px]">
-                      {renderScheduleView()}
-                    </div>
-                  </div>
-
+                <div className="min-h-0 flex-1 overflow-hidden bg-background p-2 [&_.schedule-payment-gate-footer]:hidden">
+                  {renderScheduleView({ mobileOverlay: true })}
                 </div>
               </div>
             </div>
@@ -5141,6 +5198,28 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                   </button>
                 );
               })}
+            </div>
+
+            <div
+              className={`pointer-events-none absolute inset-y-1 left-1 z-[20] flex w-10 items-center justify-start rounded-l-2xl bg-gradient-to-r from-card via-card/85 to-transparent transition-opacity sm:hidden ${
+                mobileTimelineTabsScrollHint.left ? 'opacity-100' : 'opacity-0'
+              }`}
+              aria-hidden="true"
+            >
+              <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground shadow-sm">
+                &lt;
+              </span>
+            </div>
+
+            <div
+              className={`pointer-events-none absolute inset-y-1 right-1 z-[20] flex w-10 items-center justify-end rounded-r-2xl bg-gradient-to-l from-card via-card/85 to-transparent transition-opacity sm:hidden ${
+                mobileTimelineTabsScrollHint.right ? 'opacity-100' : 'opacity-0'
+              }`}
+              aria-hidden="true"
+            >
+              <span className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground shadow-sm">
+                &gt;
+              </span>
             </div>
           </div>
 
