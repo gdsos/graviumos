@@ -1215,8 +1215,15 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
     useState<'status' | 'phase'>('status');
   const [scheduleRescheduleDrag, setScheduleRescheduleDrag] =
     useState<ScheduleRescheduleDragState | null>(null);
+  const [isMobileScheduleOverlayOpen, setIsMobileScheduleOverlayOpen] =
+    useState(false);
+  const [mobileTimelineTabsScrollHint, setMobileTimelineTabsScrollHint] = useState({
+    left: false,
+    right: false,
+  });
   const [scheduleViewportWidth, setScheduleViewportWidth] = useState(0);
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const mobileTimelineTabsScrollRef = useRef<HTMLDivElement | null>(null);
   const scheduleRescheduleDragRef = useRef<ScheduleRescheduleDragState | null>(null);
   const pendingScheduleScrollLeftRef = useRef<number | null>(null);
   const scheduleDragStartXRef = useRef<number | null>(null);
@@ -1700,7 +1707,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
       resizeObserver?.disconnect();
       window.removeEventListener('resize', updateScheduleViewportWidth);
     };
-  }, [activeTab]);
+  }, [activeTab, isMobileScheduleOverlayOpen]);
 
   useEffect(() => {
     if (activeTab !== 'schedule') return;
@@ -4147,10 +4154,32 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                 );
               })}
             </div>
+
+            <div
+              className={`pointer-events-none absolute inset-y-1 left-1 z-[20] flex w-10 items-center justify-start rounded-l-2xl bg-gradient-to-r from-card via-card/85 to-transparent transition-opacity sm:hidden ${
+                mobileTimelineTabsScrollHint.left ? 'opacity-100' : 'opacity-0'
+              }`}
+              aria-hidden="true"
+            >
+              <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground shadow-sm">
+                &lt;
+              </span>
+            </div>
+
+            <div
+              className={`pointer-events-none absolute inset-y-1 right-1 z-[20] flex w-10 items-center justify-end rounded-r-2xl bg-gradient-to-l from-card via-card/85 to-transparent transition-opacity sm:hidden ${
+                mobileTimelineTabsScrollHint.right ? 'opacity-100' : 'opacity-0'
+              }`}
+              aria-hidden="true"
+            >
+              <span className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground shadow-sm">
+                &gt;
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="border-t border-border bg-card px-4 py-3 sm:px-5">
+        <div className="schedule-payment-gate-footer border-t border-border bg-card px-4 py-3 sm:px-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Payment Gate Markers
@@ -4234,6 +4263,36 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     );
   };
 
+  const updateMobileTimelineTabsScrollHint = useCallback(() => {
+    const scrollElement = mobileTimelineTabsScrollRef.current;
+
+    if (!scrollElement) {
+      setMobileTimelineTabsScrollHint({ left: false, right: false });
+      return;
+    }
+
+    const maxScrollLeft = Math.max(
+      0,
+      scrollElement.scrollWidth - scrollElement.clientWidth
+    );
+
+    setMobileTimelineTabsScrollHint({
+      left: scrollElement.scrollLeft > 8,
+      right: scrollElement.scrollLeft < maxScrollLeft - 8,
+    });
+  }, []);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(updateMobileTimelineTabsScrollHint);
+
+    window.addEventListener('resize', updateMobileTimelineTabsScrollHint);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', updateMobileTimelineTabsScrollHint);
+    };
+  }, [activeTab, updateMobileTimelineTabsScrollHint]);
+
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
@@ -4281,7 +4340,71 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     }
 
     if (activeTab === 'schedule') {
-      return renderScheduleView();
+      return (
+        <>
+          <div className="grid min-w-0 gap-4 sm:hidden">
+            <div className="rounded-3xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+              <div className="flex min-w-0 flex-col gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    Schedule View
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    Open the chart in a landscape-style full-screen view.
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={() => setIsMobileScheduleOverlayOpen(true)}
+                  className="w-full bg-foreground text-background hover:bg-foreground/90"
+                >
+                  View Schedule
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden sm:block">
+            {renderScheduleView()}
+          </div>
+
+          {isMobileScheduleOverlayOpen ? (
+            <div className="fixed inset-0 z-[999] overflow-hidden bg-background text-foreground sm:hidden">
+              <div className="absolute left-1/2 top-1/2 flex h-[100dvw] w-[100dvh] -translate-x-1/2 -translate-y-1/2 rotate-90 flex-col overflow-hidden bg-background">
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      Schedule View
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Swipe sideways to move across dates.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsMobileScheduleOverlayOpen(false)}
+                    className="h-9 shrink-0 rounded-xl px-3 text-xs"
+                  >
+                    Close
+                  </Button>
+                </div>
+
+                <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+                  <div className="h-full overflow-auto overscroll-contain p-2 [&_.schedule-payment-gate-footer]:hidden">
+                    <div className="min-w-[1180px]">
+                      {renderScheduleView()}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </>
+      );
     }
 
     return (
@@ -4983,8 +5106,12 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
             </div>
           )}
 
-          <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
-            <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
+          <div className="relative mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
+            <div
+              ref={mobileTimelineTabsScrollRef}
+              onScroll={updateMobileTimelineTabsScrollHint}
+              className="flex gap-1 overflow-x-auto overscroll-x-contain scroll-smooth pr-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-5 sm:overflow-visible sm:pr-0"
+            >
               {tabs.map(tab => {
                 const isActive = activeTab === tab.id;
                 const actionCount = timelineTabActionCounts[tab.id] ?? 0;
@@ -4995,9 +5122,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition sm:gap-2 sm:text-sm ${
-                      tab.id === 'schedule' ? 'hidden sm:inline-flex ' : ''
-                    }${
+                    className={`inline-flex min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition sm:min-w-0 sm:shrink sm:gap-2 sm:text-sm ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
