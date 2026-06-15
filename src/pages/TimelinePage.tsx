@@ -5201,23 +5201,23 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
             </div>
 
             <div
-              className={`pointer-events-none absolute inset-y-1 left-1 z-[20] flex w-10 items-center justify-start rounded-l-2xl bg-gradient-to-r from-card via-card/85 to-transparent transition-opacity sm:hidden ${
+              className={`pointer-events-none absolute -left-1 inset-y-0 z-[20] flex w-20 items-center justify-start rounded-l-[inherit] bg-gradient-to-r from-card via-card/95 to-transparent pl-5 transition-opacity sm:hidden ${
                 mobileTimelineTabsScrollHint.left ? 'opacity-100' : 'opacity-0'
               }`}
               aria-hidden="true"
             >
-              <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground opacity-50 shadow-sm">
+              <span className="text-sm font-bold text-foreground/50">
                 &lt;
               </span>
             </div>
 
             <div
-              className={`pointer-events-none absolute inset-y-1 right-1 z-[20] flex w-10 items-center justify-end rounded-r-2xl bg-gradient-to-l from-card via-card/85 to-transparent transition-opacity sm:hidden ${
+              className={`pointer-events-none absolute -right-1 inset-y-0 z-[20] flex w-20 items-center justify-end rounded-r-[inherit] bg-gradient-to-l from-card via-card/95 to-transparent pr-5 transition-opacity sm:hidden ${
                 mobileTimelineTabsScrollHint.right ? 'opacity-100' : 'opacity-0'
               }`}
               aria-hidden="true"
             >
-              <span className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/95 text-xs font-bold text-foreground opacity-50 shadow-sm">
+              <span className="text-sm font-bold text-foreground/50">
                 &gt;
               </span>
             </div>
