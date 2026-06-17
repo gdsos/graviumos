@@ -1,6 +1,16 @@
 -- 17. Project checkpoint foundation
 -- Adds stage-gated project checkpoints for site visit, design, execution, QC, and handover.
 
+CREATE OR REPLACE FUNCTION public.set_project_checkpoints_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
 CREATE TABLE IF NOT EXISTS public.project_checkpoints (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -45,10 +55,11 @@ CREATE INDEX IF NOT EXISTS idx_project_checkpoints_status
   ON public.project_checkpoints(status);
 
 DROP TRIGGER IF EXISTS trg_project_checkpoints_updated_at ON public.project_checkpoints;
+
 CREATE TRIGGER trg_project_checkpoints_updated_at
   BEFORE UPDATE ON public.project_checkpoints
   FOR EACH ROW
-  EXECUTE FUNCTION public.set_updated_at();
+  EXECUTE FUNCTION public.set_project_checkpoints_updated_at();
 
 ALTER TABLE public.project_checkpoints ENABLE ROW LEVEL SECURITY;
 
@@ -74,20 +85,13 @@ CREATE POLICY "Project operators can manage project checkpoints"
       FROM public.profiles p
       WHERE p.id = auth.uid()
         AND (
-          p.role IN ('super_admin', 'admin')
+          p.role::text = 'super_admin'
           OR EXISTS (
             SELECT 1
             FROM public.departments d
-            WHERE d public.project_checkpoints
-  FOR ALL
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM public.profiles p
-     .id = ANY(COALESCE(p.department_ids, '{}'::uuid[]))
+            WHERE d.id = ANY(COALESCE(p.department_ids, '{}'::uuid[]))
               AND (
-                d.code IN ('DE', 'OQ', 'PL')
+                d.code::text IN ('DE', 'OQ', 'PL')
                 OR d.name IN (
                   'Designing & Execution',
                   'Ops. & Quality Control',
@@ -104,13 +108,13 @@ CREATE POLICY "Project operators can manage project checkpoints"
       FROM public.profiles p
       WHERE p.id = auth.uid()
         AND (
-          p.role IN ('super_admin', 'admin')
+          p.role::text = 'super_admin'
           OR EXISTS (
             SELECT 1
             FROM public.departments d
             WHERE d.id = ANY(COALESCE(p.department_ids, '{}'::uuid[]))
               AND (
-                d.code IN ('DE', 'OQ', 'PL')
+                d.code::text IN ('DE', 'OQ', 'PL')
                 OR d.name IN (
                   'Designing & Execution',
                   'Ops. & Quality Control',
