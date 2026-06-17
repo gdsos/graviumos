@@ -39,6 +39,31 @@ export interface CostEstimateExportPayload {
   preparedAt?: string;
 }
 
+export interface DesignEstimateExportLine {
+  id: string;
+  serviceName: string;
+  unit: 'view' | '360';
+  quantity: number;
+  rate: number;
+}
+
+export interface DesignEstimateExportPayload {
+  projectName: string;
+  clientName?: string;
+  status: string;
+  version: number;
+  rows: DesignEstimateExportLine[];
+  total: number;
+  preparedAt?: string;
+}
+
+interface ProjectMetaPdfPayload {
+  projectName: string;
+  clientName?: string;
+  status: string;
+  version: number;
+}
+
 const BRAND = {
   offWhite: [245, 245, 245] as Rgb,
   pearlBlack: [47, 47, 47] as Rgb,
@@ -202,6 +227,10 @@ function buildFileName(payload: CostEstimateExportPayload) {
   return `${sanitizeFileName(payload.projectName)}-estimate-v${payload.version}.pdf`;
 }
 
+function buildDesignEstimateFileName(payload: DesignEstimateExportPayload) {
+  return `${sanitizeFileName(payload.projectName)}-design-estimate-v${payload.version}.pdf`;
+}
+
 function getAreaName(areas: CostEstimateArea[], areaId: string) {
   return areas.find(area => area.id === areaId)?.name ?? 'Unassigned Area';
 }
@@ -297,7 +326,9 @@ async function loadPngImage(paths: string[], invert: boolean) {
 function drawHeader(
   doc: jsPDF,
   settings: DocumentOrganizationSettings,
-  logo?: LoadedImage
+  logo?: LoadedImage,
+  title = 'COST ESTIMATE',
+  subtitle = 'INTERIOR DESIGN & EXECUTION'
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -331,11 +362,11 @@ function drawHeader(
   setFont(doc, 'bold');
   doc.setTextColor(...BRAND.offWhite);
   doc.setFontSize(17);
-  doc.text('COST ESTIMATE', pageWidth / 2, 66, { align: 'center' });
+  doc.text(title, pageWidth / 2, 66, { align: 'center' });
 
   setFont(doc);
   doc.setFontSize(8);
-  doc.text('INTERIOR DESIGN & EXECUTION', pageWidth / 2, 84, {
+  doc.text(subtitle, pageWidth / 2, 84, {
     align: 'center',
   });
 
@@ -379,7 +410,7 @@ function getCleanEstimateStatus(status: string) {
 
 function drawProjectMeta(
   doc: jsPDF,
-  payload: CostEstimateExportPayload,
+  payload: ProjectMetaPdfPayload,
   preparedDate: string
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -607,6 +638,199 @@ function drawFooter(doc: jsPDF) {
       align: 'right',
     });
   }
+}
+
+function drawDesignEstimateSummaryAndSignatory(
+  doc: jsPDF,
+  payload: DesignEstimateExportPayload,
+  signature?: LoadedImage,
+  startY?: number
+) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const y = ensureSpace(doc, 190, startY ?? 54);
+  const contentX = 36;
+  const contentWidth = pageWidth - contentX * 2;
+  const summaryWidth = 226;
+  const summaryX = pageWidth - contentX - summaryWidth;
+  const signatoryX = contentX;
+  const signatoryWidth = contentWidth - summaryWidth - 28;
+
+  doc.setFillColor(...BRAND.softSurface);
+  doc.setDrawColor(...BRAND.line);
+  doc.roundedRect(summaryX, y, summaryWidth, 172, 12, 12, 'FD');
+
+  setFont(doc, 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...BRAND.pearlBlack);
+  doc.text('Estimate Summary', summaryX + 16, y + 24);
+
+  const summaryRows = [
+    ['Subtotal', payload.total],
+    ['Grand Total', payload.total],
+  ];
+
+  summaryRows.forEach(([label, value], index) => {
+    const rowY = y + 52 + index * 24;
+    const isTotal = index === summaryRows.length - 1;
+
+    if (isTotal) {
+      doc.setFillColor(...BRAND.tropicalWoodBrown);
+      doc.roundedRect(summaryX + 10, rowY - 13, summaryWidth - 20, 20, 4, 4, 'F');
+    }
+
+    setFont(doc, isTotal ? 'bold' : 'normal');
+    doc.setFontSize(isTotal ? 9.8 : 8.2);
+    doc.setTextColor(...(isTotal ? BRAND.offWhite : BRAND.black));
+    doc.text(String(label), summaryX + 16, rowY, { maxWidth: 120 });
+    drawMoneyValue(
+      doc,
+      Number(value),
+      summaryX + summaryWidth - 16,
+      rowY,
+      isTotal ? BRAND.offWhite : BRAND.black,
+      isTotal ? 9.8 : 8.2,
+      isTotal ? 'bold' : 'medium'
+    );
+  });
+
+  doc.setFillColor(...BRAND.softSurface);
+  doc.setDrawColor(...BRAND.line);
+  doc.roundedRect(signatoryX, y, signatoryWidth, 172, 12, 12, 'FD');
+
+  setFont(doc, 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...BRAND.pearlBlack);
+  doc.text('Authorized Signatory', signatoryX + 16, y + 24);
+
+  if (signature) {
+    const signatureBoxWidth = Math.min(170, signatoryWidth - 32);
+    const signatureBoxHeight = 74;
+    const fittedSignature = fitImageWithinBox(
+      signature,
+      signatureBoxWidth,
+      signatureBoxHeight
+    );
+
+    doc.addImage(
+      signature.dataUrl,
+      'PNG',
+      signatoryX + 16,
+      y + 42,
+      fittedSignature.width,
+      fittedSignature.height
+    );
+  } else {
+    setFont(doc);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...BRAND.architectureGrey);
+    doc.text('Signature image not uploaded', signatoryX + 16, y + 72);
+  }
+
+  doc.setDrawColor(...BRAND.architectureGrey);
+  doc.line(signatoryX + 16, y + 132, signatoryX + 184, y + 132);
+
+  setFont(doc);
+  doc.setFontSize(8);
+  doc.setTextColor(...BRAND.architectureGrey);
+  doc.text('For GRAVIUM DESIGN STUDIO LLP', signatoryX + 16, y + 150);
+}
+
+export async function exportGraviumClassicDesignEstimatePdf(
+  payload: DesignEstimateExportPayload
+) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+  await registerRupeeFont(doc);
+
+  const { organizationSettings: settings } = await fetchDocumentExportSettings();
+  const preparedDate = getPreparedDate(payload.preparedAt);
+  const logo = await loadPngImage(
+    [settings.logoPath, settings.fallbackLogoPath],
+    settings.invertLogoOnDark
+  );
+  const signature = await loadPngImage([settings.signaturePath], false);
+
+  drawHeader(
+    doc,
+    settings,
+    logo,
+    'DESIGN ESTIMATE',
+    'INTERIOR DESIGN SERVICES'
+  );
+  drawProjectMeta(doc, payload, preparedDate);
+
+  const body =
+    payload.rows.length > 0
+      ? payload.rows.map((row, index) => [
+          String(index + 1),
+          row.serviceName,
+          row.unit === '360' ? '360' : 'View',
+          String(row.quantity),
+          formatPdfMoney(row.rate),
+          formatPdfMoney(row.quantity * row.rate),
+        ])
+      : [['-', 'No design services added', '-', '-', '-', '-']];
+
+  autoTable(doc, {
+    startY: 250,
+    head: [[
+      '#',
+      'Service Name',
+      'Unit',
+      'Qty',
+      'Rate',
+      'Amount',
+    ]],
+    body,
+    theme: 'grid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.4,
+      cellPadding: 4,
+      overflow: 'linebreak',
+      valign: 'top',
+      lineColor: BRAND.line,
+      lineWidth: 0.35,
+      textColor: BRAND.black,
+    },
+    headStyles: {
+      fillColor: BRAND.pearlBlack,
+      textColor: BRAND.offWhite,
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [250, 249, 247],
+    },
+    columnStyles: {
+      0: { cellWidth: 22, halign: 'center' },
+      1: { cellWidth: 220 },
+      2: { cellWidth: 58 },
+      3: { cellWidth: 52, halign: 'right' },
+      4: {
+        cellWidth: 78,
+        halign: 'right',
+        font: getMoneyFontFamily(),
+        fontStyle: getMoneyAutoTableFontStyle('medium'),
+      },
+      5: {
+        cellWidth: 93,
+        halign: 'right',
+        font: getMoneyFontFamily(),
+        fontStyle: getMoneyAutoTableFontStyle('medium'),
+      },
+    },
+    margin: { left: 36, right: 36 },
+  });
+
+  drawDesignEstimateSummaryAndSignatory(
+    doc,
+    payload,
+    signature,
+    getLastAutoTableFinalY(doc) + 24
+  );
+  drawFooter(doc);
+
+  doc.save(buildDesignEstimateFileName(payload));
 }
 
 export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateExportPayload) {

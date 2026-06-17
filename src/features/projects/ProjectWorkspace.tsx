@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { ArrowLeft, Check, ChevronDown, ExternalLink, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ExternalLink, FileText, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { exportDesignEstimatePdf } from '@/features/cost-estimate/export';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,7 +14,7 @@ interface ProjectWorkspaceProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  Active: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  Active: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:text-emerald-100',
   Completed: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   'On Hold': 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   Cancelled: 'border-destructive/20 bg-destructive/10 text-destructive',
@@ -59,6 +60,55 @@ const EMPTY_PROJECT_DOCUMENT_FORM: ProjectDocumentForm = {
   notes: '',
 };
 
+const DESIGN_PHASE_WORKFLOW_STATUSES = [
+  'waiting',
+  'in_progress',
+  'approved',
+  'bypassed',
+] as const;
+
+type DesignPhaseWorkflowStatus = (typeof DESIGN_PHASE_WORKFLOW_STATUSES)[number];
+
+const DESIGN_PHASE_STATUS_STYLES: Record<DesignPhaseWorkflowStatus, string> = {
+  waiting: 'border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+  in_progress: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  approved: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:border-emerald-400/60 dark:bg-emerald-500/25 dark:text-emerald-100',
+  bypassed: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
+};
+
+const DESIGN_ESTIMATE_UNITS = ['view', '360'] as const;
+
+type DesignEstimateUnit = (typeof DESIGN_ESTIMATE_UNITS)[number];
+
+type DesignEstimateLineForm = {
+  id: string;
+  serviceName: string;
+  unit: DesignEstimateUnit;
+  quantity: string;
+  rate: string;
+};
+
+function createDesignEstimateLineId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `design-estimate-line-${crypto.randomUUID()}`;
+  }
+
+  return `design-estimate-line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createEmptyDesignEstimateLine(
+  overrides: Partial<DesignEstimateLineForm> = {}
+): DesignEstimateLineForm {
+  return {
+    id: createDesignEstimateLineId(),
+    serviceName: '',
+    unit: 'view',
+    quantity: '1',
+    rate: '',
+    ...overrides,
+  };
+}
+
 type CheckpointDetailTextField =
   | 'notes'
   | 'clientRequirements'
@@ -66,7 +116,10 @@ type CheckpointDetailTextField =
   | 'customRequirements'
   | 'designApprovalNotes'
   | 'designEstimateNotes'
-  | 'designBypassReason';
+  | 'designBypassReason'
+  | 'designServiceScope'
+  | 'designFeeAmount'
+  | 'designServiceEstimateNotes';
 
 interface CheckpointDetailForm {
   notes: string;
@@ -76,6 +129,12 @@ interface CheckpointDetailForm {
   designApprovalNotes: string;
   designEstimateNotes: string;
   designBypassReason: string;
+  designServiceScope: string;
+  designFeeAmount: string;
+  designServiceEstimateNotes: string;
+  designEstimateRows: DesignEstimateLineForm[];
+  designEstimateApproved: boolean;
+  designPhaseStatus: DesignPhaseWorkflowStatus;
 }
 
 const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
@@ -86,6 +145,12 @@ const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
   designApprovalNotes: '',
   designEstimateNotes: '',
   designBypassReason: '',
+  designServiceScope: '',
+  designFeeAmount: '',
+  designServiceEstimateNotes: '',
+  designEstimateRows: [createEmptyDesignEstimateLine()],
+  designEstimateApproved: false,
+  designPhaseStatus: 'waiting',
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -98,6 +163,98 @@ function toSafeString(value: unknown) {
 
 function hasText(value: string) {
   return value.trim().length > 0;
+}
+
+function formatINR(amount: number) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function getNumericInputValue(value: string) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+function calculateDesignEstimateRowTotal(row: DesignEstimateLineForm) {
+  return getNumericInputValue(row.quantity) * getNumericInputValue(row.rate);
+}
+
+function getCompactDesignEstimateRows(rows: DesignEstimateLineForm[]) {
+  return rows
+    .map(row => ({
+      id: row.id || createDesignEstimateLineId(),
+      serviceName: row.serviceName.trim(),
+      unit: DESIGN_ESTIMATE_UNITS.includes(row.unit) ? row.unit : 'view',
+      quantity: String(getNumericInputValue(row.quantity) || 0),
+      rate: String(getNumericInputValue(row.rate) || 0),
+    }))
+    .filter(row =>
+      hasText(row.serviceName) ||
+      getNumericInputValue(row.quantity) > 0 ||
+      getNumericInputValue(row.rate) > 0
+    );
+}
+
+function getValidDesignEstimateRows(rows: DesignEstimateLineForm[]) {
+  return getCompactDesignEstimateRows(rows).filter(row =>
+    hasText(row.serviceName) &&
+    getNumericInputValue(row.quantity) > 0 &&
+    getNumericInputValue(row.rate) > 0
+  );
+}
+
+function calculateDesignEstimateTotal(rows: DesignEstimateLineForm[]) {
+  return rows.reduce(
+    (total, row) => total + calculateDesignEstimateRowTotal(row),
+    0
+  );
+}
+
+function getDesignEstimateRowsFromMetadata(
+  metadata: Record<string, unknown>
+): DesignEstimateLineForm[] {
+  const storedRows = metadata.design_estimate_rows ?? metadata.designEstimateRows;
+
+  if (Array.isArray(storedRows)) {
+    const rows = storedRows
+      .filter(isRecord)
+      .map(row => {
+        const unit = toSafeString(row.unit).toLowerCase();
+
+        return createEmptyDesignEstimateLine({
+          id: toSafeString(row.id) || createDesignEstimateLineId(),
+          serviceName: toSafeString(row.serviceName ?? row.service_name ?? row.name),
+          unit: unit === '360' ? '360' : 'view',
+          quantity: toSafeString(row.quantity ?? row.qty) || '1',
+          rate: toSafeString(row.rate ?? row.ratePerUnit ?? row.rate_per_unit),
+        });
+      });
+
+    if (rows.length > 0) return rows;
+  }
+
+  const legacyScope = toSafeString(
+    metadata.design_service_scope ?? metadata.designServiceScope
+  );
+  const legacyFee = toSafeString(
+    metadata.design_fee_amount ?? metadata.designFeeAmount
+  );
+
+  if (hasText(legacyScope) || hasText(legacyFee)) {
+    return [
+      createEmptyDesignEstimateLine({
+        serviceName: legacyScope,
+        unit: 'view',
+        quantity: '1',
+        rate: legacyFee,
+      }),
+    ];
+  }
+
+  return [createEmptyDesignEstimateLine()];
 }
 
 function getCheckpointMetadata(checkpoint: ProjectCheckpoint) {
@@ -125,8 +282,44 @@ function getProjectDocumentCategory(document: ProjectDocument) {
   return document.category?.trim() || 'Project Document';
 }
 
+function getDesignPhaseWorkflowStatus(
+  checkpoint: ProjectCheckpoint,
+  metadata: Record<string, unknown>
+): DesignPhaseWorkflowStatus {
+  const storedStatus = toSafeString(metadata.design_phase_status ?? metadata.designPhaseStatus);
+
+  if (
+    DESIGN_PHASE_WORKFLOW_STATUSES.includes(
+      storedStatus as DesignPhaseWorkflowStatus
+    )
+  ) {
+    return storedStatus as DesignPhaseWorkflowStatus;
+  }
+
+  if (checkpoint.status === 'skipped') return 'bypassed';
+  if (checkpoint.status === 'completed') return 'approved';
+
+  return 'waiting';
+}
+
+function getDesignPhaseStatusLabel(status: DesignPhaseWorkflowStatus) {
+  switch (status) {
+    case 'waiting':
+      return 'Waiting';
+    case 'in_progress':
+      return 'In-Progress';
+    case 'approved':
+      return 'Approved';
+    case 'bypassed':
+      return 'Bypassed';
+    default:
+      return 'Waiting';
+  }
+}
+
 function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetailForm {
   const metadata = getCheckpointMetadata(checkpoint);
+  const designPhaseStatus = getDesignPhaseWorkflowStatus(checkpoint, metadata);
 
   return {
     notes: checkpoint.notes || '',
@@ -136,6 +329,17 @@ function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetai
     designApprovalNotes: toSafeString(metadata.design_approval_notes ?? metadata.designApprovalNotes),
     designEstimateNotes: toSafeString(metadata.design_estimate_notes ?? metadata.designEstimateNotes),
     designBypassReason: toSafeString(metadata.design_bypass_reason ?? metadata.designBypassReason),
+    designServiceScope: toSafeString(metadata.design_service_scope ?? metadata.designServiceScope),
+    designFeeAmount: toSafeString(metadata.design_fee_amount ?? metadata.designFeeAmount),
+    designServiceEstimateNotes: toSafeString(
+      metadata.design_service_estimate_notes ?? metadata.designServiceEstimateNotes
+    ),
+    designEstimateRows: getDesignEstimateRowsFromMetadata(metadata),
+    designEstimateApproved:
+      metadata.design_estimate_approved === true ||
+      metadata.designEstimateApproved === true ||
+      designPhaseStatus === 'approved',
+    designPhaseStatus,
   };
 }
 
@@ -168,12 +372,13 @@ function buildDesignPhaseChecklist(
   checkpoint: ProjectCheckpoint,
   form: CheckpointDetailForm
 ) {
-  const hasEstimateOrBypass =
-    hasText(form.designEstimateNotes) || hasText(form.designBypassReason);
+  const isApproved = form.designPhaseStatus === 'approved';
+  const isBypassed = form.designPhaseStatus === 'bypassed';
+  const isEstimateApproved = form.designEstimateApproved || isApproved;
 
   const completionByItemId: Record<string, boolean> = {
-    'design-approval': hasText(form.designApprovalNotes),
-    'design-estimate': hasEstimateOrBypass,
+    'design-approval': isApproved || isBypassed,
+    'design-estimate': isEstimateApproved || isBypassed,
   };
 
   return getCheckpointChecklistItems(checkpoint).map(item => {
@@ -214,6 +419,14 @@ function getCheckpointSaveStatus(
     return checkpoint.status;
   }
 
+  if (checkpoint.checkpoint_key === 'design_phase') {
+    if (checkpoint.status === 'locked') return 'locked';
+
+    return form.designPhaseStatus === 'in_progress'
+      ? 'in_progress'
+      : 'available';
+  }
+
   const hasProgress =
     hasText(form.notes) ||
     hasText(form.clientRequirements) ||
@@ -221,7 +434,11 @@ function getCheckpointSaveStatus(
     hasText(form.customRequirements) ||
     hasText(form.designApprovalNotes) ||
     hasText(form.designEstimateNotes) ||
-    hasText(form.designBypassReason);
+    hasText(form.designBypassReason) ||
+    hasText(form.designServiceEstimateNotes) ||
+    getValidDesignEstimateRows(form.designEstimateRows).length > 0 ||
+    form.designEstimateApproved ||
+    form.designPhaseStatus !== 'waiting';
 
   return hasProgress && checkpoint.status === 'available'
     ? 'in_progress'
@@ -236,7 +453,7 @@ const CHECKPOINT_STATUS_STYLES: Record<string, string> = {
   locked: 'border-border bg-muted text-muted-foreground',
   available: 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   in_progress: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  completed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  completed: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:text-emerald-100',
   skipped: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
 };
 
@@ -935,7 +1152,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     }));
   };
 
-  const saveCheckpointDetails = async (options?: { complete?: boolean }) => {
+  const saveCheckpointDetails = async (options?: {
+    complete?: boolean;
+    designPhaseStatus?: DesignPhaseWorkflowStatus;
+    designEstimateApproved?: boolean;
+  }) => {
     if (!selectedCheckpoint) return;
 
     if (!canManageProjects) {
@@ -953,18 +1174,37 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
     try {
       const metadata = getCheckpointMetadata(selectedCheckpoint);
+      const effectiveForm: CheckpointDetailForm = {
+        ...checkpointDetailForm,
+        designPhaseStatus:
+          options?.designPhaseStatus ?? checkpointDetailForm.designPhaseStatus,
+        designEstimateApproved:
+          options?.designEstimateApproved ?? checkpointDetailForm.designEstimateApproved,
+      };
+
+      const designEstimateRows = getCompactDesignEstimateRows(
+        effectiveForm.designEstimateRows
+      );
+      const designEstimateTotal = calculateDesignEstimateTotal(designEstimateRows);
+
       const nextMetadata = {
         ...metadata,
-        client_requirements: checkpointDetailForm.clientRequirements.trim(),
-        site_measurements: checkpointDetailForm.siteMeasurements.trim(),
-        custom_requirements: checkpointDetailForm.customRequirements.trim(),
-        design_approval_notes: checkpointDetailForm.designApprovalNotes.trim(),
-        design_estimate_notes: checkpointDetailForm.designEstimateNotes.trim(),
-        design_bypass_reason: checkpointDetailForm.designBypassReason.trim(),
+        client_requirements: effectiveForm.clientRequirements.trim(),
+        site_measurements: effectiveForm.siteMeasurements.trim(),
+        custom_requirements: effectiveForm.customRequirements.trim(),
+        design_approval_notes: effectiveForm.designApprovalNotes.trim(),
+        design_estimate_notes: effectiveForm.designEstimateNotes.trim(),
+        design_bypass_reason: effectiveForm.designBypassReason.trim(),
+        design_service_scope: designEstimateRows.map(row => row.serviceName).join(', '),
+        design_fee_amount: String(designEstimateTotal),
+        design_service_estimate_notes: effectiveForm.designServiceEstimateNotes.trim(),
+        design_estimate_rows: designEstimateRows,
+        design_estimate_approved: effectiveForm.designEstimateApproved,
+        design_phase_status: effectiveForm.designPhaseStatus,
       };
 
       const updates = {
-        notes: checkpointDetailForm.notes.trim(),
+        notes: effectiveForm.notes.trim(),
         metadata: nextMetadata,
         checklist: options?.complete
           ? getCheckpointChecklistItems(selectedCheckpoint).map(item => ({
@@ -973,10 +1213,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
               completed: true,
               status: 'completed',
             }))
-          : buildCheckpointChecklist(selectedCheckpoint, checkpointDetailForm),
+          : buildCheckpointChecklist(selectedCheckpoint, effectiveForm),
         status: options?.complete
-          ? 'completed'
-          : getCheckpointSaveStatus(selectedCheckpoint, checkpointDetailForm),
+          ? effectiveForm.designPhaseStatus === 'bypassed'
+            ? 'skipped'
+            : 'completed'
+          : getCheckpointSaveStatus(selectedCheckpoint, effectiveForm),
         completed_at: options?.complete
           ? new Date().toISOString()
           : selectedCheckpoint.completed_at,
@@ -1035,6 +1277,136 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     } finally {
       setIsSavingCheckpointDetail(false);
     }
+  };
+
+
+  const approveDesignEstimate = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'design_phase') {
+      return;
+    }
+
+    if (selectedCheckpoint.status === 'locked') {
+      setCheckpointDetailError('Design Phase is locked. Complete Initial Site Visit first.');
+      return;
+    }
+
+    const validRows = getValidDesignEstimateRows(checkpointDetailForm.designEstimateRows);
+
+    if (validRows.length === 0) {
+      setCheckpointDetailError(
+        'Add at least one service row with service name, quantity, and rate before approving the estimate.'
+      );
+      return;
+    }
+
+    await saveCheckpointDetails({
+      designPhaseStatus: 'in_progress',
+      designEstimateApproved: true,
+    });
+  };
+
+  const approveDesignPhase = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'design_phase') {
+      return;
+    }
+
+    if (!checkpointDetailForm.designEstimateApproved) {
+      setCheckpointDetailError('Approve the design estimate before approving Design Phase.');
+      return;
+    }
+
+    await saveCheckpointDetails({
+      complete: true,
+      designPhaseStatus: 'approved',
+      designEstimateApproved: true,
+    });
+  };
+
+  const bypassDesignPhase = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'design_phase') {
+      return;
+    }
+
+    if (selectedCheckpoint.status === 'locked') {
+      setCheckpointDetailError('Design Phase is locked. Complete Initial Site Visit first.');
+      return;
+    }
+
+    if (!hasText(checkpointDetailForm.designBypassReason)) {
+      setCheckpointDetailError('Add a bypass reason before bypassing Design Phase.');
+      return;
+    }
+
+    await saveCheckpointDetails({
+      complete: true,
+      designPhaseStatus: 'bypassed',
+      designEstimateApproved: false,
+    });
+  };
+
+  const addDesignEstimateRow = () => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      designEstimateRows: [
+        ...current.designEstimateRows,
+        createEmptyDesignEstimateLine(),
+      ],
+    }));
+  };
+
+  const updateDesignEstimateRow = (
+    rowId: string,
+    field: keyof Omit<DesignEstimateLineForm, 'id'>,
+    value: string
+  ) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      designEstimateRows: current.designEstimateRows.map(row =>
+        row.id === rowId ? { ...row, [field]: value } : row
+      ),
+    }));
+  };
+
+  const removeDesignEstimateRow = (rowId: string) => {
+    setCheckpointDetailForm(current => {
+      const nextRows = current.designEstimateRows.filter(row => row.id !== rowId);
+
+      return {
+        ...current,
+        designEstimateRows:
+          nextRows.length > 0 ? nextRows : [createEmptyDesignEstimateLine()],
+      };
+    });
+  };
+
+  const handleExportDesignEstimatePdf = () => {
+    if (!selectedProject || !selectedCheckpoint) return;
+
+    const rows = getValidDesignEstimateRows(checkpointDetailForm.designEstimateRows);
+
+    if (rows.length === 0) {
+      setCheckpointDetailError('Add at least one valid service row before exporting PDF.');
+      return;
+    }
+
+    void exportDesignEstimatePdf({
+      projectName: selectedProject.name || 'Design Estimate',
+      clientName: selectedProject.client || undefined,
+      status: getDesignPhaseStatusLabel(checkpointDetailForm.designPhaseStatus),
+      version: 1,
+      rows: rows.map(row => ({
+        id: row.id,
+        serviceName: row.serviceName,
+        unit: row.unit,
+        quantity: getNumericInputValue(row.quantity),
+        rate: getNumericInputValue(row.rate),
+      })),
+      total: calculateDesignEstimateTotal(rows),
+      preparedAt: new Date().toISOString(),
+    }).catch(error => {
+      console.error('Design estimate PDF export failed.', error);
+      setCheckpointDetailError('Could not export design estimate PDF.');
+    });
   };
 
 
@@ -1820,7 +2192,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                           <span
                             className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${getCheckpointStatusClass(checkpoint.status)}`}
                           >
-                            {getCheckpointStatusLabel(checkpoint.status)}
+                            {checkpoint.checkpoint_key === 'design_phase' && checkpoint.status === 'skipped'
+                              ? 'Bypassed'
+                              : getCheckpointStatusLabel(checkpoint.status)}
                           </span>
                         </div>
 
@@ -1831,7 +2205,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                           {getCheckpointDescription(checkpoint.checkpoint_key)}
                         </p>
 
-                        {canManageProjects && (
+                        {canManageProjects && checkpoint.status !== 'locked' && (
                           <button
                             type="button"
                             onClick={() => openCheckpointDetail(checkpoint)}
@@ -2143,18 +2517,30 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
         {selectedCheckpoint && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
-            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl">
+            <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl">
               <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card p-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Checkpoint Details
-                  </p>
-                  <h2 className="mt-2 text-lg font-semibold text-foreground">
-                    {selectedCheckpoint.title}
-                  </h2>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Save requirements, site notes, and checkpoint decisions without leaving this project.
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        Checkpoint Details
+                      </p>
+                      <h2 className="mt-2 text-lg font-semibold text-foreground">
+                        {selectedCheckpoint.title}
+                      </h2>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Save requirements, site notes, and checkpoint decisions without leaving this project.
+                      </p>
+                    </div>
+
+                    {selectedCheckpoint.checkpoint_key === 'design_phase' && (
+                      <span
+                        className={`w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${DESIGN_PHASE_STATUS_STYLES[checkpointDetailForm.designPhaseStatus]}`}
+                      >
+                        {getDesignPhaseStatusLabel(checkpointDetailForm.designPhaseStatus)}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <button
@@ -2209,51 +2595,271 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 )}
 
                 {selectedCheckpoint.checkpoint_key === 'design_phase' && (
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-4">
                     <div className="rounded-2xl border border-border bg-background p-4">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Design Approval
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Design Service Estimator
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Available during Waiting. Add service rows like Cost Estimate, then approve to move Design Phase to In-Progress.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <span
+                            className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                              checkpointDetailForm.designEstimateApproved
+                                ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:text-emerald-100'
+                                : 'border-border bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {checkpointDetailForm.designEstimateApproved ? 'Estimate Approved' : 'Estimate Draft'}
+                          </span>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleExportDesignEstimatePdf}
+                            className="w-fit gap-2"
+                          >
+                            <FileText className="h-4 w-4" />
+                            Export PDF
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 overflow-x-auto pb-2">
+                        <div className="min-w-[940px] space-y-2">
+                          <div
+                            className="grid gap-3 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+                            style={{
+                              gridTemplateColumns:
+                                'minmax(260px, 2fr) minmax(160px, 1fr) minmax(110px, 0.7fr) minmax(140px, 0.8fr) minmax(150px, 0.8fr) 44px',
+                            }}
+                          >
+                            <span>Service Name</span>
+                            <span>Unit</span>
+                            <span>Qty</span>
+                            <span>Rate</span>
+                            <span>Total Row Rate</span>
+                            <span />
+                          </div>
+
+                          {checkpointDetailForm.designEstimateRows.map(row => {
+                            const rowTotal = calculateDesignEstimateRowTotal(row);
+
+                            return (
+                              <div
+                                key={row.id}
+                                className="grid items-center gap-3 rounded-2xl border border-border bg-card p-3"
+                                style={{
+                                  gridTemplateColumns:
+                                    'minmax(260px, 2fr) minmax(160px, 1fr) minmax(110px, 0.7fr) minmax(140px, 0.8fr) minmax(150px, 0.8fr) 44px',
+                                }}
+                              >
+                                <input
+                                  type="text"
+                                  value={row.serviceName}
+                                  onChange={event =>
+                                    updateDesignEstimateRow(row.id, 'serviceName', event.target.value)
+                                  }
+                                  className="h-11 min-w-0 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                  placeholder="Concept design / 3D view"
+                                />
+
+                                <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-background p-1">
+                                  {DESIGN_ESTIMATE_UNITS.map(unit => (
+                                    <button
+                                      key={unit}
+                                      type="button"
+                                      onClick={() =>
+                                        updateDesignEstimateRow(row.id, 'unit', unit)
+                                      }
+                                      className={
+                                        row.unit === unit
+                                          ? 'rounded-lg bg-foreground px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-background'
+                                          : 'rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+                                      }
+                                    >
+                                      {unit}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={row.quantity}
+                                  onChange={event =>
+                                    updateDesignEstimateRow(row.id, 'quantity', event.target.value)
+                                  }
+                                  className="h-11 min-w-0 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                  placeholder="1"
+                                />
+
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={row.rate}
+                                  onChange={event =>
+                                    updateDesignEstimateRow(row.id, 'rate', event.target.value)
+                                  }
+                                  className="h-11 min-w-0 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                  placeholder="25000"
+                                />
+
+                                <div className="rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground">
+                                  {formatINR(rowTotal)}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeDesignEstimateRow(row.id)}
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                                  aria-label="Remove design estimate row"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 lg:flex-row lg:items-center lg:justify-between">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addDesignEstimateRow}
+                          className="w-fit gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Row
+                        </Button>
+
+                        <div className="rounded-2xl border border-border bg-card px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            Estimate Total
+                          </p>
+                          <p className="mt-1 text-xl font-semibold text-foreground">
+                            {formatINR(calculateDesignEstimateTotal(checkpointDetailForm.designEstimateRows))}
+                          </p>
+                        </div>
+                      </div>
+
+                      <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        Estimate Notes
+                        <textarea
+                          value={checkpointDetailForm.designServiceEstimateNotes}
+                          onChange={event =>
+                            updateCheckpointDetailField('designServiceEstimateNotes', event.target.value)
+                          }
+                          rows={3}
+                          className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="Add assumptions, exclusions, scope notes, or client-facing estimate notes."
+                        />
                       </label>
-                      <textarea
-                        value={checkpointDetailForm.designApprovalNotes}
-                        onChange={event =>
-                          updateCheckpointDetailField('designApprovalNotes', event.target.value)
-                        }
-                        rows={4}
-                        className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                        placeholder="Record approval status, approved concept/version, client comments, and pending revisions."
-                      />
+
+                      {canManageProjects &&
+                        selectedCheckpoint.status !== 'locked' &&
+                        !isCheckpointComplete(selectedCheckpoint) &&
+                        !checkpointDetailForm.designEstimateApproved && (
+                          <Button
+                            type="button"
+                            onClick={approveDesignEstimate}
+                            disabled={isSavingCheckpointDetail}
+                            className="mt-4"
+                          >
+                            {isSavingCheckpointDetail ? 'Saving...' : 'Approve Design Estimate'}
+                          </Button>
+                        )}
                     </div>
 
-                    <div className="rounded-2xl border border-border bg-background p-4">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Design Estimate / Bypass
-                      </label>
-                      <textarea
-                        value={checkpointDetailForm.designEstimateNotes}
-                        onChange={event =>
-                          updateCheckpointDetailField('designEstimateNotes', event.target.value)
-                        }
-                        rows={4}
-                        className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                        placeholder="Record design estimate reference, estimate status, or confirmation that design estimate is not required."
-                      />
-                    </div>
+                    {checkpointDetailForm.designEstimateApproved &&
+                      checkpointDetailForm.designPhaseStatus !== 'approved' &&
+                      checkpointDetailForm.designPhaseStatus !== 'bypassed' && (
+                        <div className="rounded-2xl border border-emerald-400/50 bg-emerald-500/20 p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-100">
+                                Ready For Design Approval
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                After the design is approved, approve this phase to unlock Execution.
+                              </p>
+                            </div>
 
-                    <div className="rounded-2xl border border-border bg-background p-4 md:col-span-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Bypass Reason
-                      </label>
-                      <textarea
-                        value={checkpointDetailForm.designBypassReason}
-                        onChange={event =>
-                          updateCheckpointDetailField('designBypassReason', event.target.value)
-                        }
-                        rows={3}
-                        className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                        placeholder="Use this only when the design estimate is intentionally bypassed."
-                      />
-                    </div>
+                            {canManageProjects &&
+                              selectedCheckpoint.status !== 'locked' &&
+                              !isCheckpointComplete(selectedCheckpoint) && (
+                                <Button
+                                  type="button"
+                                  onClick={approveDesignPhase}
+                                  disabled={isSavingCheckpointDetail}
+                                >
+                                  {isSavingCheckpointDetail ? 'Saving...' : 'Approve Design Phase'}
+                                </Button>
+                              )}
+                          </div>
+
+                          <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            Approval Notes
+                            <textarea
+                              value={checkpointDetailForm.designApprovalNotes}
+                              onChange={event =>
+                                updateCheckpointDetailField('designApprovalNotes', event.target.value)
+                              }
+                              rows={3}
+                              className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                              placeholder="Record approval status, approved concept/version, client comments, and pending revisions."
+                            />
+                          </label>
+                        </div>
+                      )}
+
+                    {checkpointDetailForm.designPhaseStatus !== 'approved' &&
+                      checkpointDetailForm.designPhaseStatus !== 'bypassed' && (
+                        <div className="rounded-2xl border border-border bg-background p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Bypass Design Phase
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                Use bypass only when the design phase is intentionally skipped. A reason is required.
+                              </p>
+                            </div>
+
+                            {canManageProjects &&
+                              selectedCheckpoint.status !== 'locked' &&
+                              !isCheckpointComplete(selectedCheckpoint) && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={bypassDesignPhase}
+                                  disabled={isSavingCheckpointDetail}
+                                >
+                                  {isSavingCheckpointDetail ? 'Saving...' : 'Bypass Design Phase'}
+                                </Button>
+                              )}
+                          </div>
+
+                          <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            Bypass Reason
+                            <textarea
+                              value={checkpointDetailForm.designBypassReason}
+                              onChange={event =>
+                                updateCheckpointDetailField('designBypassReason', event.target.value)
+                              }
+                              rows={3}
+                              className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                              placeholder="Explain why the design phase is being bypassed."
+                            />
+                          </label>
+                        </div>
+                      )}
                   </div>
                 )}
 
@@ -2310,6 +2916,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 </Button>
 
                 {canManageProjects &&
+                  selectedCheckpoint.checkpoint_key !== 'design_phase' &&
                   selectedCheckpoint.status !== 'locked' &&
                   !isCheckpointComplete(selectedCheckpoint) && (
                     <Button
