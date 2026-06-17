@@ -470,11 +470,11 @@ function getCheckpointStatusLabel(status: ProjectCheckpoint['status']) {
 
 function getCheckpointCardClass(checkpoint: ProjectCheckpoint) {
   if (isCheckpointComplete(checkpoint)) {
-    return 'border-emerald-500/25 bg-emerald-500/10';
+    return 'border-emerald-500/25 bg-emerald-500/10 dark:border-[#00E676]/85 dark:bg-[#003D27] dark:shadow-[0_0_38px_rgba(0,230,118,0.36)] dark:ring-1 dark:ring-[#00E676]/35';
   }
 
   if (checkpoint.status === 'available' || checkpoint.status === 'in_progress') {
-    return 'border-sky-500/25 bg-sky-500/10';
+    return 'border-sky-500/25 bg-sky-500/10 dark:border-sky-400/70 dark:bg-sky-950/55 dark:shadow-[0_0_34px_rgba(14,165,233,0.30)] dark:ring-1 dark:ring-sky-400/25';
   }
 
   return 'border-border bg-card';
