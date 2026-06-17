@@ -116,6 +116,18 @@ export interface ProjectCheckpoint {
   updated_at: string;
 }
 
+export interface ProjectDocument {
+  id: string;
+  project_id: string;
+  name: string;
+  document_url: string;
+  category: string;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProjectExpense {
   id: string;
   project_id: string;

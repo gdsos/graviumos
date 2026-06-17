@@ -4,7 +4,7 @@ import { ArrowLeft, Check, ChevronDown, ExternalLink, MoreHorizontal, Pencil, Pl
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase, type Lead, type Project, type ProjectCheckpoint } from '../../lib/supabase';
+import { supabase, type Lead, type Project, type ProjectCheckpoint, type ProjectDocument } from '../../lib/supabase';
 import type { ProjectWorkspaceMode } from './projectTypes';
 import { ensureProjectCheckpoints, sortProjectCheckpoints, updateProjectCheckpoint } from './projectCheckpoints';
 
@@ -45,12 +45,18 @@ const EMPTY_PROJECT_FORM: ProjectFormState = {
   description: '',
 };
 
-type CheckpointDocumentForm = {
-  id: string;
-  title: string;
-  url: string;
-  notes: string;
+type ProjectDocumentForm = {
+  name: string;
+  document_url: string;
   category: string;
+  notes: string;
+};
+
+const EMPTY_PROJECT_DOCUMENT_FORM: ProjectDocumentForm = {
+  name: '',
+  document_url: '',
+  category: 'Project Document',
+  notes: '',
 };
 
 type CheckpointDetailTextField =
@@ -70,7 +76,6 @@ interface CheckpointDetailForm {
   designApprovalNotes: string;
   designEstimateNotes: string;
   designBypassReason: string;
-  documents: CheckpointDocumentForm[];
 }
 
 const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
@@ -81,7 +86,6 @@ const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
   designApprovalNotes: '',
   designEstimateNotes: '',
   designBypassReason: '',
-  documents: [],
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -100,28 +104,25 @@ function getCheckpointMetadata(checkpoint: ProjectCheckpoint) {
   return isRecord(checkpoint.metadata) ? checkpoint.metadata : {};
 }
 
-function getCheckpointDocuments(checkpoint: ProjectCheckpoint): CheckpointDocumentForm[] {
-  return Array.isArray(checkpoint.attachments)
-    ? checkpoint.attachments
-        .filter(isRecord)
-        .map((document, index) => ({
-          id: toSafeString(document.id) || `document-${index + 1}`,
-          title: toSafeString(document.title ?? document.name),
-          url: toSafeString(document.url ?? document.link ?? document.href),
-          notes: toSafeString(document.notes ?? document.description),
-          category: toSafeString(document.category) || 'Project Document',
-        }))
-    : [];
+function getSafeDocumentUrl(value: string | null | undefined) {
+  const trimmed = (value || '').trim();
+
+  if (!trimmed) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
 }
 
-function createEmptyCheckpointDocument(): CheckpointDocumentForm {
-  return {
-    id: `document-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: '',
-    url: '',
-    notes: '',
-    category: 'Project Document',
-  };
+function getProjectDocumentTitle(document: ProjectDocument, index: number) {
+  return document.name?.trim() || `Project Document ${index + 1}`;
+}
+
+function getProjectDocumentCategory(document: ProjectDocument) {
+  return document.category?.trim() || 'Project Document';
 }
 
 function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetailForm {
@@ -135,34 +136,15 @@ function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetai
     designApprovalNotes: toSafeString(metadata.design_approval_notes ?? metadata.designApprovalNotes),
     designEstimateNotes: toSafeString(metadata.design_estimate_notes ?? metadata.designEstimateNotes),
     designBypassReason: toSafeString(metadata.design_bypass_reason ?? metadata.designBypassReason),
-    documents: getCheckpointDocuments(checkpoint),
   };
-}
-
-function getCompactCheckpointDocuments(form: CheckpointDetailForm) {
-  return form.documents
-    .map(document => ({
-      id: document.id,
-      title: document.title.trim(),
-      url: document.url.trim(),
-      notes: document.notes.trim(),
-      category: document.category.trim() || 'Project Document',
-    }))
-    .filter(document =>
-      hasText(document.title) ||
-      hasText(document.url) ||
-      hasText(document.notes)
-    );
 }
 
 function buildInitialSiteVisitChecklist(
   checkpoint: ProjectCheckpoint,
   form: CheckpointDetailForm
 ) {
-  const compactDocuments = getCompactCheckpointDocuments(form);
   const completionByItemId: Record<string, boolean> = {
     'site-measurements': hasText(form.siteMeasurements),
-    'site-images': compactDocuments.length > 0,
     'client-requirements': hasText(form.clientRequirements),
     'custom-requirements': hasText(form.customRequirements),
   };
@@ -239,8 +221,7 @@ function getCheckpointSaveStatus(
     hasText(form.customRequirements) ||
     hasText(form.designApprovalNotes) ||
     hasText(form.designEstimateNotes) ||
-    hasText(form.designBypassReason) ||
-    getCompactCheckpointDocuments(form).length > 0;
+    hasText(form.designBypassReason);
 
   return hasProgress && checkpoint.status === 'available'
     ? 'in_progress'
@@ -579,6 +560,16 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     useState<CheckpointDetailForm>(EMPTY_CHECKPOINT_DETAIL_FORM);
   const [checkpointDetailError, setCheckpointDetailError] = useState('');
   const [isSavingCheckpointDetail, setIsSavingCheckpointDetail] = useState(false);
+  const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
+  const [projectDocumentsLoading, setProjectDocumentsLoading] = useState(false);
+  const [projectDocumentError, setProjectDocumentError] = useState('');
+  const [isProjectDocumentModalOpen, setIsProjectDocumentModalOpen] = useState(false);
+  const [projectDocumentForm, setProjectDocumentForm] =
+    useState<ProjectDocumentForm>(EMPTY_PROJECT_DOCUMENT_FORM);
+  const [projectDocumentModalError, setProjectDocumentModalError] = useState('');
+  const [isSavingProjectDocument, setIsSavingProjectDocument] = useState(false);
+  const [selectedProjectDocument, setSelectedProjectDocument] =
+    useState<ProjectDocument | null>(null);
 
   const isAdminMode = mode === 'admin';
   const canManageProjects = isAdminMode && isAdmin();
@@ -727,6 +718,54 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     };
   }, [selectedProject, canManageProjects, profile?.id]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadProjectDocuments() {
+      if (!selectedProject) {
+        setProjectDocuments([]);
+        setProjectDocumentError('');
+        setProjectDocumentsLoading(false);
+        return;
+      }
+
+      setProjectDocumentsLoading(true);
+      setProjectDocumentError('');
+
+      try {
+        const { data, error: documentsError } = await supabase
+          .from('project_documents')
+          .select('*')
+          .eq('project_id', selectedProject.id)
+          .order('created_at', { ascending: false });
+
+        if (documentsError) throw documentsError;
+
+        if (!isMounted) return;
+        setProjectDocuments((data || []) as ProjectDocument[]);
+      } catch (documentsError) {
+        if (!isMounted) return;
+
+        setProjectDocumentError(
+          documentsError instanceof Error
+            ? documentsError.message
+            : 'Could not load project documents.'
+        );
+        setProjectDocuments([]);
+      } finally {
+        if (isMounted) {
+          setProjectDocumentsLoading(false);
+        }
+      }
+    }
+
+    void loadProjectDocuments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProject]);
+
   const filteredProjects = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
@@ -788,6 +827,91 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     });
   };
 
+  const openProjectDocumentModal = () => {
+    setProjectDocumentForm(EMPTY_PROJECT_DOCUMENT_FORM);
+    setProjectDocumentModalError('');
+    setIsProjectDocumentModalOpen(true);
+  };
+
+  const closeProjectDocumentModal = () => {
+    setIsProjectDocumentModalOpen(false);
+    setProjectDocumentForm(EMPTY_PROJECT_DOCUMENT_FORM);
+    setProjectDocumentModalError('');
+    setIsSavingProjectDocument(false);
+  };
+
+  const updateProjectDocumentField = (
+    field: keyof ProjectDocumentForm,
+    value: string
+  ) => {
+    setProjectDocumentForm(current => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const saveProjectDocument = async () => {
+    if (!selectedProject) return;
+
+    if (!canManageProjects) {
+      setProjectDocumentModalError('Only admins can add project documents.');
+      return;
+    }
+
+    const name = projectDocumentForm.name.trim();
+    const documentUrl = projectDocumentForm.document_url.trim();
+    const category = projectDocumentForm.category.trim() || 'Project Document';
+    const notes = projectDocumentForm.notes.trim();
+
+    if (!name) {
+      setProjectDocumentModalError('Document name is required.');
+      return;
+    }
+
+    if (!documentUrl) {
+      setProjectDocumentModalError('Document link is required.');
+      return;
+    }
+
+    if (!getSafeDocumentUrl(documentUrl)) {
+      setProjectDocumentModalError('Use a valid http or https document link.');
+      return;
+    }
+
+    setIsSavingProjectDocument(true);
+    setProjectDocumentModalError('');
+
+    try {
+      const { data, error: documentError } = await supabase
+        .from('project_documents')
+        .insert({
+          project_id: selectedProject.id,
+          name,
+          document_url: documentUrl,
+          category,
+          notes,
+          created_by: profile?.id ?? null,
+        })
+        .select('*')
+        .single();
+
+      if (documentError) throw documentError;
+
+      const savedDocument = data as ProjectDocument;
+      setProjectDocuments(current => [savedDocument, ...current]);
+      setSelectedProjectDocument(savedDocument);
+      closeProjectDocumentModal();
+    } catch (documentError) {
+      setProjectDocumentModalError(
+        documentError instanceof Error
+          ? documentError.message
+          : 'Could not save project document.'
+      );
+    } finally {
+      setIsSavingProjectDocument(false);
+    }
+  };
+
   const openCheckpointDetail = (checkpoint: ProjectCheckpoint) => {
     setSelectedCheckpoint(checkpoint);
     setCheckpointDetailForm(getCheckpointDetailForm(checkpoint));
@@ -808,35 +932,6 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     setCheckpointDetailForm(current => ({
       ...current,
       [field]: value,
-    }));
-  };
-
-  const addCheckpointDocument = () => {
-    setCheckpointDetailForm(current => ({
-      ...current,
-      documents: [...current.documents, createEmptyCheckpointDocument()],
-    }));
-  };
-
-  const updateCheckpointDocument = (
-    documentId: string,
-    field: keyof Omit<CheckpointDocumentForm, 'id'>,
-    value: string
-  ) => {
-    setCheckpointDetailForm(current => ({
-      ...current,
-      documents: current.documents.map(document =>
-        document.id === documentId
-          ? { ...document, [field]: value }
-          : document
-      ),
-    }));
-  };
-
-  const removeCheckpointDocument = (documentId: string) => {
-    setCheckpointDetailForm(current => ({
-      ...current,
-      documents: current.documents.filter(document => document.id !== documentId),
     }));
   };
 
@@ -870,9 +965,15 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
       const updates = {
         notes: checkpointDetailForm.notes.trim(),
-        attachments: getCompactCheckpointDocuments(checkpointDetailForm),
         metadata: nextMetadata,
-        checklist: buildCheckpointChecklist(selectedCheckpoint, checkpointDetailForm),
+        checklist: options?.complete
+          ? getCheckpointChecklistItems(selectedCheckpoint).map(item => ({
+              ...item,
+              is_completed: true,
+              completed: true,
+              status: 'completed',
+            }))
+          : buildCheckpointChecklist(selectedCheckpoint, checkpointDetailForm),
         status: options?.complete
           ? 'completed'
           : getCheckpointSaveStatus(selectedCheckpoint, checkpointDetailForm),
@@ -1599,6 +1700,81 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             </div>
 
             <div className="mt-5 rounded-2xl border border-border bg-background p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Project Documents
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Store project-level files, Google Drive links, site images, PDFs, and client-shared documents here.
+                  </p>
+                </div>
+
+                {canManageProjects && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={openProjectDocumentModal}
+                    className="w-fit gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Document
+                  </Button>
+                )}
+              </div>
+
+              {projectDocumentError ? (
+                <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                  {projectDocumentError}
+                </div>
+              ) : projectDocumentsLoading ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  Loading project documents...
+                </div>
+              ) : projectDocuments.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  No project documents added yet.
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {projectDocuments.map((document, index) => {
+                    const documentUrl = getSafeDocumentUrl(document.document_url);
+                    const title = getProjectDocumentTitle(document, index);
+
+                    return (
+                      <button
+                        key={document.id}
+                        type="button"
+                        onClick={() => setSelectedProjectDocument(document)}
+                        className="group min-h-36 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-sky-500/30 hover:bg-sky-500/5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            {getProjectDocumentCategory(document)}
+                          </span>
+
+                          <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+                        </div>
+
+                        <p className="mt-4 text-sm font-semibold text-foreground">
+                          {title}
+                        </p>
+
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                          {document.notes || (documentUrl ? 'Click to preview this document.' : 'No preview link added.')}
+                        </p>
+
+                        <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Preview
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-border bg-background p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
@@ -1802,6 +1978,169 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         {projectModal}
         {deleteDialog}
 
+        {isProjectDocumentModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
+            <div className="w-full max-w-2xl rounded-3xl border border-border bg-card shadow-2xl">
+              <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Project Documents
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold text-foreground">
+                    Add Document
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Add a project-level link for drawings, site images, PDFs, approvals, or Google Drive files.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeProjectDocumentModal}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Close add document"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4 p-5">
+                {projectDocumentModalError && (
+                  <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                    {projectDocumentModalError}
+                  </div>
+                )}
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Document Name
+                  <input
+                    type="text"
+                    value={projectDocumentForm.name}
+                    onChange={event => updateProjectDocumentField('name', event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                    placeholder="Site measurement sheet / approved design PDF"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Document Link
+                  <input
+                    type="text"
+                    value={projectDocumentForm.document_url}
+                    onChange={event => updateProjectDocumentField('document_url', event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                    placeholder="https://drive.google.com/..."
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Category
+                  <input
+                    type="text"
+                    value={projectDocumentForm.category}
+                    onChange={event => updateProjectDocumentField('category', event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                    placeholder="Site Images / PDF / Approval / Measurement"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Notes
+                  <textarea
+                    value={projectDocumentForm.notes}
+                    onChange={event => updateProjectDocumentField('notes', event.target.value)}
+                    rows={3}
+                    className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                    placeholder="Add a short note about this document."
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-border p-5 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeProjectDocumentModal}
+                  disabled={isSavingProjectDocument}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={saveProjectDocument}
+                  disabled={isSavingProjectDocument}
+                >
+                  {isSavingProjectDocument ? 'Saving...' : 'Save Document'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedProjectDocument && (() => {
+          const documentUrl = getSafeDocumentUrl(selectedProjectDocument.document_url);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
+              <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+                <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      {getProjectDocumentCategory(selectedProjectDocument)}
+                    </p>
+                    <h2 className="mt-2 text-lg font-semibold text-foreground">
+                      {selectedProjectDocument.name}
+                    </h2>
+                    {selectedProjectDocument.notes && (
+                      <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                        {selectedProjectDocument.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProjectDocument(null)}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Close document preview"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="max-h-[calc(90vh-154px)] overflow-y-auto p-5">
+                  {documentUrl ? (
+                    <div className="space-y-4">
+                      <div className="overflow-hidden rounded-2xl border border-border bg-background">
+                        <iframe
+                          title={selectedProjectDocument.name}
+                          src={documentUrl}
+                          className="h-[58vh] w-full bg-background"
+                        />
+                      </div>
+
+                      <a
+                        href={documentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                      >
+                        Open document in new tab
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                      This document does not have a valid preview link.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {selectedCheckpoint && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
             <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl">
@@ -1814,7 +2153,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     {selectedCheckpoint.title}
                   </h2>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Save requirements, site notes, and document links without leaving this project.
+                    Save requirements, site notes, and checkpoint decisions without leaving this project.
                   </p>
                 </div>
 
@@ -1931,111 +2270,6 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
                     placeholder="Add internal notes for this checkpoint."
                   />
-                </div>
-
-                <div className="rounded-2xl border border-border bg-background p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Project Documents
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Add Google Drive, image folder, PDF, or file links related to this checkpoint.
-                      </p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={addCheckpointDocument}
-                      className="w-fit gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Document
-                    </Button>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {checkpointDetailForm.documents.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                        No document links added yet.
-                      </div>
-                    ) : (
-                      checkpointDetailForm.documents.map((document, index) => (
-                        <div
-                          key={document.id}
-                          className="rounded-2xl border border-border bg-card p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                              Document {index + 1}
-                            </p>
-
-                            <button
-                              type="button"
-                              onClick={() => removeCheckpointDocument(document.id)}
-                              className="text-xs font-semibold text-destructive"
-                            >
-                              Remove
-                            </button>
-                          </div>
-
-                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <label className="text-xs font-medium text-muted-foreground">
-                              Name
-                              <input
-                                type="text"
-                                value={document.title}
-                                onChange={event =>
-                                  updateCheckpointDocument(document.id, 'title', event.target.value)
-                                }
-                                className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                                placeholder="Site images / measurement sheet"
-                              />
-                            </label>
-
-                            <label className="text-xs font-medium text-muted-foreground">
-                              Link
-                              <input
-                                type="text"
-                                value={document.url}
-                                onChange={event =>
-                                  updateCheckpointDocument(document.id, 'url', event.target.value)
-                                }
-                                className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                                placeholder="https://drive.google.com/..."
-                              />
-                            </label>
-                          </div>
-
-                          <label className="mt-3 block text-xs font-medium text-muted-foreground">
-                            Notes
-                            <textarea
-                              value={document.notes}
-                              onChange={event =>
-                                updateCheckpointDocument(document.id, 'notes', event.target.value)
-                              }
-                              rows={2}
-                              className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                              placeholder="Short context for this document."
-                            />
-                          </label>
-
-                          {document.url.trim() && (
-                            <a
-                              href={document.url.trim()}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-foreground underline-offset-4 hover:underline"
-                            >
-                              Open link
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
                 </div>
 
                 {selectedCheckpoint.checkpoint_key === 'initial_site_visit' && (
