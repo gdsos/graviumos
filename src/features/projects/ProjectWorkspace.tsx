@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, type Lead, type Project, type ProjectCheckpoint } from '../../lib/supabase';
 import type { ProjectWorkspaceMode } from './projectTypes';
-import { ensureProjectCheckpoints, sortProjectCheckpoints } from './projectCheckpoints';
+import { ensureProjectCheckpoints, sortProjectCheckpoints, updateProjectCheckpoint } from './projectCheckpoints';
 
 interface ProjectWorkspaceProps {
   mode: ProjectWorkspaceMode;
@@ -44,6 +44,151 @@ const EMPTY_PROJECT_FORM: ProjectFormState = {
   status: 'Active',
   description: '',
 };
+
+type CheckpointDocumentForm = {
+  id: string;
+  title: string;
+  url: string;
+  notes: string;
+  category: string;
+};
+
+type CheckpointDetailTextField =
+  | 'notes'
+  | 'clientRequirements'
+  | 'siteMeasurements'
+  | 'customRequirements';
+
+interface CheckpointDetailForm {
+  notes: string;
+  clientRequirements: string;
+  siteMeasurements: string;
+  customRequirements: string;
+  documents: CheckpointDocumentForm[];
+}
+
+const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
+  notes: '',
+  clientRequirements: '',
+  siteMeasurements: '',
+  customRequirements: '',
+  documents: [],
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function toSafeString(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
+function hasText(value: string) {
+  return value.trim().length > 0;
+}
+
+function getCheckpointMetadata(checkpoint: ProjectCheckpoint) {
+  return isRecord(checkpoint.metadata) ? checkpoint.metadata : {};
+}
+
+function getCheckpointDocuments(checkpoint: ProjectCheckpoint): CheckpointDocumentForm[] {
+  return Array.isArray(checkpoint.attachments)
+    ? checkpoint.attachments
+        .filter(isRecord)
+        .map((document, index) => ({
+          id: toSafeString(document.id) || `document-${index + 1}`,
+          title: toSafeString(document.title ?? document.name),
+          url: toSafeString(document.url ?? document.link ?? document.href),
+          notes: toSafeString(document.notes ?? document.description),
+          category: toSafeString(document.category) || 'Project Document',
+        }))
+    : [];
+}
+
+function createEmptyCheckpointDocument(): CheckpointDocumentForm {
+  return {
+    id: `document-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: '',
+    url: '',
+    notes: '',
+    category: 'Project Document',
+  };
+}
+
+function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetailForm {
+  const metadata = getCheckpointMetadata(checkpoint);
+
+  return {
+    notes: checkpoint.notes || '',
+    clientRequirements: toSafeString(metadata.client_requirements ?? metadata.clientRequirements),
+    siteMeasurements: toSafeString(metadata.site_measurements ?? metadata.siteMeasurements),
+    customRequirements: toSafeString(metadata.custom_requirements ?? metadata.customRequirements),
+    documents: getCheckpointDocuments(checkpoint),
+  };
+}
+
+function getCompactCheckpointDocuments(form: CheckpointDetailForm) {
+  return form.documents
+    .map(document => ({
+      id: document.id,
+      title: document.title.trim(),
+      url: document.url.trim(),
+      notes: document.notes.trim(),
+      category: document.category.trim() || 'Project Document',
+    }))
+    .filter(document =>
+      hasText(document.title) ||
+      hasText(document.url) ||
+      hasText(document.notes)
+    );
+}
+
+function buildInitialSiteVisitChecklist(
+  checkpoint: ProjectCheckpoint,
+  form: CheckpointDetailForm
+) {
+  const compactDocuments = getCompactCheckpointDocuments(form);
+  const completionByItemId: Record<string, boolean> = {
+    'site-measurements': hasText(form.siteMeasurements),
+    'site-images': compactDocuments.length > 0,
+    'client-requirements': hasText(form.clientRequirements),
+    'custom-requirements': hasText(form.customRequirements),
+  };
+
+  return getCheckpointChecklistItems(checkpoint).map(item => {
+    const itemId = toSafeString(item.id);
+    const shouldMarkComplete = completionByItemId[itemId];
+
+    return shouldMarkComplete
+      ? {
+          ...item,
+          is_completed: true,
+          completed: true,
+          status: 'completed',
+        }
+      : item;
+  });
+}
+
+function getCheckpointSaveStatus(
+  checkpoint: ProjectCheckpoint,
+  form: CheckpointDetailForm
+): ProjectCheckpoint['status'] {
+  if (checkpoint.status === 'completed' || checkpoint.status === 'skipped') {
+    return checkpoint.status;
+  }
+
+  const hasProgress =
+    hasText(form.notes) ||
+    hasText(form.clientRequirements) ||
+    hasText(form.siteMeasurements) ||
+    hasText(form.customRequirements) ||
+    getCompactCheckpointDocuments(form).length > 0;
+
+  return hasProgress && checkpoint.status === 'available'
+    ? 'in_progress'
+    : checkpoint.status;
+}
 
 function getProjectStatusClass(status: string | null | undefined) {
   return STATUS_STYLES[status || ''] || 'border-border bg-muted text-muted-foreground';
@@ -372,6 +517,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const [projectCheckpoints, setProjectCheckpoints] = useState<ProjectCheckpoint[]>([]);
   const [projectCheckpointsLoading, setProjectCheckpointsLoading] = useState(false);
   const [projectCheckpointError, setProjectCheckpointError] = useState('');
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<ProjectCheckpoint | null>(null);
+  const [checkpointDetailForm, setCheckpointDetailForm] =
+    useState<CheckpointDetailForm>(EMPTY_CHECKPOINT_DETAIL_FORM);
+  const [checkpointDetailError, setCheckpointDetailError] = useState('');
+  const [isSavingCheckpointDetail, setIsSavingCheckpointDetail] = useState(false);
 
   const isAdminMode = mode === 'admin';
   const canManageProjects = isAdminMode && isAdmin();
@@ -579,6 +729,154 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       right: Math.max(16, window.innerWidth - rect.right),
       project,
     });
+  };
+
+  const openCheckpointDetail = (checkpoint: ProjectCheckpoint) => {
+    setSelectedCheckpoint(checkpoint);
+    setCheckpointDetailForm(getCheckpointDetailForm(checkpoint));
+    setCheckpointDetailError('');
+  };
+
+  const closeCheckpointDetail = () => {
+    setSelectedCheckpoint(null);
+    setCheckpointDetailForm(EMPTY_CHECKPOINT_DETAIL_FORM);
+    setCheckpointDetailError('');
+    setIsSavingCheckpointDetail(false);
+  };
+
+  const updateCheckpointDetailField = (
+    field: CheckpointDetailTextField,
+    value: string
+  ) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const addCheckpointDocument = () => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      documents: [...current.documents, createEmptyCheckpointDocument()],
+    }));
+  };
+
+  const updateCheckpointDocument = (
+    documentId: string,
+    field: keyof Omit<CheckpointDocumentForm, 'id'>,
+    value: string
+  ) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      documents: current.documents.map(document =>
+        document.id === documentId
+          ? { ...document, [field]: value }
+          : document
+      ),
+    }));
+  };
+
+  const removeCheckpointDocument = (documentId: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      documents: current.documents.filter(document => document.id !== documentId),
+    }));
+  };
+
+  const saveCheckpointDetails = async (options?: { complete?: boolean }) => {
+    if (!selectedCheckpoint) return;
+
+    if (!canManageProjects) {
+      setCheckpointDetailError('Only admins can update project checkpoint details.');
+      return;
+    }
+
+    if (selectedCheckpoint.status === 'locked') {
+      setCheckpointDetailError('This checkpoint is locked. Complete the previous stage first.');
+      return;
+    }
+
+    setIsSavingCheckpointDetail(true);
+    setCheckpointDetailError('');
+
+    try {
+      const metadata = getCheckpointMetadata(selectedCheckpoint);
+      const nextMetadata = {
+        ...metadata,
+        client_requirements: checkpointDetailForm.clientRequirements.trim(),
+        site_measurements: checkpointDetailForm.siteMeasurements.trim(),
+        custom_requirements: checkpointDetailForm.customRequirements.trim(),
+      };
+
+      const updates = {
+        notes: checkpointDetailForm.notes.trim(),
+        attachments: getCompactCheckpointDocuments(checkpointDetailForm),
+        metadata: nextMetadata,
+        checklist:
+          selectedCheckpoint.checkpoint_key === 'initial_site_visit'
+            ? buildInitialSiteVisitChecklist(selectedCheckpoint, checkpointDetailForm)
+            : selectedCheckpoint.checklist,
+        status: options?.complete
+          ? 'completed'
+          : getCheckpointSaveStatus(selectedCheckpoint, checkpointDetailForm),
+        completed_at: options?.complete
+          ? new Date().toISOString()
+          : selectedCheckpoint.completed_at,
+        completed_by: options?.complete
+          ? profile?.id ?? null
+          : selectedCheckpoint.completed_by,
+      } as Parameters<typeof updateProjectCheckpoint>[1];
+
+      const savedCheckpoint = await updateProjectCheckpoint(selectedCheckpoint.id, updates);
+
+      if (!savedCheckpoint) {
+        throw new Error('Could not save checkpoint details.');
+      }
+
+      let unlockedCheckpoint: ProjectCheckpoint | null = null;
+
+      if (options?.complete) {
+        const sortedCheckpoints = sortProjectCheckpoints(projectCheckpoints);
+        const currentIndex = sortedCheckpoints.findIndex(
+          checkpoint => checkpoint.id === selectedCheckpoint.id
+        );
+        const nextCheckpoint = sortedCheckpoints[currentIndex + 1];
+
+        if (nextCheckpoint?.status === 'locked') {
+          unlockedCheckpoint = await updateProjectCheckpoint(nextCheckpoint.id, {
+            status: 'available',
+          });
+        }
+      }
+
+      setProjectCheckpoints(current =>
+        sortProjectCheckpoints(
+          current.map(checkpoint => {
+            if (checkpoint.id === savedCheckpoint.id) return savedCheckpoint;
+            if (unlockedCheckpoint && checkpoint.id === unlockedCheckpoint.id) {
+              return unlockedCheckpoint;
+            }
+            return checkpoint;
+          })
+        )
+      );
+
+      if (options?.complete) {
+        closeCheckpointDetail();
+        return;
+      }
+
+      setSelectedCheckpoint(savedCheckpoint);
+      setCheckpointDetailForm(getCheckpointDetailForm(savedCheckpoint));
+    } catch (checkpointError) {
+      setCheckpointDetailError(
+        checkpointError instanceof Error
+          ? checkpointError.message
+          : 'Could not save checkpoint details.'
+      );
+    } finally {
+      setIsSavingCheckpointDetail(false);
+    }
   };
 
 
@@ -1300,6 +1598,16 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                           {getCheckpointDescription(checkpoint.checkpoint_key)}
                         </p>
 
+                        {canManageProjects && (
+                          <button
+                            type="button"
+                            onClick={() => openCheckpointDetail(checkpoint)}
+                            className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+                          >
+                            Open Details
+                          </button>
+                        )}
+
                         <div className="mt-4 space-y-2">
                           {checklistItems.length === 0 ? (
                             <p className="rounded-xl border border-dashed border-border bg-background/70 px-3 py-2 text-xs text-muted-foreground">
@@ -1434,6 +1742,246 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         {floatingMenuLayer}
         {projectModal}
         {deleteDialog}
+
+        {selectedCheckpoint && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border bg-card shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card p-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Checkpoint Details
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold text-foreground">
+                    {selectedCheckpoint.title}
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Save requirements, site notes, and document links without leaving this project.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeCheckpointDetail}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Close checkpoint details"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-5 p-5">
+                {checkpointDetailError && (
+                  <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                    {checkpointDetailError}
+                  </div>
+                )}
+
+                {selectedCheckpoint.checkpoint_key === 'initial_site_visit' && (
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Client Requirements
+                    </label>
+                    <textarea
+                      value={checkpointDetailForm.clientRequirements}
+                      onChange={event =>
+                        updateCheckpointDetailField('clientRequirements', event.target.value)
+                      }
+                      rows={4}
+                      className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                      placeholder="Record client expectations, functional needs, preferred style, materials, budget notes, and must-have requirements."
+                    />
+                  </div>
+                )}
+
+                {selectedCheckpoint.checkpoint_key === 'initial_site_visit' && (
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Site Measurements
+                    </label>
+                    <textarea
+                      value={checkpointDetailForm.siteMeasurements}
+                      onChange={event =>
+                        updateCheckpointDetailField('siteMeasurements', event.target.value)
+                      }
+                      rows={4}
+                      className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                      placeholder="Add room-wise measurements, ceiling heights, openings, service points, and measurement caveats."
+                    />
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-border bg-background p-4">
+                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Checkpoint Notes
+                  </label>
+                  <textarea
+                    value={checkpointDetailForm.notes}
+                    onChange={event =>
+                      updateCheckpointDetailField('notes', event.target.value)
+                    }
+                    rows={3}
+                    className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                    placeholder="Add internal notes for this checkpoint."
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Project Documents
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Add Google Drive, image folder, PDF, or file links related to this checkpoint.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addCheckpointDocument}
+                      className="w-fit gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Document
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {checkpointDetailForm.documents.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                        No document links added yet.
+                      </div>
+                    ) : (
+                      checkpointDetailForm.documents.map((document, index) => (
+                        <div
+                          key={document.id}
+                          className="rounded-2xl border border-border bg-card p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Document {index + 1}
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => removeCheckpointDocument(document.id)}
+                              className="text-xs font-semibold text-destructive"
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Name
+                              <input
+                                type="text"
+                                value={document.title}
+                                onChange={event =>
+                                  updateCheckpointDocument(document.id, 'title', event.target.value)
+                                }
+                                className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                placeholder="Site images / measurement sheet"
+                              />
+                            </label>
+
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Link
+                              <input
+                                type="text"
+                                value={document.url}
+                                onChange={event =>
+                                  updateCheckpointDocument(document.id, 'url', event.target.value)
+                                }
+                                className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                placeholder="https://drive.google.com/..."
+                              />
+                            </label>
+                          </div>
+
+                          <label className="mt-3 block text-xs font-medium text-muted-foreground">
+                            Notes
+                            <textarea
+                              value={document.notes}
+                              onChange={event =>
+                                updateCheckpointDocument(document.id, 'notes', event.target.value)
+                              }
+                              rows={2}
+                              className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                              placeholder="Short context for this document."
+                            />
+                          </label>
+
+                          {document.url.trim() && (
+                            <a
+                              href={document.url.trim()}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-foreground underline-offset-4 hover:underline"
+                            >
+                              Open link
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {selectedCheckpoint.checkpoint_key === 'initial_site_visit' && (
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Custom Requirements
+                    </label>
+                    <textarea
+                      value={checkpointDetailForm.customRequirements}
+                      onChange={event =>
+                        updateCheckpointDetailField('customRequirements', event.target.value)
+                      }
+                      rows={4}
+                      className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                      placeholder="Add unusual site constraints, client-specific instructions, execution warnings, or custom scope notes."
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-border bg-card p-5 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeCheckpointDetail}
+                  disabled={isSavingCheckpointDetail}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => saveCheckpointDetails()}
+                  disabled={isSavingCheckpointDetail || selectedCheckpoint.status === 'locked'}
+                >
+                  {isSavingCheckpointDetail ? 'Saving...' : 'Save Details'}
+                </Button>
+
+                {canManageProjects &&
+                  selectedCheckpoint.status !== 'locked' &&
+                  !isCheckpointComplete(selectedCheckpoint) && (
+                    <Button
+                      type="button"
+                      onClick={() => saveCheckpointDetails({ complete: true })}
+                      disabled={isSavingCheckpointDetail}
+                    >
+                      {isSavingCheckpointDetail ? 'Saving...' : 'Mark Complete & Unlock Next'}
+                    </Button>
+                  )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
