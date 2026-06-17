@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, type Project, formatINR } from '@/lib/supabase';
+import { supabase, type Project, type ProjectCheckpoint, formatINR } from '@/lib/supabase';
 import { syncProjectFinanceAccountFromApprovedEstimate } from '@/lib/projectFinance';
 import { createNotification } from '@/lib/notifications';
 import { DateInput } from '@/components/common/DateInput';
@@ -139,10 +139,125 @@ function isFinanceGateComplete(gate: ProjectFinancePaymentGateRow) {
   );
 }
 
+function getCheckpointMetadata(checkpoint: ProjectCheckpoint | null | undefined) {
+  const metadata = checkpoint?.metadata;
+
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {};
+}
+
+function isCheckpointChecklistComplete(checkpoint: ProjectCheckpoint | null | undefined) {
+  if (!checkpoint || !Array.isArray(checkpoint.checklist)) return false;
+
+  return checkpoint.checklist.length > 0 && checkpoint.checklist.every(item => {
+    if (!item || typeof item !== 'object') return false;
+
+    const checklistItem = item as Record<string, unknown>;
+
+    return (
+      checklistItem.is_completed === true ||
+      checklistItem.completed === true ||
+      checklistItem.status === 'completed'
+    );
+  });
+}
+
+function isProjectCheckpointComplete(
+  checkpoints: ProjectCheckpoint[],
+  projectId: string,
+  checkpointKey: ProjectCheckpoint['checkpoint_key']
+) {
+  const checkpoint = checkpoints.find(
+    item => item.project_id === projectId && item.checkpoint_key === checkpointKey
+  );
+
+  return checkpoint?.status === 'completed' || checkpoint?.status === 'skipped';
+}
+
+function getProjectCheckpoint(
+  checkpoints: ProjectCheckpoint[],
+  projectId: string,
+  checkpointKey: ProjectCheckpoint['checkpoint_key']
+) {
+  return checkpoints.find(
+    item => item.project_id === projectId && item.checkpoint_key === checkpointKey
+  ) ?? null;
+}
+
+function isQcReportGenerated(checkpoint: ProjectCheckpoint | null | undefined) {
+  const metadata = getCheckpointMetadata(checkpoint);
+
+  return metadata.qc_report_generated === true || metadata.qcReportGenerated === true;
+}
+
+function readSnapshotText(snapshot: Record<string, unknown>, key: string) {
+  const value = snapshot[key];
+
+  return typeof value === 'string' ? value : '';
+}
+
+function isFinalHandoverPaymentGate(gate: ProjectFinancePaymentGateRow) {
+  const snapshot = gate.source_gate_snapshot ?? {};
+  const snapshotType = readSnapshotText(snapshot, 'type').toLowerCase();
+  const searchableGateText = [
+    gate.title,
+    gate.trigger_label,
+    readSnapshotText(snapshot, 'title'),
+    readSnapshotText(snapshot, 'description'),
+    snapshotType,
+  ].join(' ').toLowerCase();
+
+  return snapshotType === 'handover' || searchableGateText.includes('final handover');
+}
+
+function getFinalHandoverGateLockState(
+  gate: ProjectFinancePaymentGateRow,
+  projectId: string,
+  checkpoints: ProjectCheckpoint[]
+) {
+  if (!projectId || !isFinalHandoverPaymentGate(gate)) {
+    return { locked: false, helper: '' };
+  }
+
+  const qcCheckpoint = getProjectCheckpoint(checkpoints, projectId, 'quality_control');
+
+  if (!isProjectCheckpointComplete(checkpoints, projectId, 'execution')) {
+    return {
+      locked: true,
+      helper: 'Complete the Execution checkpoint before recording final handover cash.',
+    };
+  }
+
+  if (!isCheckpointChecklistComplete(qcCheckpoint)) {
+    return {
+      locked: true,
+      helper: 'Complete the QC checklist before recording final handover cash.',
+    };
+  }
+
+  if (!isQcReportGenerated(qcCheckpoint)) {
+    return {
+      locked: true,
+      helper: 'Generate the QC Report before recording final handover cash.',
+    };
+  }
+
+  if (!isProjectCheckpointComplete(checkpoints, projectId, 'quality_control')) {
+    return {
+      locked: true,
+      helper: 'Complete the Quality Control checkpoint before recording final handover cash.',
+    };
+  }
+
+  return { locked: false, helper: '' };
+}
+
 function getFinanceGateWorkflowState(
   gate: ProjectFinancePaymentGateRow,
   gateIndex: number,
-  paymentGates: ProjectFinancePaymentGateRow[]
+  paymentGates: ProjectFinancePaymentGateRow[],
+  finalHandoverGateLock = { locked: false, helper: '' }
 ) {
   if (isFinanceGateComplete(gate)) {
     return {
@@ -161,6 +276,14 @@ function getFinanceGateWorkflowState(
       state: 'locked' as const,
       label: `Locked`,
       helper: `Complete Gate ${previousGate.gate_order} before recording this payment.`,
+    };
+  }
+
+  if (finalHandoverGateLock.locked) {
+    return {
+      state: 'locked' as const,
+      label: 'QC Required',
+      helper: finalHandoverGateLock.helper,
     };
   }
 
@@ -453,6 +576,7 @@ function FinancialsInner() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [financeAccounts, setFinanceAccounts] = useState<ProjectFinanceAccountRow[]>([]);
   const [financePaymentGates, setFinancePaymentGates] = useState<ProjectFinancePaymentGateRow[]>([]);
+  const [projectCheckpoints, setProjectCheckpoints] = useState<ProjectCheckpoint[]>([]);
   const [timelineGateSources, setTimelineGateSources] = useState<ProjectTimelineGateSourceRow[]>([]);
   const [approvedEstimates, setApprovedEstimates] = useState<ApprovedEstimateRow[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -477,7 +601,7 @@ function FinancialsInner() {
     }
     setError('');
 
-    const [projectsRes, accountsRes, gatesRes, timelinesRes, estimatesRes] = await Promise.all([
+    const [projectsRes, accountsRes, gatesRes, timelinesRes, estimatesRes, checkpointsRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('project_finance_accounts').select('*').order('updated_at', { ascending: false }),
       supabase.from('project_finance_payment_gates').select('*').order('gate_order', { ascending: true }),
@@ -490,6 +614,10 @@ function FinancialsInner() {
         .select('id, project_id, project_name, client_name, status, version, grand_total, updated_at')
         .eq('status', 'approved')
         .order('updated_at', { ascending: false }),
+      supabase
+        .from('project_checkpoints')
+        .select('*')
+        .order('sort_order', { ascending: true }),
     ]);
 
     if (projectsRes.error) {
@@ -522,11 +650,18 @@ function FinancialsInner() {
       return;
     }
 
+    if (checkpointsRes.error) {
+      setError(checkpointsRes.error.message);
+      setLoading(false);
+      return;
+    }
+
     const nextProjects = (projectsRes.data ?? []) as Project[];
 
     setProjects(nextProjects);
     setFinanceAccounts((accountsRes.data ?? []) as ProjectFinanceAccountRow[]);
     setFinancePaymentGates((gatesRes.data ?? []) as ProjectFinancePaymentGateRow[]);
+    setProjectCheckpoints((checkpointsRes.data ?? []) as ProjectCheckpoint[]);
     setTimelineGateSources((timelinesRes.data ?? []) as ProjectTimelineGateSourceRow[]);
     setApprovedEstimates((estimatesRes.data ?? []) as ApprovedEstimateRow[]);
 
@@ -611,6 +746,13 @@ function FinancialsInner() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'projects' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_checkpoints' },
         () => {
           void fetchFinanceData({ silent: true });
         }
@@ -834,7 +976,8 @@ function FinancialsInner() {
     const workflowState = getFinanceGateWorkflowState(
       gate,
       gateIndex,
-      selectedPaymentGates
+      selectedPaymentGates,
+      getFinalHandoverGateLockState(gate, selectedProject?.id ?? '', projectCheckpoints)
     );
 
     if (workflowState.state !== 'open') {
@@ -882,6 +1025,21 @@ function FinancialsInner() {
         state: 'error',
         heading: 'Payment Gate Missing',
         description: 'Select a valid payment gate before recording cash received.',
+      });
+      return;
+    }
+
+    const finalHandoverGateLock = getFinalHandoverGateLockState(
+      selectedGate,
+      selectedProject.id,
+      projectCheckpoints
+    );
+
+    if (finalHandoverGateLock.locked) {
+      setNotice({
+        state: 'info',
+        heading: 'Final Handover Gate Locked',
+        description: finalHandoverGateLock.helper,
       });
       return;
     }
@@ -1717,10 +1875,11 @@ function FinancialsInner() {
                           ? 'info'
                           : 'warning';
                     const workflowState = getFinanceGateWorkflowState(
-                      gate,
-                      gateIndex,
-                      selectedPaymentGates
-                    );
+      gate,
+      gateIndex,
+      selectedPaymentGates,
+      getFinalHandoverGateLockState(gate, selectedProject?.id ?? '', projectCheckpoints)
+    );
 
                     return (
                       <div

@@ -502,6 +502,30 @@ function isChecklistItemComplete(item: Record<string, unknown>) {
     item.status === 'completed';
 }
 
+function isCheckpointChecklistComplete(checkpoint: ProjectCheckpoint | null | undefined) {
+  if (!checkpoint) return false;
+
+  const checklistItems = getCheckpointChecklistItems(checkpoint);
+
+  return checklistItems.length > 0 && checklistItems.every(isChecklistItemComplete);
+}
+
+function getBooleanMetadataValue(
+  metadata: Record<string, unknown>,
+  snakeKey: string,
+  camelKey: string
+) {
+  return metadata[snakeKey] === true || metadata[camelKey] === true;
+}
+
+function isQcReportGenerated(checkpoint: ProjectCheckpoint | null | undefined) {
+  if (!checkpoint) return false;
+
+  const metadata = getCheckpointMetadata(checkpoint);
+
+  return getBooleanMetadataValue(metadata, 'qc_report_generated', 'qcReportGenerated');
+}
+
 function getCheckpointDescription(checkpointKey: ProjectCheckpoint['checkpoint_key']) {
   switch (checkpointKey) {
     case 'initial_site_visit':
@@ -509,9 +533,9 @@ function getCheckpointDescription(checkpointKey: ProjectCheckpoint['checkpoint_k
     case 'design_phase':
       return 'Design approval and design estimate or bypass confirmation.';
     case 'execution':
-      return 'Cost estimate, timeline, and execution workspace readiness.';
+      return 'Execution work completion and readiness for Quality Control.';
     case 'quality_control':
-      return 'Ops & Quality Control checklist before handover.';
+      return 'QC checklist and QC report before final handover payment.';
     case 'handover':
       return 'Final handover and closeout confirmation.';
     default:
@@ -1154,6 +1178,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   const saveCheckpointDetails = async (options?: {
     complete?: boolean;
+    completeChecklist?: boolean;
+    qcReportGenerated?: boolean;
     designPhaseStatus?: DesignPhaseWorkflowStatus;
     designEstimateApproved?: boolean;
   }) => {
@@ -1187,6 +1213,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       );
       const designEstimateTotal = calculateDesignEstimateTotal(designEstimateRows);
 
+      const shouldGenerateQcReport = options?.qcReportGenerated === true;
       const nextMetadata = {
         ...metadata,
         client_requirements: effectiveForm.clientRequirements.trim(),
@@ -1201,12 +1228,25 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         design_estimate_rows: designEstimateRows,
         design_estimate_approved: effectiveForm.designEstimateApproved,
         design_phase_status: effectiveForm.designPhaseStatus,
+        qc_report_generated:
+          shouldGenerateQcReport ||
+          getBooleanMetadataValue(metadata, 'qc_report_generated', 'qcReportGenerated'),
+        qc_report_generated_at: shouldGenerateQcReport
+          ? new Date().toISOString()
+          : metadata.qc_report_generated_at ?? metadata.qcReportGeneratedAt ?? null,
+        qc_report_generated_by: shouldGenerateQcReport
+          ? profile?.id ?? null
+          : metadata.qc_report_generated_by ?? metadata.qcReportGeneratedBy ?? null,
+        qc_report_summary: shouldGenerateQcReport
+          ? `QC report generated for ${selectedProject?.name ?? 'project'} after checklist verification.`
+          : metadata.qc_report_summary ?? metadata.qcReportSummary ?? '',
       };
 
+      const shouldCompleteChecklist = options?.complete || options?.completeChecklist;
       const updates = {
         notes: effectiveForm.notes.trim(),
         metadata: nextMetadata,
-        checklist: options?.complete
+        checklist: shouldCompleteChecklist
           ? getCheckpointChecklistItems(selectedCheckpoint).map(item => ({
               ...item,
               is_completed: true,
@@ -1218,7 +1258,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
           ? effectiveForm.designPhaseStatus === 'bypassed'
             ? 'skipped'
             : 'completed'
-          : getCheckpointSaveStatus(selectedCheckpoint, effectiveForm),
+          : options?.completeChecklist && selectedCheckpoint.status === 'available'
+            ? 'in_progress'
+            : getCheckpointSaveStatus(selectedCheckpoint, effectiveForm),
         completed_at: options?.complete
           ? new Date().toISOString()
           : selectedCheckpoint.completed_at,
@@ -1341,6 +1383,61 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       complete: true,
       designPhaseStatus: 'bypassed',
       designEstimateApproved: false,
+    });
+  };
+
+  const completeQcChecklist = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'quality_control') {
+      return;
+    }
+
+    if (selectedCheckpoint.status === 'locked') {
+      setCheckpointDetailError('Quality Control is locked. Complete Execution first.');
+      return;
+    }
+
+    await saveCheckpointDetails({
+      completeChecklist: true,
+    });
+  };
+
+  const generateQcReport = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'quality_control') {
+      return;
+    }
+
+    if (selectedCheckpoint.status === 'locked') {
+      setCheckpointDetailError('Quality Control is locked. Complete Execution first.');
+      return;
+    }
+
+    if (!isCheckpointChecklistComplete(selectedCheckpoint)) {
+      setCheckpointDetailError('Complete the QC checklist before generating the QC Report.');
+      return;
+    }
+
+    await saveCheckpointDetails({
+      qcReportGenerated: true,
+    });
+  };
+
+  const completeQcPhase = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'quality_control') {
+      return;
+    }
+
+    if (!isCheckpointChecklistComplete(selectedCheckpoint)) {
+      setCheckpointDetailError('Complete the QC checklist before completing Quality Control.');
+      return;
+    }
+
+    if (!isQcReportGenerated(selectedCheckpoint)) {
+      setCheckpointDetailError('Generate the QC Report before completing Quality Control.');
+      return;
+    }
+
+    await saveCheckpointDetails({
+      complete: true,
     });
   };
 
@@ -2863,6 +2960,70 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </div>
                 )}
 
+                {selectedCheckpoint.checkpoint_key === 'quality_control' && (
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          QC Completion Gate
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Final handover payment in Finance unlocks only after Execution is completed, QC checklist is completed, QC Report is generated, and QC Phase is completed.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                            isCheckpointChecklistComplete(selectedCheckpoint)
+                              ? 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50'
+                              : 'border-border bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {isCheckpointChecklistComplete(selectedCheckpoint) ? 'Checklist Done' : 'Checklist Pending'}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                            isQcReportGenerated(selectedCheckpoint)
+                              ? 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50'
+                              : 'border-border bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {isQcReportGenerated(selectedCheckpoint) ? 'QC Report Generated' : 'QC Report Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {canManageProjects &&
+                      selectedCheckpoint.status !== 'locked' &&
+                      !isCheckpointComplete(selectedCheckpoint) && (
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={completeQcChecklist}
+                            disabled={isSavingCheckpointDetail || isCheckpointChecklistComplete(selectedCheckpoint)}
+                          >
+                            {isCheckpointChecklistComplete(selectedCheckpoint) ? 'QC Checklist Completed' : 'Complete QC Checklist'}
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={generateQcReport}
+                            disabled={
+                              isSavingCheckpointDetail ||
+                              !isCheckpointChecklistComplete(selectedCheckpoint) ||
+                              isQcReportGenerated(selectedCheckpoint)
+                            }
+                          >
+                            {isQcReportGenerated(selectedCheckpoint) ? 'QC Report Generated' : 'Generate QC Report'}
+                          </Button>
+                        </div>
+                      )}
+                  </div>
+                )}
+
                 <div className="rounded-2xl border border-border bg-background p-4">
                   <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Checkpoint Notes
@@ -2916,7 +3077,25 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 </Button>
 
                 {canManageProjects &&
+                  selectedCheckpoint.checkpoint_key === 'quality_control' &&
+                  selectedCheckpoint.status !== 'locked' &&
+                  !isCheckpointComplete(selectedCheckpoint) && (
+                    <Button
+                      type="button"
+                      onClick={completeQcPhase}
+                      disabled={
+                        isSavingCheckpointDetail ||
+                        !isCheckpointChecklistComplete(selectedCheckpoint) ||
+                        !isQcReportGenerated(selectedCheckpoint)
+                      }
+                    >
+                      {isSavingCheckpointDetail ? 'Saving...' : 'Complete QC Phase'}
+                    </Button>
+                  )}
+
+                {canManageProjects &&
                   selectedCheckpoint.checkpoint_key !== 'design_phase' &&
+                  selectedCheckpoint.checkpoint_key !== 'quality_control' &&
                   selectedCheckpoint.status !== 'locked' &&
                   !isCheckpointComplete(selectedCheckpoint) && (
                     <Button
@@ -2924,7 +3103,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       onClick={() => saveCheckpointDetails({ complete: true })}
                       disabled={isSavingCheckpointDetail}
                     >
-                      {isSavingCheckpointDetail ? 'Saving...' : 'Mark Complete & Unlock Next'}
+                      {isSavingCheckpointDetail
+                        ? 'Saving...'
+                        : selectedCheckpoint.checkpoint_key === 'execution'
+                          ? 'Work Finished / Ready for QC'
+                          : 'Mark Complete & Unlock Next'}
                     </Button>
                   )}
               </div>
