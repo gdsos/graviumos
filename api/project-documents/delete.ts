@@ -4,7 +4,7 @@ import {
   readJsonBody,
   requireProjectDocumentManageAccess,
   sendJson,
-} from '../../server/projectDocumentHelpers';
+} from '../../server/projectDocumentHelpers.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -52,4 +52,3 @@ export default async function handler(req: any, res: any) {
     handleApiError(res, error);
   }
 }
-

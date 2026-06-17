@@ -5,7 +5,7 @@ import {
   requireProjectDocumentManageAccess,
   sendJson,
   uploadFileToGoogleDrive,
-} from '../../server/projectDocumentHelpers';
+} from '../../server/projectDocumentHelpers.js';
 
 export const config = {
   api: {
@@ -84,4 +84,3 @@ export default async function handler(req: any, res: any) {
     handleApiError(res, error);
   }
 }
-
