@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { createSign } from 'crypto';
 
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_UPLOAD_URL =
   'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,webContentLink';
@@ -32,18 +30,6 @@ function getSupabaseUrl() {
 
 function getSupabaseAnonKey() {
   return process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-}
-
-function normalizePrivateKey(value: string) {
-  return value.replace(/\\n/g, '\n');
-}
-
-function base64Url(input: string | Buffer) {
-  return Buffer.from(input)
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
 }
 
 function readBearerToken(req: any) {
@@ -167,34 +153,9 @@ export async function requireProjectDocumentManageAccess(req: any) {
 }
 
 async function getGoogleDriveAccessToken() {
-  const clientEmail = getEnv('GOOGLE_DRIVE_CLIENT_EMAIL');
-  const privateKey = normalizePrivateKey(getEnv('GOOGLE_DRIVE_PRIVATE_KEY'));
-  const now = Math.floor(Date.now() / 1000);
-
-  const header = base64Url(
-    JSON.stringify({
-      alg: 'RS256',
-      typ: 'JWT',
-    })
-  );
-
-  const claimSet = base64Url(
-    JSON.stringify({
-      iss: clientEmail,
-      scope: DRIVE_SCOPE,
-      aud: GOOGLE_TOKEN_URL,
-      exp: now + 3600,
-      iat: now,
-    })
-  );
-
-  const unsignedJwt = `${header}.${claimSet}`;
-  const signer = createSign('RSA-SHA256');
-  signer.update(unsignedJwt);
-  signer.end();
-
-  const signature = signer.sign(privateKey);
-  const assertion = `${unsignedJwt}.${base64Url(signature)}`;
+  const clientId = getEnv('GOOGLE_OAUTH_CLIENT_ID');
+  const clientSecret = getEnv('GOOGLE_OAUTH_CLIENT_SECRET');
+  const refreshToken = getEnv('GOOGLE_OAUTH_REFRESH_TOKEN');
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
@@ -202,15 +163,21 @@ async function getGoogleDriveAccessToken() {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion,
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
     }),
   });
 
   const body = await response.json();
 
   if (!response.ok) {
-    throw new Error(body.error_description || body.error || 'Google auth failed.');
+    throw new Error(body.error_description || body.error || 'Google OAuth refresh failed.');
+  }
+
+  if (!body.access_token) {
+    throw new Error('Google OAuth did not return an access token.');
   }
 
   return body.access_token as string;
