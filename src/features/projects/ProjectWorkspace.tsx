@@ -4,8 +4,9 @@ import { ArrowLeft, ChevronDown, ExternalLink, MoreHorizontal, Pencil, Plus, Sea
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase, type Lead, type Project } from '../../lib/supabase';
+import { supabase, type Lead, type Project, type ProjectCheckpoint } from '../../lib/supabase';
 import type { ProjectWorkspaceMode } from './projectTypes';
+import { ensureProjectCheckpoints, sortProjectCheckpoints } from './projectCheckpoints';
 
 interface ProjectWorkspaceProps {
   mode: ProjectWorkspaceMode;
@@ -48,6 +49,76 @@ function getProjectStatusClass(status: string | null | undefined) {
   return STATUS_STYLES[status || ''] || 'border-border bg-muted text-muted-foreground';
 }
 
+const CHECKPOINT_STATUS_STYLES: Record<string, string> = {
+  locked: 'border-border bg-muted text-muted-foreground',
+  available: 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+  in_progress: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  completed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  skipped: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
+};
+
+function getCheckpointStatusClass(status: ProjectCheckpoint['status']) {
+  return CHECKPOINT_STATUS_STYLES[status] || CHECKPOINT_STATUS_STYLES.locked;
+}
+
+function getCheckpointStatusLabel(status: ProjectCheckpoint['status']) {
+  return status
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function getCheckpointCardClass(checkpoint: ProjectCheckpoint) {
+  if (isCheckpointComplete(checkpoint)) {
+    return 'border-emerald-500/25 bg-emerald-500/10';
+  }
+
+  if (checkpoint.status === 'available' || checkpoint.status === 'in_progress') {
+    return 'border-sky-500/25 bg-sky-500/10';
+  }
+
+  return 'border-border bg-card';
+}
+
+function getCheckpointChecklistItems(checkpoint: ProjectCheckpoint) {
+  return Array.isArray(checkpoint.checklist)
+    ? checkpoint.checklist.filter(
+        item => item && typeof item === 'object'
+      ) as Array<Record<string, unknown>>
+    : [];
+}
+
+function getChecklistItemLabel(item: Record<string, unknown>, index: number) {
+  const label = item.label ?? item.title ?? item.name;
+
+  return typeof label === 'string' && label.trim()
+    ? label
+    : `Checklist item ${index + 1}`;
+}
+
+function isChecklistItemComplete(item: Record<string, unknown>) {
+  return item.is_completed === true ||
+    item.completed === true ||
+    item.status === 'completed';
+}
+
+function getCheckpointDescription(checkpointKey: ProjectCheckpoint['checkpoint_key']) {
+  switch (checkpointKey) {
+    case 'initial_site_visit':
+      return 'Measurements, images, requirements, and custom notes.';
+    case 'design_phase':
+      return 'Design approval and design estimate or bypass confirmation.';
+    case 'execution':
+      return 'Cost estimate, timeline, and execution workspace readiness.';
+    case 'quality_control':
+      return 'Ops & Quality Control checklist before handover.';
+    case 'handover':
+      return 'Final handover and closeout confirmation.';
+    default:
+      return 'Project checkpoint.';
+  }
+}
+
 function getProjectFormFromRecord(project: Project): ProjectFormState {
   return {
     name: project.name || '',
@@ -61,30 +132,93 @@ function getRouteBase(mode: ProjectWorkspaceMode) {
   return mode === 'admin' ? '/admin' : '/portal';
 }
 
-function createProjectLinks(mode: ProjectWorkspaceMode, projectId: string) {
+function getCheckpointByKey(
+  checkpoints: ProjectCheckpoint[],
+  checkpointKey: ProjectCheckpoint['checkpoint_key']
+) {
+  return checkpoints.find(checkpoint => checkpoint.checkpoint_key === checkpointKey);
+}
+
+function isCheckpointAvailable(checkpoint: ProjectCheckpoint | undefined) {
+  return Boolean(
+    checkpoint &&
+      ['available', 'in_progress', 'completed', 'skipped'].includes(checkpoint.status)
+  );
+}
+
+function isCheckpointComplete(checkpoint: ProjectCheckpoint | undefined) {
+  return Boolean(
+    checkpoint &&
+      ['completed', 'skipped'].includes(checkpoint.status)
+  );
+}
+
+function createProjectStageActions(
+  mode: ProjectWorkspaceMode,
+  projectId: string,
+  checkpoints: ProjectCheckpoint[]
+) {
   const base = getRouteBase(mode);
   const query = `?projectId=${encodeURIComponent(projectId)}`;
 
+  const designCheckpoint = getCheckpointByKey(checkpoints, 'design_phase');
+  const executionCheckpoint = getCheckpointByKey(checkpoints, 'execution');
+  const qualityCheckpoint = getCheckpointByKey(checkpoints, 'quality_control');
+  const handoverCheckpoint = getCheckpointByKey(checkpoints, 'handover');
+
+  const isDesignAvailable = isCheckpointAvailable(designCheckpoint);
+  const isExecutionAvailable = isCheckpointAvailable(executionCheckpoint);
+  const isQualityAvailable = isCheckpointAvailable(qualityCheckpoint);
+  const isHandoverAvailable = isCheckpointAvailable(handoverCheckpoint);
+
   return [
     {
-      label: 'Tasks',
-      description: 'Project tasks and execution responsibilities.',
-      to: `${base}/tasks${query}`,
+      label: 'Design Phase',
+      description: 'Handle design approval and design estimate/bypass from project checkpoints.',
+      lockedReason: 'Complete Initial Site Visit first.',
+      isAvailable: isDesignAvailable,
+      to: null,
+      statusLabel: isDesignAvailable ? 'Available here' : 'Locked',
     },
     {
-      label: 'Cost Estimate',
-      description: 'Project-linked estimate workspace.',
+      label: 'Project Cost Estimate',
+      description: 'Open only this project-linked cost estimate workspace.',
+      lockedReason: 'Complete Design Phase first.',
+      isAvailable: isExecutionAvailable,
       to: `${base}/cost-estimates${query}`,
+      statusLabel: isExecutionAvailable ? 'Open project estimate' : 'Locked',
     },
     {
-      label: 'Timeline',
-      description: 'Planning, schedule, and execution timeline.',
+      label: 'Project Timeline',
+      description: 'Open only this project-linked timeline workspace.',
+      lockedReason: 'Execution stage must be available first.',
+      isAvailable: isExecutionAvailable,
       to: `${base}/timeline${query}`,
+      statusLabel: isExecutionAvailable ? 'Open project timeline' : 'Locked',
     },
     {
       label: 'Project Finance',
-      description: 'Dedicated project accounts workspace.',
+      description: 'Open this project account only after execution is available.',
+      lockedReason: 'Execution stage must be available first.',
+      isAvailable: isExecutionAvailable,
       to: `${base}/financials${query}`,
+      statusLabel: isExecutionAvailable ? 'Open project finance' : 'Locked',
+    },
+    {
+      label: 'Quality Control',
+      description: 'Ops & Quality Control checklist before handover.',
+      lockedReason: 'Complete execution requirements first.',
+      isAvailable: isQualityAvailable,
+      to: null,
+      statusLabel: isQualityAvailable ? 'Available here' : 'Locked',
+    },
+    {
+      label: 'Handover Done',
+      description: 'Final project handover and closeout.',
+      lockedReason: 'Quality Control must be completed first.',
+      isAvailable: isHandoverAvailable,
+      to: null,
+      statusLabel: isHandoverAvailable ? 'Available here' : 'Locked',
     },
   ];
 }
@@ -235,6 +369,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const [pendingProjectRequest, setPendingProjectRequest] = useState<Lead | null>(null);
   const [modalError, setModalError] = useState('');
   const [isSavingProject, setIsSavingProject] = useState(false);
+  const [projectCheckpoints, setProjectCheckpoints] = useState<ProjectCheckpoint[]>([]);
+  const [projectCheckpointsLoading, setProjectCheckpointsLoading] = useState(false);
+  const [projectCheckpointError, setProjectCheckpointError] = useState('');
 
   const isAdminMode = mode === 'admin';
   const canManageProjects = isAdminMode && isAdmin();
@@ -323,6 +460,65 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       isMounted = false;
     };
   }, [canManageProjects]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSelectedProjectCheckpoints() {
+      if (!selectedProject) {
+        setProjectCheckpoints([]);
+        setProjectCheckpointError('');
+        setProjectCheckpointsLoading(false);
+        return;
+      }
+
+      setProjectCheckpointsLoading(true);
+      setProjectCheckpointError('');
+
+      try {
+        if (canManageProjects) {
+          const checkpoints = await ensureProjectCheckpoints(
+            selectedProject.id,
+            profile?.id ?? null
+          );
+
+          if (!isMounted) return;
+          setProjectCheckpoints(checkpoints);
+          return;
+        }
+
+        const { data, error: checkpointFetchError } = await supabase
+          .from('project_checkpoints')
+          .select('*')
+          .eq('project_id', selectedProject.id)
+          .order('sort_order', { ascending: true });
+
+        if (checkpointFetchError) throw checkpointFetchError;
+
+        if (!isMounted) return;
+        setProjectCheckpoints(sortProjectCheckpoints((data || []) as ProjectCheckpoint[]));
+      } catch (checkpointError) {
+        if (!isMounted) return;
+
+        setProjectCheckpointError(
+          checkpointError instanceof Error
+            ? checkpointError.message
+            : 'Could not load project checkpoints.'
+        );
+        setProjectCheckpoints([]);
+      } finally {
+        if (isMounted) {
+          setProjectCheckpointsLoading(false);
+        }
+      }
+    }
+
+    void loadSelectedProjectCheckpoints();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProject, canManageProjects, profile?.id]);
 
   const filteredProjects = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -957,7 +1153,13 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   );
 
   if (selectedProject) {
-    const projectLinks = createProjectLinks(mode, selectedProject.id);
+    const projectStageActions = createProjectStageActions(mode, selectedProject.id, projectCheckpoints);
+    const completedCheckpointCount = projectCheckpoints.filter(
+      checkpoint => checkpoint.status === 'completed' || checkpoint.status === 'skipped'
+    ).length;
+    const checkpointProgressLabel = projectCheckpoints.length > 0
+      ? `${completedCheckpointCount}/${projectCheckpoints.length} completed`
+      : 'Not initialized';
 
     return (
       <div className="space-y-6">
@@ -1041,6 +1243,104 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
               </div>
             </div>
 
+            <div className="mt-5 rounded-2xl border border-border bg-background p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Project Checkpoints
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Stage-gated project flow from site visit to handover.
+                  </p>
+                </div>
+
+                <span className="w-fit rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground">
+                  {projectCheckpointsLoading ? 'Loading...' : checkpointProgressLabel}
+                </span>
+              </div>
+
+              {projectCheckpointError ? (
+                <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                  {projectCheckpointError}
+                </div>
+              ) : projectCheckpointsLoading ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  Loading project checkpoints...
+                </div>
+              ) : projectCheckpoints.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  No checkpoints found for this project yet.
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 lg:grid-cols-5">
+                  {projectCheckpoints.map(checkpoint => {
+                    const checklistItems = getCheckpointChecklistItems(checkpoint);
+
+                    return (
+                      <div
+                        key={checkpoint.id}
+                        className={`rounded-2xl border p-4 ${getCheckpointCardClass(checkpoint)}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-muted-foreground">
+                            {checkpoint.sort_order}
+                          </div>
+
+                          <span
+                            className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${getCheckpointStatusClass(checkpoint.status)}`}
+                          >
+                            {getCheckpointStatusLabel(checkpoint.status)}
+                          </span>
+                        </div>
+
+                        <p className="mt-4 text-sm font-semibold text-foreground">
+                          {checkpoint.title}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          {getCheckpointDescription(checkpoint.checkpoint_key)}
+                        </p>
+
+                        <div className="mt-4 space-y-2">
+                          {checklistItems.length === 0 ? (
+                            <p className="rounded-xl border border-dashed border-border bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                              No checklist items configured.
+                            </p>
+                          ) : (
+                            checklistItems.map((item, index) => (
+                              <div
+                                key={`${checkpoint.id}-${index}`}
+                                className="flex items-start gap-2 rounded-xl border border-border bg-background/70 px-3 py-2"
+                              >
+                                <span
+                                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                                    isChecklistItemComplete(item)
+                                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                                      : 'border-border bg-card text-muted-foreground'
+                                  }`}
+                                >
+                                  {isChecklistItemComplete(item) ? '?' : ''}
+                                </span>
+
+                                <span className="text-xs leading-5 text-muted-foreground">
+                                  {getChecklistItemLabel(item, index)}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {checkpoint.completed_at && (
+                          <p className="mt-3 text-[11px] text-muted-foreground">
+                            Completed {new Date(checkpoint.completed_at).toLocaleDateString('en-IN')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {selectedProject.description && (
               <div className="mt-4 rounded-2xl border border-border bg-background p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -1055,32 +1355,77 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             <div className="mt-5 border-t border-border pt-5">
               <div className="flex flex-col gap-1">
                 <p className="text-sm font-semibold text-foreground">
-                  Linked Workspaces
+                  Project Stage Actions
+                </p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Actions unlock only when the required project checkpoint is available.
                 </p>
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {projectLinks.map(link => (
-                  <Link
-                    key={link.to}
-                    to={link.to}
-                    className="group flex min-h-20 items-center justify-between gap-4 rounded-2xl border border-border bg-background px-4 py-3 transition-colors hover:bg-muted/60"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {link.label}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        {link.description}
-                      </p>
-                    </div>
+                {projectStageActions.map(action => {
+                  const inner = (
+                    <>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            {action.label}
+                          </p>
+                          <span
+                            className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                              action.isAvailable
+                                ? 'border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                                : 'border-border bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {action.statusLabel}
+                          </span>
+                        </div>
 
-                    <ExternalLink
-                      size={16}
-                      className="shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
-                    />
-                  </Link>
-                ))}
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          {action.isAvailable ? action.description : action.lockedReason}
+                        </p>
+                      </div>
+
+                      {action.isAvailable && action.to ? (
+                        <ExternalLink
+                          size={16}
+                          className="shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                        />
+                      ) : (
+                        <span className="shrink-0 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Stage
+                        </span>
+                      )}
+                    </>
+                  );
+
+                  if (action.isAvailable && action.to) {
+                    return (
+                      <Link
+                        key={action.label}
+                        to={action.to}
+                        className="group flex min-h-24 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 transition-colors hover:bg-sky-500/15"
+                      >
+                        {inner}
+                      </Link>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={action.label}
+                      aria-disabled={!action.isAvailable}
+                      className={
+                        action.isAvailable
+                          ? 'flex min-h-24 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3'
+                          : 'flex min-h-24 cursor-not-allowed items-center justify-between gap-4 rounded-2xl border border-border bg-muted/30 px-4 py-3 opacity-80'
+                      }
+                    >
+                      {inner}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
