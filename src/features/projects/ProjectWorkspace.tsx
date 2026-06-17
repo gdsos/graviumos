@@ -283,6 +283,14 @@ function getProjectDocumentCategory(document: ProjectDocument) {
   return document.category?.trim() || 'Project Document';
 }
 
+function getProjectDocumentPreviewUrl(document: ProjectDocument) {
+  if (document.drive_file_id) {
+    return `https://drive.google.com/file/d/${document.drive_file_id}/preview`;
+  }
+
+  return document.document_url;
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2714,6 +2722,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
         {selectedProjectDocument && (() => {
           const documentUrl = getSafeDocumentUrl(selectedProjectDocument.document_url);
+          const previewUrl = getSafeDocumentUrl(
+            getProjectDocumentPreviewUrl(selectedProjectDocument)
+          );
 
           return (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
@@ -2749,7 +2760,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       <div className="overflow-hidden rounded-2xl border border-border bg-background">
                         <iframe
                           title={selectedProjectDocument.name}
-                          src={documentUrl}
+                          src={previewUrl || documentUrl}
                           className="h-[58vh] w-full bg-background"
                         />
                       </div>
