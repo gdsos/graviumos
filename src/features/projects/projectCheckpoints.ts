@@ -140,7 +140,22 @@ export async function ensureProjectCheckpoints(
   projectId: string,
   createdBy?: string | null
 ) {
-  const payload = PROJECT_CHECKPOINT_TEMPLATES.map(template => ({
+  const { data: existingData, error: fetchError } = await supabase
+    .from('project_checkpoints')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('sort_order', { ascending: true });
+
+  if (fetchError) throw fetchError;
+
+  const existingCheckpoints = (existingData || []) as ProjectCheckpoint[];
+  const existingCheckpointKeys = new Set(
+    existingCheckpoints.map(checkpoint => checkpoint.checkpoint_key)
+  );
+
+  const missingPayload = PROJECT_CHECKPOINT_TEMPLATES.filter(
+    template => !existingCheckpointKeys.has(template.checkpoint_key)
+  ).map(template => ({
     project_id: projectId,
     checkpoint_key: template.checkpoint_key,
     title: template.title,
@@ -151,10 +166,18 @@ export async function ensureProjectCheckpoints(
     created_by: createdBy ?? null,
   }));
 
+  if (missingPayload.length > 0) {
+    const { error: insertError } = await supabase
+      .from('project_checkpoints')
+      .insert(missingPayload);
+
+    if (insertError) throw insertError;
+  }
+
   const { data, error } = await supabase
     .from('project_checkpoints')
-    .upsert(payload, { onConflict: 'project_id,checkpoint_key' })
     .select('*')
+    .eq('project_id', projectId)
     .order('sort_order', { ascending: true });
 
   if (error) throw error;
