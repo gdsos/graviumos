@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { MouseEvent } from 'react';
-import { ArrowLeft, Check, ChevronDown, ExternalLink, FileText, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, MouseEvent } from 'react';
+import { ArrowLeft, Check, ChevronDown, ExternalLink, FileText, MoreHorizontal, Pencil, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react';
 import { exportDesignEstimatePdf } from '@/features/cost-estimate/export';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
@@ -281,6 +281,20 @@ function getProjectDocumentTitle(document: ProjectDocument, index: number) {
 
 function getProjectDocumentCategory(document: ProjectDocument) {
   return document.category?.trim() || 'Project Document';
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read selected file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getBase64Payload(dataUrl: string) {
+  return dataUrl.includes(',') ? dataUrl.split(',').pop() || '' : dataUrl;
 }
 
 function getDesignPhaseWorkflowStatus(
@@ -802,9 +816,14 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     useState<CheckpointDetailForm>(EMPTY_CHECKPOINT_DETAIL_FORM);
   const [checkpointDetailError, setCheckpointDetailError] = useState('');
   const [isSavingCheckpointDetail, setIsSavingCheckpointDetail] = useState(false);
+  const projectDocumentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
   const [projectDocumentsLoading, setProjectDocumentsLoading] = useState(false);
   const [projectDocumentError, setProjectDocumentError] = useState('');
+  const [isUploadingProjectDocument, setIsUploadingProjectDocument] = useState(false);
+  const [isDeletingProjectDocument, setIsDeletingProjectDocument] = useState(false);
+  const [projectDocumentDeleteTarget, setProjectDocumentDeleteTarget] =
+    useState<ProjectDocument | null>(null);
   const [isProjectDocumentModalOpen, setIsProjectDocumentModalOpen] = useState(false);
   const [projectDocumentForm, setProjectDocumentForm] =
     useState<ProjectDocumentForm>(EMPTY_PROJECT_DOCUMENT_FORM);
@@ -1092,6 +1111,127 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       ...current,
       [field]: value,
     }));
+  };
+
+  const uploadProjectDocumentFile = async (file: File) => {
+    if (!selectedProject) return;
+
+    if (!canManageProjectDocuments) {
+      setProjectDocumentError('Projects manage access is required to upload project documents.');
+      return;
+    }
+
+    setIsUploadingProjectDocument(true);
+    setProjectDocumentError('');
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Login session expired. Sign in again before uploading.');
+      }
+
+      const dataUrl = await readFileAsDataUrl(file);
+      const response = await fetch('/api/project-documents/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: selectedProject.id,
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          base64Data: getBase64Payload(dataUrl),
+          category: 'Project Document',
+          notes: '',
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Could not upload project document.');
+      }
+
+      const savedDocument = result.document as ProjectDocument;
+      setProjectDocuments(current => [savedDocument, ...current]);
+      setSelectedProjectDocument(savedDocument);
+    } catch (uploadError) {
+      setProjectDocumentError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : 'Could not upload project document.'
+      );
+    } finally {
+      setIsUploadingProjectDocument(false);
+    }
+  };
+
+  const handleProjectDocumentFileChange = (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    void uploadProjectDocumentFile(file);
+  };
+
+  const deleteProjectDocument = async (document: ProjectDocument) => {
+    if (!canManageProjectDocuments) {
+      setProjectDocumentError('Projects manage access is required to delete project documents.');
+      return;
+    }
+
+    setIsDeletingProjectDocument(true);
+    setProjectDocumentError('');
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Login session expired. Sign in again before deleting.');
+      }
+
+      const response = await fetch('/api/project-documents/delete', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId: document.id,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Could not delete project document.');
+      }
+
+      setProjectDocuments(current =>
+        current.filter(projectDocument => projectDocument.id !== document.id)
+      );
+      setSelectedProjectDocument(current =>
+        current?.id === document.id ? null : current
+      );
+      setProjectDocumentDeleteTarget(null);
+    } catch (deleteError) {
+      setProjectDocumentError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : 'Could not delete project document.'
+      );
+    } finally {
+      setIsDeletingProjectDocument(false);
+    }
   };
 
   const saveProjectDocument = async () => {
@@ -2183,15 +2323,35 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 </div>
 
                 {canManageProjectDocuments && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={openProjectDocumentModal}
-                    className="w-fit gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Document
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      ref={projectDocumentFileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleProjectDocumentFileChange}
+                    />
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => projectDocumentFileInputRef.current?.click()}
+                      disabled={isUploadingProjectDocument}
+                      className="w-fit gap-2"
+                    >
+                      <UploadCloud className="h-4 w-4" />
+                      {isUploadingProjectDocument ? 'Uploading...' : 'Upload File'}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={openProjectDocumentModal}
+                      className="w-fit gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Link
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -2594,15 +2754,31 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         />
                       </div>
 
-                      <a
-                        href={documentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-                      >
-                        Open document in new tab
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <a
+                          href={documentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex w-fit items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                        >
+                          Open document in new tab
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+
+                        {canManageProjectDocuments && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() =>
+                              setProjectDocumentDeleteTarget(selectedProjectDocument)
+                            }
+                            className="w-fit gap-2"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete Document
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
@@ -2614,6 +2790,50 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             </div>
           );
         })()}
+
+        {projectDocumentDeleteTarget && (
+          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-2xl">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Delete document?
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    This removes the project document record. Google Drive files uploaded through Gravium OS will also be deleted from Drive.
+                  </p>
+                  <p className="mt-3 text-xs font-semibold text-foreground">
+                    {projectDocumentDeleteTarget.name}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setProjectDocumentDeleteTarget(null)}
+                  disabled={isDeletingProjectDocument}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => deleteProjectDocument(projectDocumentDeleteTarget)}
+                  disabled={isDeletingProjectDocument}
+                >
+                  {isDeletingProjectDocument ? 'Deleting...' : 'Delete Document'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {selectedCheckpoint && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
