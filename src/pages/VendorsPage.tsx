@@ -657,13 +657,16 @@ export default function VendorsPage() {
     setDataError('');
 
     try {
+      const nextVendors = await fetchVendorsMaster();
+
+      let nextCategories: ProcurementOption[] = [];
+      let assignedProjectsByVendorId: Record<string, VendorAssignedProject[]> = {};
+
       const [
-        nextVendors,
-        nextCategories,
-        timelinesRes,
-        projectsRes,
-      ] = await Promise.all([
-        fetchVendorsMaster(),
+        categoriesResult,
+        timelinesResult,
+        projectsResult,
+      ] = await Promise.allSettled([
         fetchProcurementCategories(),
         supabase
           .from('project_timelines')
@@ -674,13 +677,34 @@ export default function VendorsPage() {
           .select('id, name, client_name'),
       ]);
 
-      if (timelinesRes.error) throw timelinesRes.error;
-      if (projectsRes.error) throw projectsRes.error;
+      if (categoriesResult.status === 'fulfilled') {
+        nextCategories = categoriesResult.value;
+      } else {
+        setDataError(
+          categoriesResult.reason instanceof Error
+            ? categoriesResult.reason.message
+            : 'Vendor categories could not be loaded. Vendors are still shown.'
+        );
+      }
 
-      const assignedProjectsByVendorId = buildVendorAssignedProjectsMap(
-        (timelinesRes.data ?? []) as VendorTimelineRow[],
-        (projectsRes.data ?? []) as VendorProjectRow[]
-      );
+      if (
+        timelinesResult.status === 'fulfilled' &&
+        projectsResult.status === 'fulfilled'
+      ) {
+        if (timelinesResult.value.error) {
+          setDataError(timelinesResult.value.error.message);
+        } else if (projectsResult.value.error) {
+          setDataError(projectsResult.value.error.message);
+        } else {
+          assignedProjectsByVendorId = buildVendorAssignedProjectsMap(
+            (timelinesResult.value.data ?? []) as VendorTimelineRow[],
+            (projectsResult.value.data ?? []) as VendorProjectRow[]
+          );
+        }
+      } else {
+        setDataError('Vendor assignment counts could not be loaded. Vendors are still shown.');
+      }
+
       const vendorsWithAssignmentCounts = nextVendors.map(vendor => ({
         ...vendor,
         assignedProjectCount: assignedProjectsByVendorId[vendor.id]?.length ?? 0,
@@ -694,16 +718,21 @@ export default function VendorsPage() {
           : currentVendor
       );
       setCategoryOptions(
-        mergeDropdownOptions(getDefaultCategoryOptions(), nextCategories)
+        mergeDropdownOptions(
+          getDefaultCategoryOptions(),
+          nextCategories.length > 0 ? nextCategories : getStoredCategoryOptions()
+        )
       );
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Could not load Supabase vendor masters.';
+          : 'Could not load Supabase vendors.';
 
       setDataError(message);
       setVendors([]);
+      setVendorAssignedProjectsByVendorId({});
+      setSelectedVendor(null);
       setCategoryOptions(getStoredCategoryOptions());
     } finally {
       setIsLoadingMasters(false);
