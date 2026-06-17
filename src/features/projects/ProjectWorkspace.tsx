@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { ArrowLeft, ChevronDown, ExternalLink, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ExternalLink, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
@@ -57,13 +57,19 @@ type CheckpointDetailTextField =
   | 'notes'
   | 'clientRequirements'
   | 'siteMeasurements'
-  | 'customRequirements';
+  | 'customRequirements'
+  | 'designApprovalNotes'
+  | 'designEstimateNotes'
+  | 'designBypassReason';
 
 interface CheckpointDetailForm {
   notes: string;
   clientRequirements: string;
   siteMeasurements: string;
   customRequirements: string;
+  designApprovalNotes: string;
+  designEstimateNotes: string;
+  designBypassReason: string;
   documents: CheckpointDocumentForm[];
 }
 
@@ -72,6 +78,9 @@ const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
   clientRequirements: '',
   siteMeasurements: '',
   customRequirements: '',
+  designApprovalNotes: '',
+  designEstimateNotes: '',
+  designBypassReason: '',
   documents: [],
 };
 
@@ -123,6 +132,9 @@ function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetai
     clientRequirements: toSafeString(metadata.client_requirements ?? metadata.clientRequirements),
     siteMeasurements: toSafeString(metadata.site_measurements ?? metadata.siteMeasurements),
     customRequirements: toSafeString(metadata.custom_requirements ?? metadata.customRequirements),
+    designApprovalNotes: toSafeString(metadata.design_approval_notes ?? metadata.designApprovalNotes),
+    designEstimateNotes: toSafeString(metadata.design_estimate_notes ?? metadata.designEstimateNotes),
+    designBypassReason: toSafeString(metadata.design_bypass_reason ?? metadata.designBypassReason),
     documents: getCheckpointDocuments(checkpoint),
   };
 }
@@ -170,6 +182,48 @@ function buildInitialSiteVisitChecklist(
   });
 }
 
+function buildDesignPhaseChecklist(
+  checkpoint: ProjectCheckpoint,
+  form: CheckpointDetailForm
+) {
+  const hasEstimateOrBypass =
+    hasText(form.designEstimateNotes) || hasText(form.designBypassReason);
+
+  const completionByItemId: Record<string, boolean> = {
+    'design-approval': hasText(form.designApprovalNotes),
+    'design-estimate': hasEstimateOrBypass,
+  };
+
+  return getCheckpointChecklistItems(checkpoint).map(item => {
+    const itemId = toSafeString(item.id);
+    const shouldMarkComplete = completionByItemId[itemId];
+
+    return shouldMarkComplete
+      ? {
+          ...item,
+          is_completed: true,
+          completed: true,
+          status: 'completed',
+        }
+      : item;
+  });
+}
+
+function buildCheckpointChecklist(
+  checkpoint: ProjectCheckpoint,
+  form: CheckpointDetailForm
+) {
+  if (checkpoint.checkpoint_key === 'initial_site_visit') {
+    return buildInitialSiteVisitChecklist(checkpoint, form);
+  }
+
+  if (checkpoint.checkpoint_key === 'design_phase') {
+    return buildDesignPhaseChecklist(checkpoint, form);
+  }
+
+  return checkpoint.checklist;
+}
+
 function getCheckpointSaveStatus(
   checkpoint: ProjectCheckpoint,
   form: CheckpointDetailForm
@@ -183,6 +237,9 @@ function getCheckpointSaveStatus(
     hasText(form.clientRequirements) ||
     hasText(form.siteMeasurements) ||
     hasText(form.customRequirements) ||
+    hasText(form.designApprovalNotes) ||
+    hasText(form.designEstimateNotes) ||
+    hasText(form.designBypassReason) ||
     getCompactCheckpointDocuments(form).length > 0;
 
   return hasProgress && checkpoint.status === 'available'
@@ -806,16 +863,16 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         client_requirements: checkpointDetailForm.clientRequirements.trim(),
         site_measurements: checkpointDetailForm.siteMeasurements.trim(),
         custom_requirements: checkpointDetailForm.customRequirements.trim(),
+        design_approval_notes: checkpointDetailForm.designApprovalNotes.trim(),
+        design_estimate_notes: checkpointDetailForm.designEstimateNotes.trim(),
+        design_bypass_reason: checkpointDetailForm.designBypassReason.trim(),
       };
 
       const updates = {
         notes: checkpointDetailForm.notes.trim(),
         attachments: getCompactCheckpointDocuments(checkpointDetailForm),
         metadata: nextMetadata,
-        checklist:
-          selectedCheckpoint.checkpoint_key === 'initial_site_visit'
-            ? buildInitialSiteVisitChecklist(selectedCheckpoint, checkpointDetailForm)
-            : selectedCheckpoint.checklist,
+        checklist: buildCheckpointChecklist(selectedCheckpoint, checkpointDetailForm),
         status: options?.complete
           ? 'completed'
           : getCheckpointSaveStatus(selectedCheckpoint, checkpointDetailForm),
@@ -1626,7 +1683,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                       : 'border-border bg-card text-muted-foreground'
                                   }`}
                                 >
-                                  {isChecklistItemComplete(item) ? '?' : ''}
+                                  {isChecklistItemComplete(item) ? (
+                                      <Check className="h-2.5 w-2.5" />
+                                    ) : null}
                                 </span>
 
                                 <span className="text-xs leading-5 text-muted-foreground">
@@ -1807,6 +1866,55 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
                       placeholder="Add room-wise measurements, ceiling heights, openings, service points, and measurement caveats."
                     />
+                  </div>
+                )}
+
+                {selectedCheckpoint.checkpoint_key === 'design_phase' && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-border bg-background p-4">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Design Approval
+                      </label>
+                      <textarea
+                        value={checkpointDetailForm.designApprovalNotes}
+                        onChange={event =>
+                          updateCheckpointDetailField('designApprovalNotes', event.target.value)
+                        }
+                        rows={4}
+                        className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                        placeholder="Record approval status, approved concept/version, client comments, and pending revisions."
+                      />
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-background p-4">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Design Estimate / Bypass
+                      </label>
+                      <textarea
+                        value={checkpointDetailForm.designEstimateNotes}
+                        onChange={event =>
+                          updateCheckpointDetailField('designEstimateNotes', event.target.value)
+                        }
+                        rows={4}
+                        className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                        placeholder="Record design estimate reference, estimate status, or confirmation that design estimate is not required."
+                      />
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-background p-4 md:col-span-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Bypass Reason
+                      </label>
+                      <textarea
+                        value={checkpointDetailForm.designBypassReason}
+                        onChange={event =>
+                          updateCheckpointDetailField('designBypassReason', event.target.value)
+                        }
+                        rows={3}
+                        className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                        placeholder="Use this only when the design estimate is intentionally bypassed."
+                      />
+                    </div>
                   </div>
                 )}
 
