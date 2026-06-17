@@ -1213,6 +1213,8 @@ const [timelineConfirmedAt, setTimelineConfirmedAt] = useState(
   const [scheduleZoom, setScheduleZoom] = useState(1);
   const [scheduleDisplayMode, setScheduleDisplayMode] =
     useState<'status' | 'phase'>('status');
+  const [isCompactTimelineViewport, setIsCompactTimelineViewport] =
+    useState(false);
   const [scheduleRescheduleDrag, setScheduleRescheduleDrag] =
     useState<ScheduleRescheduleDragState | null>(null);
   const [scheduleViewportWidth, setScheduleViewportWidth] = useState(0);
@@ -1675,6 +1677,25 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
       window.requestAnimationFrame(scrollToReview);
     });
   }, [pendingTimelineDraft, shouldScrollToPendingTimelineReview]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia(
+      '(max-width: 1023px), (max-height: 599px)'
+    );
+
+    const updateCompactTimelineViewport = () => {
+      setIsCompactTimelineViewport(mediaQuery.matches);
+    };
+
+    updateCompactTimelineViewport();
+    mediaQuery.addEventListener('change', updateCompactTimelineViewport);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateCompactTimelineViewport);
+    };
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'schedule') return;
@@ -4234,6 +4255,12 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     );
   };
 
+  useEffect(() => {
+    if (isCompactTimelineViewport && activeTab === 'schedule') {
+      setActiveTab('overview');
+    }
+  }, [activeTab, isCompactTimelineViewport]);
+
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
@@ -4984,8 +5011,10 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
           )}
 
           <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-card p-1 text-card-foreground shadow-sm">
-            <div className="grid grid-cols-4 gap-1 sm:grid-cols-5">
-              {tabs.map(tab => {
+            <div className="grid grid-cols-4 gap-1 lg:grid-cols-5">
+              {tabs
+                .filter(tab => tab.id !== 'schedule' || !isCompactTimelineViewport)
+                .map(tab => {
                 const isActive = activeTab === tab.id;
                 const actionCount = timelineTabActionCounts[tab.id] ?? 0;
                 const actionCountLabel = actionCount > 99 ? '99+' : String(actionCount);
@@ -4996,7 +5025,7 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
                     className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-medium transition sm:gap-2 sm:text-sm ${
-                      tab.id === 'schedule' ? 'hidden sm:inline-flex ' : ''
+                      tab.id === 'schedule' ? 'hidden lg:inline-flex ' : ''
                     }${
                       isActive
                         ? 'bg-primary text-primary-foreground'

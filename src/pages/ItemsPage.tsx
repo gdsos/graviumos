@@ -9,6 +9,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -441,6 +442,83 @@ function normalizeSupabaseUnitOptions(options: ProcurementOption[]) {
   });
 }
 
+type ItemActionMenuPosition = {
+  top: number;
+  left: number;
+  width: number;
+};
+
+function ItemActionMenu({
+  item,
+  menuPosition,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  item: ProcurementItem;
+  menuPosition: ItemActionMenuPosition | null;
+  onClose: () => void;
+  onEdit: (item: ProcurementItem) => void;
+  onDelete: (item: ProcurementItem) => void;
+}) {
+  if (!menuPosition || typeof document === 'undefined') return null;
+
+  const menuWidth = menuPosition.width;
+  const safeLeft =
+    typeof window === 'undefined'
+      ? menuPosition.left
+      : Math.min(menuPosition.left, window.innerWidth - menuWidth - 12);
+  const safeTop =
+    typeof window === 'undefined'
+      ? menuPosition.top
+      : Math.min(menuPosition.top, window.innerHeight - 104);
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        aria-label="Close item actions"
+        className="fixed inset-0 z-[9998] cursor-default bg-transparent"
+        onClick={onClose}
+      />
+
+      <div
+        className="fixed z-[9999] overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl"
+        style={{
+          top: Math.max(12, safeTop),
+          left: Math.max(12, safeLeft),
+          width: menuWidth,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            onEdit(item);
+            onClose();
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition hover:bg-muted"
+        >
+          <Pencil className="h-4 w-4" />
+          Edit Item
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            onDelete(item);
+            onClose();
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/10"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </button>
+      </div>
+    </>,
+    document.body
+  );
+}
+
 export default function ItemsPage() {
   const [items, setItems] = useState<ProcurementItem[]>([]);
   const [categoryOptions, setCategoryOptions] = useState(() => defaultCategoryOptions);
@@ -453,6 +531,8 @@ export default function ItemsPage() {
   const [modalState, setModalState] = useState<ItemModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProcurementItem | null>(null);
   const [actionMenuItemId, setActionMenuItemId] = useState<string | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] =
+    useState<ItemActionMenuPosition | null>(null);
   const [formState, setFormState] = useState<ItemFormState>(() =>
     createFormState()
   );
@@ -511,6 +591,23 @@ export default function ItemsPage() {
   useEffect(() => {
     void loadProcurementMasters();
   }, []);
+
+  useEffect(() => {
+    if (!actionMenuItemId) return;
+
+    const closeActionMenu = () => {
+      setActionMenuItemId(null);
+      setActionMenuPosition(null);
+    };
+
+    window.addEventListener('resize', closeActionMenu);
+    window.addEventListener('scroll', closeActionMenu, true);
+
+    return () => {
+      window.removeEventListener('resize', closeActionMenu);
+      window.removeEventListener('scroll', closeActionMenu, true);
+    };
+  }, [actionMenuItemId]);
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -949,11 +1046,21 @@ export default function ItemsPage() {
                 <div className="absolute right-4 top-4 flex justify-end lg:relative lg:right-auto lg:top-auto">
                   <button
                     type="button"
-                    onClick={() =>
-                      setActionMenuItemId(current =>
-                        current === item.id ? null : item.id
-                      )
-                    }
+                    onClick={event => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const isCurrentMenuOpen = actionMenuItemId === item.id;
+
+                      setActionMenuItemId(isCurrentMenuOpen ? null : item.id);
+                      setActionMenuPosition(
+                        isCurrentMenuOpen
+                          ? null
+                          : {
+                              top: rect.bottom + 8,
+                              left: rect.right - 176,
+                              width: 176,
+                            }
+                      );
+                    }}
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
                     aria-label={`Open actions for ${item.name}`}
                   >
@@ -961,31 +1068,16 @@ export default function ItemsPage() {
                   </button>
 
                   {actionMenuItemId === item.id && (
-                    <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionMenuItemId(null);
-                          openEditModal(item);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition hover:bg-muted"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit Item
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionMenuItemId(null);
-                          setDeleteTarget(item);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive transition hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </button>
-                    </div>
+                    <ItemActionMenu
+                      item={item}
+                      menuPosition={actionMenuPosition}
+                      onClose={() => {
+                        setActionMenuItemId(null);
+                        setActionMenuPosition(null);
+                      }}
+                      onEdit={openEditModal}
+                      onDelete={setDeleteTarget}
+                    />
                   )}
                 </div>
               </article>
