@@ -83,6 +83,39 @@ export interface Project {
   updated_at: string;
 }
 
+export type ProjectCheckpointKey =
+  | 'initial_site_visit'
+  | 'design_phase'
+  | 'execution'
+  | 'quality_control'
+  | 'handover';
+
+export type ProjectCheckpointStatus =
+  | 'locked'
+  | 'available'
+  | 'in_progress'
+  | 'completed'
+  | 'skipped';
+
+export interface ProjectCheckpoint {
+  id: string;
+  project_id: string;
+  checkpoint_key: ProjectCheckpointKey;
+  title: string;
+  status: ProjectCheckpointStatus;
+  sort_order: number;
+  is_required: boolean;
+  notes: string;
+  checklist: Array<Record<string, unknown>>;
+  attachments: Array<Record<string, unknown>>;
+  metadata: Record<string, unknown>;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProjectExpense {
   id: string;
   project_id: string;
