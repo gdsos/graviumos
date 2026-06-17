@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, type Lead, type Project, type ProjectCheckpoint, type ProjectDocument } from '../../lib/supabase';
+import { canManagePage } from '../../lib/pagePermissions';
 import type { ProjectWorkspaceMode } from './projectTypes';
 import { ensureProjectCheckpoints, sortProjectCheckpoints, updateProjectCheckpoint } from './projectCheckpoints';
 
@@ -814,6 +815,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
   const isAdminMode = mode === 'admin';
   const canManageProjects = isAdminMode && isAdmin();
+  const canManageProjectDocuments =
+    canManageProjects || canManagePage(profile, 'portal.projects');
 
   async function fetchProjects() {
     setLoading(true);
@@ -1094,8 +1097,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const saveProjectDocument = async () => {
     if (!selectedProject) return;
 
-    if (!canManageProjects) {
-      setProjectDocumentModalError('Only admins can add project documents.');
+    if (!canManageProjectDocuments) {
+      setProjectDocumentModalError('Projects manage access is required to add project documents.');
       return;
     }
 
@@ -2179,7 +2182,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </p>
                 </div>
 
-                {canManageProjects && (
+                {canManageProjectDocuments && (
                   <Button
                     type="button"
                     variant="outline"

@@ -123,6 +123,13 @@ export interface ProjectDocument {
   document_url: string;
   category: string;
   notes: string;
+  storage_provider: 'external_link' | 'google_drive' | string;
+  drive_file_id: string | null;
+  drive_folder_id: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  uploaded_by: string | null;
+  uploaded_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
