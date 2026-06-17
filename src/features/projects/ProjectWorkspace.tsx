@@ -2754,7 +2754,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </button>
                 </div>
 
-                <div className="max-h-[calc(90vh-154px)] overflow-y-auto p-5">
+                <div className="p-5">
                   {documentUrl ? (
                     <div className="space-y-4">
                       <div className="overflow-hidden rounded-2xl border border-border bg-background">
@@ -2765,18 +2765,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         />
                       </div>
 
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <a
-                          href={documentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex w-fit items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-                        >
-                          Open document in new tab
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-
-                        {canManageProjectDocuments && (
+                      {canManageProjectDocuments && (
+                        <div className="flex justify-end">
                           <Button
                             type="button"
                             variant="destructive"
@@ -2788,8 +2778,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                             <Trash2 className="h-4 w-4" />
                             Delete Document
                           </Button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
