@@ -256,15 +256,25 @@ function getStoredCostEstimateUnits() {
 }
 
 async function saveCostEstimateUnitsToStorage(units: CostEstimateUnit[]) {
-  const payload = units.map(unit => {
+  const unitPayloadByValue = new Map<
+    string,
+    { id: string; value: string; label: string; short_label: string }
+  >();
+
+  units.forEach(unit => {
     const value = normalizeUnitValue(unit.shortLabel);
 
-    return {
+    if (!value) return;
+
+    unitPayloadByValue.set(value, {
       id: `unit-${value}`,
       value,
       label: unit.label?.trim().replaceAll('_', ' ') || formatUnitLabel(value),
-    };
+      short_label: value,
+    });
   });
+
+  const payload = Array.from(unitPayloadByValue.values());
 
   if (payload.length === 0) return;
 
