@@ -14,7 +14,7 @@ interface ProjectWorkspaceProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  Active: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:text-emerald-100',
+  Active: 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50',
   Completed: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   'On Hold': 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   Cancelled: 'border-destructive/20 bg-destructive/10 text-destructive',
@@ -72,7 +72,7 @@ type DesignPhaseWorkflowStatus = (typeof DESIGN_PHASE_WORKFLOW_STATUSES)[number]
 const DESIGN_PHASE_STATUS_STYLES: Record<DesignPhaseWorkflowStatus, string> = {
   waiting: 'border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   in_progress: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  approved: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:border-emerald-400/60 dark:bg-emerald-500/25 dark:text-emerald-100',
+  approved: 'border-[#00E676]/90 bg-[#00D084]/40 text-[#E9FFF4] shadow-[0_0_26px_rgba(0,208,132,0.24)]',
   bypassed: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
 };
 
@@ -453,7 +453,7 @@ const CHECKPOINT_STATUS_STYLES: Record<string, string> = {
   locked: 'border-border bg-muted text-muted-foreground',
   available: 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   in_progress: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  completed: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:text-emerald-100',
+  completed: 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50',
   skipped: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300',
 };
 
@@ -2611,7 +2611,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                           <span
                             className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
                               checkpointDetailForm.designEstimateApproved
-                                ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-800 dark:text-emerald-100'
+                                ? 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50'
                                 : 'border-border bg-muted text-muted-foreground'
                             }`}
                           >
@@ -2780,10 +2780,10 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     {checkpointDetailForm.designEstimateApproved &&
                       checkpointDetailForm.designPhaseStatus !== 'approved' &&
                       checkpointDetailForm.designPhaseStatus !== 'bypassed' && (
-                        <div className="rounded-2xl border border-emerald-400/50 bg-emerald-500/20 p-4">
+                        <div className="rounded-2xl border border-emerald-300/80 bg-emerald-500/35 p-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-100">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-950 dark:text-emerald-50">
                                 Ready For Design Approval
                               </p>
                               <p className="mt-1 text-xs leading-5 text-muted-foreground">
