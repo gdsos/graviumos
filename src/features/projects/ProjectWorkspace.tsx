@@ -61,6 +61,16 @@ type ProjectTimelineSummary = {
   timeline_confirmed_at: string | null;
 };
 
+type ProjectStageAction = {
+  label: string;
+  description: string;
+  lockedReason: string;
+  isAvailable: boolean;
+  to: string | null;
+  statusLabel: string;
+  checkpointKey?: ProjectCheckpoint['checkpoint_key'];
+};
+
 const EMPTY_PROJECT_DOCUMENT_FORM: ProjectDocumentForm = {
   name: '',
   document_url: '',
@@ -760,49 +770,64 @@ function isCheckpointComplete(checkpoint: ProjectCheckpoint | undefined) {
 function createProjectStageActions(
   mode: ProjectWorkspaceMode,
   projectId: string,
-  checkpoints: ProjectCheckpoint[]
-) {
+  checkpoints: ProjectCheckpoint[],
+  timeline: ProjectTimelineSummary | null | undefined,
+  isTimelineLoading = false
+): ProjectStageAction[] {
   const base = getRouteBase(mode);
   const query = `?projectId=${encodeURIComponent(projectId)}`;
 
+  const initialVisitCheckpoint = getCheckpointByKey(checkpoints, 'initial_site_visit');
   const designCheckpoint = getCheckpointByKey(checkpoints, 'design_phase');
   const executionCheckpoint = getCheckpointByKey(checkpoints, 'execution');
   const qualityCheckpoint = getCheckpointByKey(checkpoints, 'quality_control');
   const handoverCheckpoint = getCheckpointByKey(checkpoints, 'handover');
 
+  const isInitialVisitAvailable = isCheckpointAvailable(initialVisitCheckpoint);
   const isDesignAvailable = isCheckpointAvailable(designCheckpoint);
   const isExecutionAvailable = isCheckpointAvailable(executionCheckpoint);
   const isQualityAvailable = isCheckpointAvailable(qualityCheckpoint);
   const isHandoverAvailable = isCheckpointAvailable(handoverCheckpoint);
+  const timelineStatusLabel = getProjectTimelineStatusLabel(timeline, isTimelineLoading);
 
   return [
     {
+      label: 'Initial Site Visit',
+      description: 'Open this project?s site measurements, client requirements, and custom notes.',
+      lockedReason: 'Project checkpoints are still being prepared.',
+      isAvailable: isInitialVisitAvailable,
+      to: null,
+      statusLabel: isInitialVisitAvailable ? 'Open checkpoint' : 'Locked',
+      checkpointKey: 'initial_site_visit',
+    },
+    {
       label: 'Design Phase',
-      description: 'Handle design approval and design estimate/bypass from project checkpoints.',
+      description: 'Handle design approval, design fee estimate, or design bypass for this project.',
       lockedReason: 'Complete Initial Site Visit first.',
       isAvailable: isDesignAvailable,
       to: null,
-      statusLabel: isDesignAvailable ? 'Available here' : 'Locked',
+      statusLabel: isDesignAvailable ? 'Open checkpoint' : 'Locked',
+      checkpointKey: 'design_phase',
     },
     {
-      label: 'Project Cost Estimate',
-      description: 'Open only this project-linked cost estimate workspace.',
-      lockedReason: 'Complete Design Phase first.',
-      isAvailable: isExecutionAvailable,
+      label: 'Cost Estimate',
+      description: 'Open this project?s linked estimate workspace. Site visit requirements can prefill the draft.',
+      lockedReason: 'Initial Site Visit / Design Phase is not available yet.',
+      isAvailable: isDesignAvailable,
       to: `${base}/cost-estimates${query}`,
-      statusLabel: isExecutionAvailable ? 'Open project estimate' : 'Locked',
+      statusLabel: isDesignAvailable ? 'Open project estimate' : 'Locked',
     },
     {
-      label: 'Project Timeline',
-      description: 'Open only this project-linked timeline workspace.',
+      label: 'Timeline',
+      description: 'Open this project?s linked timeline workspace after estimate approval / execution readiness.',
       lockedReason: 'Execution stage must be available first.',
       isAvailable: isExecutionAvailable,
       to: `${base}/timeline${query}`,
-      statusLabel: isExecutionAvailable ? 'Open project timeline' : 'Locked',
+      statusLabel: isExecutionAvailable ? timelineStatusLabel : 'Locked',
     },
     {
-      label: 'Project Finance',
-      description: 'Open this project account only after execution is available.',
+      label: 'Finance',
+      description: 'Open this project?s finance account. Finance data entry stays inside Finance only.',
       lockedReason: 'Execution stage must be available first.',
       isAvailable: isExecutionAvailable,
       to: `${base}/financials${query}`,
@@ -810,19 +835,21 @@ function createProjectStageActions(
     },
     {
       label: 'Quality Control',
-      description: 'Ops & Quality Control checklist before handover.',
+      description: 'Open this project?s QC checklist and QC report controls.',
       lockedReason: 'Complete execution requirements first.',
       isAvailable: isQualityAvailable,
       to: null,
-      statusLabel: isQualityAvailable ? 'Available here' : 'Locked',
+      statusLabel: isQualityAvailable ? 'Open checkpoint' : 'Locked',
+      checkpointKey: 'quality_control',
     },
     {
-      label: 'Handover Done',
-      description: 'Final project handover and closeout.',
+      label: 'Handover',
+      description: 'Open final handover and project closeout confirmation.',
       lockedReason: 'Quality Control must be completed first.',
       isAvailable: isHandoverAvailable,
       to: null,
-      statusLabel: isHandoverAvailable ? 'Available here' : 'Locked',
+      statusLabel: isHandoverAvailable ? 'Open checkpoint' : 'Locked',
+      checkpointKey: 'handover',
     },
   ];
 }
@@ -2614,7 +2641,13 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   );
 
   if (selectedProject) {
-    const projectStageActions = createProjectStageActions(mode, selectedProject.id, projectCheckpoints);
+    const projectStageActions = createProjectStageActions(
+                mode,
+                selectedProject.id,
+                projectCheckpoints,
+                projectTimelineSummaries[selectedProject.id],
+                projectTimelineSummariesLoading
+              );
     const completedCheckpointCount = projectCheckpoints.filter(
       checkpoint => checkpoint.status === 'completed' || checkpoint.status === 'skipped'
     ).length;
@@ -2982,6 +3015,24 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       >
                         {inner}
                       </Link>
+                    );
+                  }
+
+                  if (action.checkpointKey && action.isAvailable) {
+                    const checkpoint = getCheckpointByKey(
+                      projectCheckpoints,
+                      action.checkpointKey
+                    );
+
+                    return (
+                      <button
+                        key={action.label}
+                        type="button"
+                        onClick={() => checkpoint && openCheckpointDetail(checkpoint)}
+                        className="flex min-h-24 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-left transition-colors hover:border-sky-400/45 hover:bg-sky-500/15"
+                      >
+                        {inner}
+                      </button>
                     );
                   }
 
