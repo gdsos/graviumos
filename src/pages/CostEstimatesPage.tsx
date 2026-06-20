@@ -20,7 +20,6 @@ import {
   DEFAULT_MISC_CHARGE_PERCENT,
   DEFAULT_SERVICE_CHARGE_PERCENT,
 } from '@/features/cost-estimate/calculator';
-import { demoCostEstimateAreas } from '@/features/cost-estimate/data';
 import type {
   CostEstimateArea,
   CostEstimateLineItem,
@@ -124,6 +123,41 @@ function getRequirementAreaType(areaName: string): CostEstimateArea['type'] {
   return 'custom';
 }
 
+function normalizeRequirementUnit(value: string) {
+  const normalizedValue = value.trim().toLowerCase();
+
+  if (!normalizedValue) return 'sqft';
+  if (['sq ft', 'sq.ft', 'sft'].includes(normalizedValue)) return 'sqft';
+  if (['sq m', 'sq.m', 'm2', 'm?'].includes(normalizedValue)) return 'sqm';
+  if (['running feet', 'running foot', 'linear feet', 'linear foot'].includes(normalizedValue)) return 'rft';
+  if (['nos', 'no', 'number', 'numbers', 'piece', 'pieces', 'pcs'].includes(normalizedValue)) return 'nos';
+  if (['each', 'ea'].includes(normalizedValue)) return 'each';
+
+  return normalizedValue;
+}
+
+function getRequirementUnitMode(unit: string) {
+  const normalizedUnit = normalizeRequirementUnit(unit);
+
+  if (['sqft', 'sqm'].includes(normalizedUnit)) return 'area';
+  if (['rft', 'ft', 'feet', 'foot', 'm', 'meter', 'metre', 'cm', 'mm', 'inch', 'in'].includes(normalizedUnit)) {
+    return 'linear';
+  }
+
+  return 'count';
+}
+
+function convertRequirementLengthCm(lengthCm: number, unit: string) {
+  const normalizedUnit = normalizeRequirementUnit(unit);
+
+  if (normalizedUnit === 'cm') return lengthCm;
+  if (normalizedUnit === 'mm') return lengthCm * 10;
+  if (normalizedUnit === 'm' || normalizedUnit === 'meter' || normalizedUnit === 'metre') return lengthCm / 100;
+  if (normalizedUnit === 'inch' || normalizedUnit === 'in') return lengthCm / 2.54;
+
+  return lengthCm / 30.48;
+}
+
 function getRequirementRowsFromMetadata(metadata: unknown): SiteVisitRequirementRow[] {
   const record =
     metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
@@ -141,15 +175,96 @@ function getRequirementRowsFromMetadata(metadata: unknown): SiteVisitRequirement
       const areaName = toSafeString(rowRecord.area_name ?? rowRecord.areaName).trim();
       const itemName = toSafeString(rowRecord.item_name ?? rowRecord.itemName).trim();
       const notes = toSafeString(rowRecord.notes).trim();
-      const quantity = Number(rowRecord.quantity);
+      const unitLabel = normalizeRequirementUnit(
+        toSafeString(
+          rowRecord.output_unit ??
+            rowRecord.outputUnit ??
+            rowRecord.unit ??
+            rowRecord.unitLabel
+        ).trim() || 'sqft'
+      );
+      const unitMode = getRequirementUnitMode(unitLabel);
+      const rawMeasurementRows =
+        rowRecord.measurement_rows ??
+        rowRecord.measurementRows ??
+        rowRecord.measurements;
+      const measurementQuantity = Array.isArray(rawMeasurementRows)
+        ? rawMeasurementRows.reduce((total, measurement) => {
+            const measurementRecord =
+              measurement && typeof measurement === 'object'
+                ? (measurement as Record<string, unknown>)
+                : {};
+
+            if (unitMode === 'area') {
+              const explicitArea = Number(
+                unitLabel === 'sqm'
+                  ? measurementRecord.area_sqm ?? measurementRecord.areaSqm
+                  : measurementRecord.area_sqft ?? measurementRecord.areaSqft
+              );
+
+              if (Number.isFinite(explicitArea) && explicitArea > 0) {
+                return total + explicitArea;
+              }
+
+              const widthCm = Number(
+                measurementRecord.width_cm ?? measurementRecord.widthCm
+              );
+              const heightCm = Number(
+                measurementRecord.height_cm ?? measurementRecord.heightCm
+              );
+
+              if (
+                !Number.isFinite(widthCm) ||
+                !Number.isFinite(heightCm) ||
+                widthCm <= 0 ||
+                heightCm <= 0
+              ) {
+                return total;
+              }
+
+              const areaSqm = (widthCm * heightCm) / 10000;
+
+              return total + (
+                unitLabel === 'sqm' ? areaSqm : areaSqm * 10.7639104167
+              );
+            }
+
+            if (unitMode === 'linear') {
+              const lengthCm = Number(
+                measurementRecord.length_cm ?? measurementRecord.lengthCm
+              );
+
+              return Number.isFinite(lengthCm) && lengthCm > 0
+                ? total + convertRequirementLengthCm(lengthCm, unitLabel)
+                : total;
+            }
+
+            const quantity = Number(
+              measurementRecord.quantity ?? measurementRecord.qty
+            );
+
+            return Number.isFinite(quantity) && quantity > 0
+              ? total + quantity
+              : total;
+          }, 0)
+        : 0;
+      const explicitQuantity = Number(
+        rowRecord.quantity ?? rowRecord.calculated_quantity
+      );
+      const quantity =
+        measurementQuantity > 0
+          ? Math.round(measurementQuantity * 100) / 100
+          : Number.isFinite(explicitQuantity) && explicitQuantity > 0
+            ? explicitQuantity
+            : 1;
 
       return {
         id: toSafeString(rowRecord.id) || createId('site-visit-requirement'),
         areaName,
         itemId: toSafeString(rowRecord.item_id ?? rowRecord.itemId).trim() || null,
         itemName,
-        unitLabel: toSafeString(rowRecord.unit ?? rowRecord.unitLabel).trim() || 'sqft',
-        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+        unitLabel,
+        quantity,
         notes,
         ratePerUnit: 0,
         defaultDescription: '',
@@ -272,6 +387,29 @@ function createId(prefix: string) {
 }
 
 const COST_ESTIMATE_STORAGE_KEY = 'gravium-os-cost-estimates';
+function getEstimateAreaMergeKey(area: CostEstimateArea) {
+  return area.name.trim().toLowerCase();
+}
+
+function mergeEstimateAreaLists(
+  primaryAreas: CostEstimateArea[],
+  secondaryAreas: CostEstimateArea[]
+) {
+  const seenKeys = new Set<string>();
+  const mergedAreas: CostEstimateArea[] = [];
+
+  [...primaryAreas, ...secondaryAreas].forEach(area => {
+    const key = getEstimateAreaMergeKey(area) || area.id;
+
+    if (seenKeys.has(key)) return;
+
+    seenKeys.add(key);
+    mergedAreas.push(area);
+  });
+
+  return mergedAreas;
+}
+
 const COST_ESTIMATE_SUPABASE_IMPORT_KEY =
   'gravium-os-cost-estimates-supabase-imported';
 
@@ -435,6 +573,12 @@ export default function CostEstimatesPage() {
   const [isProjectSuggestionOpen, setIsProjectSuggestionOpen] = useState(false);
   const [projectOptions, setProjectOptions] = useState<Project[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const routeProjectId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+
+    return new URLSearchParams(window.location.search).get('projectId')?.trim() ?? '';
+  }, []);
+  const [hasHandledRouteProjectId, setHasHandledRouteProjectId] = useState(false);
   const [pendingRevenueApproval, setPendingRevenueApproval] = useState<{
     payload: EstimateEditorPayload;
     record: EstimateCardRecord;
@@ -444,12 +588,11 @@ export default function CostEstimatesPage() {
   const [siteVisitRequirementPrompt, setSiteVisitRequirementPrompt] = useState<{
     rows: SiteVisitRequirementRow[];
   } | null>(null);
+  const [isSiteVisitRequirementDialogOpen, setIsSiteVisitRequirementDialogOpen] =
+    useState(false);
   const [, setIsCheckingSiteVisitRequirements] = useState(false);
-  const [modalAreas, setModalAreas] =
-    useState<CostEstimateArea[]>(demoCostEstimateAreas);
-  const [selectedAreaIds, setSelectedAreaIds] = useState(
-    demoCostEstimateAreas.map(area => area.id)
-  );
+  const [modalAreas, setModalAreas] = useState<CostEstimateArea[]>([]);
+  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([]);
   const {
     showOperationLoading,
     showOperationSuccess,
@@ -617,7 +760,12 @@ export default function CostEstimatesPage() {
     setSelectedProjectId(UNASSIGNED_PROJECT_ID);
     setProjectSearch('Unassigned Draft');
     setSiteVisitRequirementPrompt(null);
+    setIsSiteVisitRequirementDialogOpen(false);
     setIsProjectSuggestionOpen(false);
+    setModalAreas([]);
+    setSelectedAreaIds([]);
+    setAreaSelectionUndoStack([]);
+    setNewAreaName('');
     setCreateStep('areas');
   };
 
@@ -632,6 +780,11 @@ export default function CostEstimatesPage() {
     setProjectSearch(`${project.name} - ${project.client || 'No client assigned'}`);
     setIsProjectSuggestionOpen(false);
     setSiteVisitRequirementPrompt(null);
+    setIsSiteVisitRequirementDialogOpen(false);
+    setModalAreas([]);
+    setSelectedAreaIds([]);
+    setAreaSelectionUndoStack([]);
+    setNewAreaName('');
     setIsCheckingSiteVisitRequirements(true);
 
     try {
@@ -639,6 +792,7 @@ export default function CostEstimatesPage() {
 
       if (requirementRows.length > 0) {
         setSiteVisitRequirementPrompt({ rows: requirementRows });
+        setIsSiteVisitRequirementDialogOpen(true);
         return;
       }
 
@@ -651,10 +805,44 @@ export default function CostEstimatesPage() {
     }
   };
 
+  useEffect(() => {
+    if (!routeProjectId || hasHandledRouteProjectId || isLoadingProjects) return;
+
+    const linkedRecord = records.find(record => record.projectId === routeProjectId);
+
+    if (linkedRecord) {
+      setSelectedRecordId(linkedRecord.id);
+      setIsViewingApprovedSnapshot(false);
+      setIsCreateModalOpen(false);
+      setSiteVisitRequirementPrompt(null);
+      setIsSiteVisitRequirementDialogOpen(false);
+      setHasHandledRouteProjectId(true);
+      return;
+    }
+
+    const routeProject = projectOptions.find(project => project.id === routeProjectId);
+
+    if (!routeProject) return;
+
+    void (async () => {
+      await handleSelectProject(routeProject.id);
+      setIsCreateModalOpen(true);
+      setHasHandledRouteProjectId(true);
+    })();
+  }, [
+    hasHandledRouteProjectId,
+    isLoadingProjects,
+    projectOptions,
+    records,
+    routeProjectId,
+  ]);
+
+
   const handleProjectSearchChange = (value: string) => {
     setProjectSearch(value);
     setSelectedProjectId(UNASSIGNED_PROJECT_ID);
     setSiteVisitRequirementPrompt(null);
+    setIsSiteVisitRequirementDialogOpen(false);
     setCreateStep('project');
     setIsProjectSuggestionOpen(true);
   };
@@ -864,9 +1052,10 @@ export default function CostEstimatesPage() {
     setProjectSearch('Unassigned Draft');
     setIsProjectSuggestionOpen(false);
     setSiteVisitRequirementPrompt(null);
+    setIsSiteVisitRequirementDialogOpen(false);
     setIsCheckingSiteVisitRequirements(false);
-    setModalAreas(demoCostEstimateAreas);
-    setSelectedAreaIds(demoCostEstimateAreas.map(area => area.id));
+    setModalAreas([]);
+    setSelectedAreaIds([]);
     setAreaSelectionUndoStack([]);
     setNewAreaName('');
     setCreateStep('project');
@@ -942,6 +1131,9 @@ export default function CostEstimatesPage() {
     const prefill = siteVisitRequirementRows?.length
       ? buildEstimatePrefillFromSiteVisitRequirements(siteVisitRequirementRows)
       : null;
+    const selectedEstimateAreas = prefill
+      ? mergeEstimateAreaLists(prefill.areas, selectedAreas)
+      : selectedAreas;
 
     const nextRecord: EstimateCardRecord = {
       id: createId('estimate'),
@@ -956,7 +1148,7 @@ export default function CostEstimatesPage() {
       version: 1,
       grandTotal: 0,
       updatedAt: nowTimestamp(),
-      areas: prefill?.areas ?? selectedAreas,
+      areas: selectedEstimateAreas,
       lineItems: prefill?.lineItems ?? [],
       serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
       miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
@@ -973,6 +1165,7 @@ export default function CostEstimatesPage() {
       setIsViewingApprovedSnapshot(false);
       setIsCreateModalOpen(false);
       setSiteVisitRequirementPrompt(null);
+      setIsSiteVisitRequirementDialogOpen(false);
       await showOperationSuccess('Estimate Created');
     } catch (error) {
       console.error('Could not create estimate.', error);
@@ -981,17 +1174,33 @@ export default function CostEstimatesPage() {
   };
 
   const handleStartEstimation = async () => {
-    await createEstimateRecord();
+    await createEstimateRecord(siteVisitRequirementPrompt?.rows);
   };
 
-  const handleUseSiteVisitRequirements = async () => {
+  const handleUseSiteVisitRequirements = () => {
     if (!siteVisitRequirementPrompt) return;
 
-    await createEstimateRecord(siteVisitRequirementPrompt.rows);
+    const prefill = buildEstimatePrefillFromSiteVisitRequirements(
+      siteVisitRequirementPrompt.rows
+    );
+    const mergedAreas = mergeEstimateAreaLists(prefill.areas, modalAreas);
+    const prefilledAreaIds = prefill.areas.map(area => area.id);
+
+    setModalAreas(mergedAreas);
+    setSelectedAreaIds(prefilledAreaIds);
+    setAreaSelectionUndoStack([]);
+    setNewAreaName('');
+    setCreateStep('areas');
+    setIsSiteVisitRequirementDialogOpen(false);
   };
 
   const handleSkipSiteVisitRequirements = () => {
     setSiteVisitRequirementPrompt(null);
+    setIsSiteVisitRequirementDialogOpen(false);
+    setModalAreas([]);
+    setSelectedAreaIds([]);
+    setAreaSelectionUndoStack([]);
+    setNewAreaName('');
     setCreateStep('areas');
   };
 
@@ -1442,7 +1651,7 @@ export default function CostEstimatesPage() {
     );
   }
 
-  const siteVisitRequirementDialog = siteVisitRequirementPrompt && (
+  const siteVisitRequirementDialog = siteVisitRequirementPrompt && isSiteVisitRequirementDialogOpen && (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="flex items-start gap-4">
@@ -1473,7 +1682,7 @@ export default function CostEstimatesPage() {
             type="button"
             onClick={handleUseSiteVisitRequirements}
           >
-            Yes, Use Requirements
+            Yes, Preview Areas
           </Button>
         </div>
       </div>
@@ -1827,48 +2036,54 @@ export default function CostEstimatesPage() {
 
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 sm:px-6">
                   <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-border bg-muted/25 p-2">
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {modalAreas.map(area => {
-                      const isSelected = selectedAreaIds.includes(area.id);
+                    {modalAreas.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+                        No areas added yet. Use the room buttons or add a custom area below.
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {modalAreas.map(area => {
+                          const isSelected = selectedAreaIds.includes(area.id);
 
-                      return (
-                        <button
-                          key={area.id}
-                          type="button"
-                          onClick={() => handleToggleArea(area.id)}
-                          className={`flex min-h-10 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${
-                            isSelected
-                              ? 'border-emerald-500/35 bg-emerald-500/10 text-foreground shadow-sm dark:border-emerald-400/35 dark:bg-emerald-400/10'
-                              : 'border-border bg-card text-foreground hover:border-foreground/30 hover:bg-muted'
-                          }`}
-                        >
-                          <span className="min-w-0 truncate text-xs font-medium sm:text-sm">
-                            {area.name}
-                          </span>
+                          return (
+                            <button
+                              key={area.id}
+                              type="button"
+                              onClick={() => handleToggleArea(area.id)}
+                              className={`flex min-h-10 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                                isSelected
+                                  ? 'border-emerald-500/35 bg-emerald-500/10 text-foreground shadow-sm dark:border-emerald-400/35 dark:bg-emerald-400/10'
+                                  : 'border-border bg-card text-foreground hover:border-foreground/30 hover:bg-muted'
+                              }`}
+                            >
+                              <span className="min-w-0 truncate text-xs font-medium sm:text-sm">
+                                {area.name}
+                              </span>
 
-                          <span
-                            className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                              isSelected
-                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
-                                : 'border-border text-muted-foreground'
-                            }`}
-                            aria-hidden="true"
-                          >
-                            {isSelected ? (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            ) : (
-                              <Plus className="h-3.5 w-3.5" />
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
+                              <span
+                                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                                  isSelected
+                                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
+                                    : 'border-border text-muted-foreground'
+                                }`}
+                                aria-hidden="true"
+                              >
+                                {isSelected ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Plus className="h-3.5 w-3.5" />
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
 
                 <div className="rounded-2xl border border-border bg-muted/30 p-3">
                   <p className="text-sm font-medium text-foreground">
-                    Add area
+                    Add area manually or by room set
                   </p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <input

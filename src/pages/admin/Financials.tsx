@@ -580,6 +580,12 @@ function FinancialsInner() {
   const [timelineGateSources, setTimelineGateSources] = useState<ProjectTimelineGateSourceRow[]>([]);
   const [approvedEstimates, setApprovedEstimates] = useState<ApprovedEstimateRow[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const routeProjectId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+
+    return new URLSearchParams(window.location.search).get('projectId')?.trim() ?? '';
+  }, []);
+  const [hasHandledRouteProjectId, setHasHandledRouteProjectId] = useState(false);
   const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
   const projectPickerRef = useRef<HTMLDivElement | null>(null);
@@ -763,6 +769,19 @@ function FinancialsInner() {
       void supabase.removeChannel(channel);
     };
   }, [fetchFinanceData]);
+
+  useEffect(() => {
+    if (!routeProjectId || hasHandledRouteProjectId || loading) return;
+
+    const routeProject = projects.find(project => project.id === routeProjectId);
+
+    if (!routeProject) return;
+
+    setSelectedProjectId(routeProject.id);
+    setProjectSearch('');
+    setIsProjectPickerOpen(false);
+    setHasHandledRouteProjectId(true);
+  }, [hasHandledRouteProjectId, loading, projects, routeProjectId]);
 
   useEffect(() => {
     if (!isProjectPickerOpen) return;
