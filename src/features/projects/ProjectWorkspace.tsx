@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, MouseEvent } from 'react';
-import { ArrowLeft, Check, ChevronDown, ExternalLink, FileText, MoreHorizontal, Pencil, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ExternalLink, FileText, MoreHorizontal, Pencil, Plus, Search, Trash2, UploadCloud, X,
+  Minus,} from 'lucide-react';
 import { exportDesignEstimatePdf } from '@/features/cost-estimate/export';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
@@ -132,16 +133,6 @@ type ClientRequirementRowForm = {
   notes: string;
 };
 
-type SiteVisitProcurementItemOption = {
-  id: string;
-  name: string;
-  category: string;
-  defaultUnitLabel: string;
-  sellingRatePerUnit: number;
-  defaultDescription: string;
-  status: string;
-};
-
 type SavedClientRequirementRow = {
   id: string;
   area_name: string;
@@ -169,6 +160,15 @@ const SITE_VISIT_AREA_OPTIONS = [
   'TV Unit Area',
   'Wardrobe Area',
 ] as const;
+
+type SiteVisitProcurementItemOption = {
+  id: string;
+  name: string;
+  defaultUnitLabel: string;
+  sellingRatePerUnit: number;
+  defaultDescription: string;
+};
+
 
 function createWorkspaceLocalId(prefix: string) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -997,9 +997,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
       const { data, error } = await supabase
         .from('procurement_items')
-        .select(
-          'id, name, category, default_unit_label, selling_rate_per_unit, default_description, status'
-        )
+        .select('id, name, default_unit_label, selling_rate_per_unit, default_description, status')
         .eq('status', 'active')
         .order('name', { ascending: true });
 
@@ -1015,14 +1013,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         (data || []).map(item => ({
           id: toSafeString(item.id),
           name: toSafeString(item.name),
-          category: toSafeString(item.category),
           defaultUnitLabel: toSafeString(item.default_unit_label) || 'sqft',
           sellingRatePerUnit:
             typeof item.selling_rate_per_unit === 'number'
               ? item.selling_rate_per_unit
               : 0,
           defaultDescription: toSafeString(item.default_description),
-          status: toSafeString(item.status),
         }))
       );
     };
@@ -1546,9 +1542,62 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     }));
   };
 
-  const selectClientRequirementArea = (rowId: string, areaName: string) => {
-    updateClientRequirementRow(rowId, 'areaName', areaName);
+  const handleSiteVisitAreaNameChange = (rowId: string, areaName: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId ? { ...row, areaName } : row
+      ),
+    }));
+    setSiteVisitAreaDropdownRowId(rowId);
+  };
+
+  const handleClearClientRequirementArea = (rowId: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId ? { ...row, areaName: '' } : row
+      ),
+    }));
     setSiteVisitAreaDropdownRowId(null);
+  };
+
+  const selectClientRequirementArea = (rowId: string, areaName: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId ? { ...row, areaName } : row
+      ),
+    }));
+    setSiteVisitAreaDropdownRowId(null);
+  };
+
+  const handleSiteVisitItemNameChange = (rowId: string, itemName: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId ? { ...row, itemName, itemId: '' } : row
+      ),
+    }));
+    setSiteVisitItemDropdownRowId(rowId);
+  };
+
+  const handleClearClientRequirementItem = (rowId: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId
+          ? {
+              ...row,
+              itemId: '',
+              itemName: '',
+              unit: 'sqft',
+              notes: '',
+            }
+          : row
+      ),
+    }));
+    setSiteVisitItemDropdownRowId(null);
   };
 
   const selectClientRequirementItem = (
@@ -3153,7 +3202,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     </div>
 
                     {siteVisitItemError && (
-                      <p className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
+                      <p className="mt-3 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-normal normal-case tracking-normal text-amber-700 dark:text-amber-200">
                         Item master could not be loaded: {siteVisitItemError}
                       </p>
                     )}
@@ -3166,11 +3215,15 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       <div className="mt-4 space-y-3">
                         {checkpointDetailForm.clientRequirementRows.map(row => {
                           const areaSearch = row.areaName.trim().toLowerCase();
-                          const matchingAreas = SITE_VISIT_AREA_OPTIONS.filter(area =>
-                            area.toLowerCase().includes(areaSearch)
+                          const matchingSiteVisitAreas = (
+                            areaSearch
+                              ? SITE_VISIT_AREA_OPTIONS.filter(area =>
+                                  area.toLowerCase().includes(areaSearch)
+                                )
+                              : SITE_VISIT_AREA_OPTIONS
                           ).slice(0, 8);
                           const itemSearch = row.itemName.trim().toLowerCase();
-                          const matchingItems = (
+                          const matchingSiteVisitItems = (
                             itemSearch
                               ? siteVisitItemOptions.filter(item =>
                                   item.name.toLowerCase().includes(itemSearch)
@@ -3184,99 +3237,133 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                               className="rounded-2xl border border-border bg-card p-3"
                             >
                               <div className="grid gap-3 lg:grid-cols-[1fr_1.4fr_0.7fr_0.7fr_auto]">
-                                <label className="relative block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                                  Area
-                                  <input
-                                    type="text"
-                                    value={row.areaName}
-                                    onChange={event => {
-                                      updateClientRequirementRow(
-                                        row.id,
-                                        'areaName',
-                                        event.target.value
-                                      );
-                                      setSiteVisitAreaDropdownRowId(row.id);
-                                    }}
-                                    onFocus={() => setSiteVisitAreaDropdownRowId(row.id)}
-                                    onBlur={() =>
-                                      window.setTimeout(
-                                        () => setSiteVisitAreaDropdownRowId(null),
-                                        140
-                                      )
-                                    }
-                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                                    placeholder="Kitchen / Bedroom"
-                                  />
+                                <div className="grid gap-2">
+                                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    Area
+                                  </span>
+                                  <div className="relative">
+                                    <input
+                                      value={row.areaName}
+                                      onFocus={() => setSiteVisitAreaDropdownRowId(row.id)}
+                                      onBlur={() => {
+                                        window.setTimeout(() => {
+                                          setSiteVisitAreaDropdownRowId(null);
+                                        }, 120);
+                                      }}
+                                      onChange={event =>
+                                        handleSiteVisitAreaNameChange(row.id, event.target.value)
+                                      }
+                                      placeholder="Type area name or search preset"
+                                      className="min-h-10 w-full rounded-lg border border-border bg-background px-3 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                    />
 
-                                  {siteVisitAreaDropdownRowId === row.id &&
-                                    matchingAreas.length > 0 && (
-                                      <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 max-h-56 overflow-y-auto rounded-2xl border border-border bg-popover p-1 shadow-xl">
-                                        {matchingAreas.map(area => (
-                                          <button
-                                            key={area}
-                                            type="button"
-                                            onMouseDown={event => event.preventDefault()}
-                                            onClick={() =>
-                                              selectClientRequirementArea(row.id, area)
-                                            }
-                                            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-popover-foreground hover:bg-muted"
-                                          >
-                                            {area}
-                                          </button>
-                                        ))}
+                                    {row.areaName.trim() && (
+                                      <button
+                                        type="button"
+                                        onMouseDown={event => event.preventDefault()}
+                                        onClick={() => handleClearClientRequirementArea(row.id)}
+                                        className="absolute right-2 top-5 z-[60] flex h-[18px] w-[18px] -translate-y-1/2 items-center justify-center rounded-full border-[2.5px] border-destructive/90 bg-background text-destructive transition hover:border-destructive hover:bg-destructive/10"
+                                        aria-label="Clear selected area"
+                                      >
+                                        <Minus className="h-[11px] w-[11px]" strokeWidth={5} />
+                                      </button>
+                                    )}
+
+                                    {siteVisitAreaDropdownRowId === row.id && (
+                                      <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                                        <div className="max-h-64 overflow-y-auto p-1">
+                                          {matchingSiteVisitAreas.length > 0 ? (
+                                            matchingSiteVisitAreas.map(area => (
+                                              <button
+                                                key={area}
+                                                type="button"
+                                                onMouseDown={event => event.preventDefault()}
+                                                onClick={() =>
+                                                  selectClientRequirementArea(row.id, area)
+                                                }
+                                                className="w-full rounded-lg px-3 py-2 text-left transition hover:bg-muted"
+                                              >
+                                                <span className="block text-sm font-medium text-foreground">
+                                                  {area}
+                                                </span>
+                                              </button>
+                                            ))
+                                          ) : (
+                                            <p className="px-3 py-2 text-xs text-muted-foreground">
+                                              No matching area. Keep typing to use a custom area.
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
                                     )}
-                                </label>
+                                  </div>
+                                </div>
 
-                                <label className="relative block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                                  Item
-                                  <input
-                                    type="text"
-                                    value={row.itemName}
-                                    onChange={event => {
-                                      updateClientRequirementRow(
-                                        row.id,
-                                        'itemName',
-                                        event.target.value
-                                      );
-                                      updateClientRequirementRow(row.id, 'itemId', '');
-                                      setSiteVisitItemDropdownRowId(row.id);
-                                    }}
-                                    onFocus={() => setSiteVisitItemDropdownRowId(row.id)}
-                                    onBlur={() =>
-                                      window.setTimeout(
-                                        () => setSiteVisitItemDropdownRowId(null),
-                                        140
-                                      )
-                                    }
-                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                                    placeholder="Search item master"
-                                  />
+                                <div className="grid gap-2">
+                                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    Item
+                                  </span>
+                                  <div className="relative">
+                                    <input
+                                      value={row.itemName}
+                                      onFocus={() => setSiteVisitItemDropdownRowId(row.id)}
+                                      onBlur={() => {
+                                        window.setTimeout(() => {
+                                          setSiteVisitItemDropdownRowId(null);
+                                        }, 120);
+                                      }}
+                                      onChange={event =>
+                                        handleSiteVisitItemNameChange(row.id, event.target.value)
+                                      }
+                                      placeholder="Type item name or search preset"
+                                      className="min-h-10 w-full rounded-lg border border-border bg-background px-3 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                    />
 
-                                  {siteVisitItemDropdownRowId === row.id &&
-                                    matchingItems.length > 0 && (
-                                      <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 max-h-64 overflow-y-auto rounded-2xl border border-border bg-popover p-1 shadow-xl">
-                                        {matchingItems.map(item => (
-                                          <button
-                                            key={item.id}
-                                            type="button"
-                                            onMouseDown={event => event.preventDefault()}
-                                            onClick={() =>
-                                              selectClientRequirementItem(row.id, item)
-                                            }
-                                            className="block w-full rounded-xl px-3 py-2 text-left hover:bg-muted"
-                                          >
-                                            <span className="block text-sm font-semibold text-popover-foreground">
-                                              {item.name}
-                                            </span>
-                                            <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                                              {item.category || 'Item'} ? {item.defaultUnitLabel || 'sqft'}
-                                            </span>
-                                          </button>
-                                        ))}
+                                    {row.itemName.trim() && (
+                                      <button
+                                        type="button"
+                                        onMouseDown={event => event.preventDefault()}
+                                        onClick={() => handleClearClientRequirementItem(row.id)}
+                                        className="absolute right-2 top-5 z-[60] flex h-[18px] w-[18px] -translate-y-1/2 items-center justify-center rounded-full border-[2.5px] border-destructive/90 bg-background text-destructive transition hover:border-destructive hover:bg-destructive/10"
+                                        aria-label="Clear selected item"
+                                      >
+                                        <Minus className="h-[11px] w-[11px]" strokeWidth={5} />
+                                      </button>
+                                    )}
+
+                                    {siteVisitItemDropdownRowId === row.id && (
+                                      <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg">
+                                        <div className="max-h-64 overflow-y-auto p-1">
+                                          {matchingSiteVisitItems.length > 0 ? (
+                                            matchingSiteVisitItems.map(item => (
+                                              <button
+                                                key={item.id}
+                                                type="button"
+                                                onMouseDown={event => event.preventDefault()}
+                                                onClick={() =>
+                                                  selectClientRequirementItem(row.id, item)
+                                                }
+                                                className="w-full rounded-lg px-3 py-2 text-left transition hover:bg-muted"
+                                              >
+                                                <span className="block text-sm font-medium text-foreground">
+                                                  {item.name}
+                                                </span>
+                                                <span className="mt-0.5 block text-xs text-muted-foreground">
+                                                  {item.defaultUnitLabel || 'sqft'} @{' '}
+                                                  {formatINR(item.sellingRatePerUnit)}
+                                                </span>
+                                              </button>
+                                            ))
+                                          ) : (
+                                            <p className="px-3 py-2 text-xs text-muted-foreground">
+                                              No matching preset. Keep typing to use a custom item.
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
                                     )}
-                                </label>
+                                  </div>
+                                </div>
 
                                 <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                                   Unit
@@ -3290,7 +3377,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                         event.target.value
                                       )
                                     }
-                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                    className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition placeholder:font-normal placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:border-foreground"
                                     placeholder="sqft"
                                   />
                                 </label>
@@ -3309,7 +3396,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                         event.target.value
                                       )
                                     }
-                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                    className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition placeholder:font-normal placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:border-foreground"
                                     placeholder="0"
                                   />
                                 </label>
@@ -3332,7 +3419,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                                     updateClientRequirementRow(row.id, 'notes', event.target.value)
                                   }
                                   rows={2}
-                                  className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                  className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition placeholder:font-normal placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:border-foreground"
                                   placeholder="Client preference, material note, finish, or scope detail."
                                 />
                               </label>
