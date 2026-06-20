@@ -2473,7 +2473,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                           {getCheckpointDescription(checkpoint.checkpoint_key)}
                         </p>
 
-                        {canManageProjects && checkpoint.status !== 'locked' && (
+                        {checkpoint.status !== 'locked' && (
                           <button
                             type="button"
                             onClick={() => openCheckpointDetail(checkpoint)}
