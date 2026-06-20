@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_URL =
   'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,webContentLink';
+const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 type DriveUploadResult = {
@@ -12,6 +14,11 @@ type DriveUploadResult = {
   size?: string;
   webViewLink?: string;
   webContentLink?: string;
+};
+
+type DriveFolderResult = {
+  id: string;
+  name?: string;
 };
 
 function getEnv(name: string) {
@@ -212,17 +219,87 @@ async function makeDriveFileViewable(fileId: string, accessToken: string) {
   }
 }
 
+function getRootDriveFolderId() {
+  return getEnv('GOOGLE_DRIVE_ROOT_FOLDER_ID');
+}
+
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+export async function getOrCreateGoogleDriveFolder(
+  folderName: string,
+  parentFolderId = getRootDriveFolderId()
+): Promise<DriveFolderResult> {
+  const accessToken = await getGoogleDriveAccessToken();
+  const safeFolderName = folderName.trim() || 'Project Documents';
+  const searchUrl = new URL(DRIVE_FILES_URL);
+
+  searchUrl.searchParams.set(
+    'q',
+    `'${escapeDriveQueryValue(parentFolderId)}' in parents and mimeType = '${DRIVE_FOLDER_MIME_TYPE}' and name = '${escapeDriveQueryValue(safeFolderName)}' and trashed = false`
+  );
+  searchUrl.searchParams.set('spaces', 'drive');
+  searchUrl.searchParams.set('fields', 'files(id,name)');
+
+  const searchResponse = await fetch(searchUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const searchBody = await searchResponse.json().catch(() => ({}));
+
+  if (!searchResponse.ok) {
+    throw new Error(searchBody.error?.message || 'Google Drive folder lookup failed.');
+  }
+
+  const existingFolder = Array.isArray(searchBody.files)
+    ? searchBody.files.find((file: DriveFolderResult) => file.id)
+    : null;
+
+  if (existingFolder?.id) {
+    return existingFolder as DriveFolderResult;
+  }
+
+  const createUrl = new URL(DRIVE_FILES_URL);
+  createUrl.searchParams.set('fields', 'id,name');
+
+  const createResponse = await fetch(createUrl.toString(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: safeFolderName,
+      mimeType: DRIVE_FOLDER_MIME_TYPE,
+      parents: [targetParentFolderId],
+    }),
+  });
+
+  const createBody = await createResponse.json().catch(() => ({}));
+
+  if (!createResponse.ok) {
+    throw new Error(createBody.error?.message || 'Google Drive folder creation failed.');
+  }
+
+  return createBody as DriveFolderResult;
+}
+
 export async function uploadFileToGoogleDrive({
   fileName,
   mimeType,
   buffer,
+  parentFolderId,
 }: {
   fileName: string;
   mimeType: string;
   buffer: Buffer;
+  parentFolderId?: string | null;
 }): Promise<DriveUploadResult> {
   const accessToken = await getGoogleDriveAccessToken();
-  const parentFolderId = getEnv('GOOGLE_DRIVE_ROOT_FOLDER_ID');
+  const targetParentFolderId = parentFolderId?.trim() || getRootDriveFolderId();
   const boundary = `gravium_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   const metadata = {

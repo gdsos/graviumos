@@ -2,6 +2,7 @@ import {
   decodeBase64File,
   handleApiError,
   readJsonBody,
+  getOrCreateGoogleDriveFolder,
   requireProjectDocumentManageAccess,
   sendJson,
   uploadFileToGoogleDrive,
@@ -14,6 +15,42 @@ export const config = {
     },
   },
 };
+
+function cleanDriveFolderName(value: unknown) {
+  return String(value ?? '')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function getProjectField(project: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = project[key];
+
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function getProjectDocumentFolderName(
+  project: Record<string, unknown>,
+  projectId: string
+) {
+  const projectName =
+    cleanDriveFolderName(
+      getProjectField(project, ['name', 'project_name', 'title'])
+    ) || 'Project';
+  const clientName = cleanDriveFolderName(
+    getProjectField(project, ['client_name', 'clientName', 'client', 'customer_name', 'lead_name'])
+  );
+  const shortProjectId = projectId.slice(0, 8);
+
+  return [projectName, clientName, shortProjectId].filter(Boolean).join(' - ');
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -46,11 +83,29 @@ export default async function handler(req: any, res: any) {
     }
 
     const { user, serviceClient } = await requireProjectDocumentManageAccess(req);
+
+    const { data: project, error: projectError } = await serviceClient
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    if (projectError) throw projectError;
+
+    if (!project) {
+      sendJson(res, 404, { error: 'Project was not found.' });
+      return;
+    }
+
+    const projectFolder = await getOrCreateGoogleDriveFolder(
+      getProjectDocumentFolderName(project as Record<string, unknown>, projectId)
+    );
     const fileBuffer = decodeBase64File(base64Data);
     const driveFile = await uploadFileToGoogleDrive({
       fileName,
       mimeType,
       buffer: fileBuffer,
+      parentFolderId: projectFolder.id,
     });
 
     const documentUrl =
@@ -67,7 +122,7 @@ export default async function handler(req: any, res: any) {
         notes,
         storage_provider: 'google_drive',
         drive_file_id: driveFile.id,
-        drive_folder_id: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || null,
+        drive_folder_id: projectFolder.id,
         mime_type: driveFile.mimeType || mimeType,
         file_size: driveFile.size ? Number(driveFile.size) : fileBuffer.byteLength,
         uploaded_by: user.id,
