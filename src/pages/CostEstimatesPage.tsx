@@ -57,6 +57,18 @@ interface EstimateEditorPayload {
   approvedSnapshot?: EstimateEditorPayload;
 }
 
+interface SiteVisitRequirementRow {
+  id: string;
+  areaName: string;
+  itemId: string | null;
+  itemName: string;
+  unitLabel: string;
+  quantity: number;
+  notes: string;
+  ratePerUnit: number;
+  defaultDescription: string;
+}
+
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
 
 const customAreaSuggestions = [
@@ -73,6 +85,137 @@ const customAreaSuggestions = [
 
 function nowTimestamp() {
   return new Date().toISOString();
+}
+
+function toSafeString(value: unknown) {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+}
+
+function createEstimateRequirementDescription({
+  areaName,
+  itemName,
+  quantity,
+  unitLabel,
+  notes,
+}: {
+  areaName: string;
+  itemName: string;
+  quantity: number;
+  unitLabel: string;
+  notes: string;
+}) {
+  if (notes.trim()) return notes.trim();
+
+  return `Design, supply, and installation of ${itemName || 'custom work item'} in ${areaName || 'selected area'}, measured as ${quantity || 0} ${unitLabel || 'unit'}, including required materials, fittings, finishing, and site installation.`;
+}
+
+function getRequirementAreaType(areaName: string): CostEstimateArea['type'] {
+  const value = areaName.toLowerCase();
+
+  if (value.includes('kitchen')) return 'kitchen';
+  if (value.includes('bedroom') || value.includes('wardrobe')) return 'bedroom';
+  if (value.includes('bath') || value.includes('toilet') || value.includes('wc')) {
+    return 'bathroom';
+  }
+  if (value.includes('living') || value.includes('dining')) return 'living_room';
+
+  return 'custom';
+}
+
+function getRequirementRowsFromMetadata(metadata: unknown): SiteVisitRequirementRow[] {
+  const record =
+    metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
+  const rawRows =
+    record.client_requirement_items ??
+    record.clientRequirementItems ??
+    record.client_requirements_items;
+
+  if (!Array.isArray(rawRows)) return [];
+
+  return rawRows
+    .map(row => {
+      const rowRecord =
+        row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+      const areaName = toSafeString(rowRecord.area_name ?? rowRecord.areaName).trim();
+      const itemName = toSafeString(rowRecord.item_name ?? rowRecord.itemName).trim();
+      const notes = toSafeString(rowRecord.notes).trim();
+      const quantity = Number(rowRecord.quantity);
+
+      return {
+        id: toSafeString(rowRecord.id) || createId('site-visit-requirement'),
+        areaName,
+        itemId: toSafeString(rowRecord.item_id ?? rowRecord.itemId).trim() || null,
+        itemName,
+        unitLabel: toSafeString(rowRecord.unit ?? rowRecord.unitLabel).trim() || 'sqft',
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+        notes,
+        ratePerUnit: 0,
+        defaultDescription: '',
+      };
+    })
+    .filter(row => row.areaName || row.itemName || row.notes);
+}
+
+function buildEstimatePrefillFromSiteVisitRequirements(rows: SiteVisitRequirementRow[]) {
+  const areas: CostEstimateArea[] = [];
+  const areaIdByName = new Map<string, string>();
+
+  rows.forEach(row => {
+    const areaName = row.areaName.trim() || 'General';
+    const key = areaName.toLowerCase();
+
+    if (areaIdByName.has(key)) return;
+
+    const area: CostEstimateArea = {
+      id: createId('site-visit-area'),
+      name: areaName,
+      type: getRequirementAreaType(areaName),
+    };
+
+    areas.push(area);
+    areaIdByName.set(key, area.id);
+  });
+
+  const fallbackArea: CostEstimateArea =
+    areas[0] ?? {
+      id: createId('site-visit-area'),
+      name: 'General',
+      type: 'custom',
+    };
+
+  if (areas.length === 0) {
+    areas.push(fallbackArea);
+  }
+
+  const lineItems: CostEstimateLineItem[] = rows.map(row => {
+    const areaName = row.areaName.trim() || fallbackArea.name;
+    const areaId = areaIdByName.get(areaName.toLowerCase()) ?? fallbackArea.id;
+    const itemName = row.itemName.trim() || 'Custom Requirement';
+    const description =
+      row.defaultDescription.trim() ||
+      createEstimateRequirementDescription({
+        areaName,
+        itemName,
+        quantity: row.quantity,
+        unitLabel: row.unitLabel,
+        notes: row.notes,
+      });
+
+    return {
+      id: createId('estimate-line'),
+      areaId,
+      name: itemName,
+      description,
+      quantity: row.quantity,
+      unitLabel: row.unitLabel || 'sqft',
+      ratePerUnit: Math.max(0, row.ratePerUnit || 0),
+      remarks: row.notes || undefined,
+    };
+  });
+
+  return { areas, lineItems };
 }
 
 function formatUpdatedAt(value: string) {
@@ -298,6 +441,10 @@ export default function CostEstimatesPage() {
     currentRevenue: number;
     approvedRevenue: number;
   } | null>(null);
+  const [siteVisitRequirementPrompt, setSiteVisitRequirementPrompt] = useState<{
+    rows: SiteVisitRequirementRow[];
+  } | null>(null);
+  const [, setIsCheckingSiteVisitRequirements] = useState(false);
   const [modalAreas, setModalAreas] =
     useState<CostEstimateArea[]>(demoCostEstimateAreas);
   const [selectedAreaIds, setSelectedAreaIds] = useState(
@@ -469,10 +616,12 @@ export default function CostEstimatesPage() {
   const handleSelectUnassignedDraft = () => {
     setSelectedProjectId(UNASSIGNED_PROJECT_ID);
     setProjectSearch('Unassigned Draft');
+    setSiteVisitRequirementPrompt(null);
     setIsProjectSuggestionOpen(false);
+    setCreateStep('areas');
   };
 
-  const handleSelectProject = (projectId: string) => {
+  const handleSelectProject = async (projectId: string) => {
     const project = projectOptions.find(
       currentProject => currentProject.id === projectId
     );
@@ -482,11 +631,31 @@ export default function CostEstimatesPage() {
     setSelectedProjectId(project.id);
     setProjectSearch(`${project.name} - ${project.client || 'No client assigned'}`);
     setIsProjectSuggestionOpen(false);
+    setSiteVisitRequirementPrompt(null);
+    setIsCheckingSiteVisitRequirements(true);
+
+    try {
+      const requirementRows = await fetchInitialSiteVisitRequirements(project.id);
+
+      if (requirementRows.length > 0) {
+        setSiteVisitRequirementPrompt({ rows: requirementRows });
+        return;
+      }
+
+      setCreateStep('areas');
+    } catch (error) {
+      console.error('Could not fetch initial site visit requirements.', error);
+      await showOperationError('Could Not Fetch Site Visit Requirements');
+    } finally {
+      setIsCheckingSiteVisitRequirements(false);
+    }
   };
 
   const handleProjectSearchChange = (value: string) => {
     setProjectSearch(value);
     setSelectedProjectId(UNASSIGNED_PROJECT_ID);
+    setSiteVisitRequirementPrompt(null);
+    setCreateStep('project');
     setIsProjectSuggestionOpen(true);
   };
 
@@ -694,6 +863,8 @@ export default function CostEstimatesPage() {
     setSelectedProjectId(UNASSIGNED_PROJECT_ID);
     setProjectSearch('Unassigned Draft');
     setIsProjectSuggestionOpen(false);
+    setSiteVisitRequirementPrompt(null);
+    setIsCheckingSiteVisitRequirements(false);
     setModalAreas(demoCostEstimateAreas);
     setSelectedAreaIds(demoCostEstimateAreas.map(area => area.id));
     setAreaSelectionUndoStack([]);
@@ -711,7 +882,67 @@ export default function CostEstimatesPage() {
       : `Unassigned Draft ${nextNumber}`;
   };
 
-  const handleStartEstimation = async () => {
+  const fetchInitialSiteVisitRequirements = async (projectId: string) => {
+    const { data, error } = await supabase
+      .from('project_checkpoints')
+      .select('metadata')
+      .eq('project_id', projectId)
+      .eq('checkpoint_key', 'initial_site_visit')
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const rows = getRequirementRowsFromMetadata(data?.metadata);
+
+    if (rows.length === 0) return [];
+
+    const itemIds = rows
+      .map(row => row.itemId)
+      .filter((itemId): itemId is string => Boolean(itemId));
+
+    if (itemIds.length === 0) return rows;
+
+    const { data: itemRecords, error: itemError } = await supabase
+      .from('procurement_items')
+      .select('id, selling_rate_per_unit, default_description')
+      .in('id', itemIds);
+
+    if (itemError) {
+      console.error('Could not fetch procurement item rates for site visit rows.', itemError);
+      return rows;
+    }
+
+    const itemMasterById = new Map(
+      (itemRecords || []).map(item => [
+        toSafeString(item.id),
+        {
+          ratePerUnit:
+            typeof item.selling_rate_per_unit === 'number'
+              ? item.selling_rate_per_unit
+              : 0,
+          defaultDescription: toSafeString(item.default_description),
+        },
+      ])
+    );
+
+    return rows.map(row => {
+      const itemMaster = row.itemId ? itemMasterById.get(row.itemId) : undefined;
+
+      return {
+        ...row,
+        ratePerUnit: itemMaster?.ratePerUnit ?? row.ratePerUnit,
+        defaultDescription: itemMaster?.defaultDescription ?? row.defaultDescription,
+      };
+    });
+  };
+
+  const createEstimateRecord = async (
+    siteVisitRequirementRows?: SiteVisitRequirementRow[]
+  ) => {
+    const prefill = siteVisitRequirementRows?.length
+      ? buildEstimatePrefillFromSiteVisitRequirements(siteVisitRequirementRows)
+      : null;
+
     const nextRecord: EstimateCardRecord = {
       id: createId('estimate'),
       projectId:
@@ -725,8 +956,8 @@ export default function CostEstimatesPage() {
       version: 1,
       grandTotal: 0,
       updatedAt: nowTimestamp(),
-      areas: selectedAreas,
-      lineItems: [],
+      areas: prefill?.areas ?? selectedAreas,
+      lineItems: prefill?.lineItems ?? [],
       serviceChargePercent: DEFAULT_SERVICE_CHARGE_PERCENT,
       miscChargePercent: DEFAULT_MISC_CHARGE_PERCENT,
       targetProjectRevenue: selectedProject?.revenue ?? 0,
@@ -741,11 +972,27 @@ export default function CostEstimatesPage() {
       setSelectedRecordId(nextRecord.id);
       setIsViewingApprovedSnapshot(false);
       setIsCreateModalOpen(false);
+      setSiteVisitRequirementPrompt(null);
       await showOperationSuccess('Estimate Created');
     } catch (error) {
       console.error('Could not create estimate.', error);
       await showOperationError('Could Not Create Estimate');
     }
+  };
+
+  const handleStartEstimation = async () => {
+    await createEstimateRecord();
+  };
+
+  const handleUseSiteVisitRequirements = async () => {
+    if (!siteVisitRequirementPrompt) return;
+
+    await createEstimateRecord(siteVisitRequirementPrompt.rows);
+  };
+
+  const handleSkipSiteVisitRequirements = () => {
+    setSiteVisitRequirementPrompt(null);
+    setCreateStep('areas');
   };
 
   const handleSaveEstimate = async (
@@ -1195,8 +1442,48 @@ export default function CostEstimatesPage() {
     );
   }
 
+  const siteVisitRequirementDialog = siteVisitRequirementPrompt && (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[2rem] border border-border bg-card p-6 text-card-foreground shadow-2xl">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+            <FilePlus2 className="h-5 w-5" />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-lg font-semibold text-foreground">
+              Use Initial Site Visit requirements?
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              This project has {siteVisitRequirementPrompt.rows.length} client requirement item(s) from Initial Site Visit. Use them to prefill estimate areas and row items?
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSkipSiteVisitRequirements}
+          >
+            No, Select Areas
+          </Button>
+
+          <Button
+            type="button"
+            onClick={handleUseSiteVisitRequirements}
+          >
+            Yes, Use Requirements
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      {siteVisitRequirementDialog}
       <PageHeader
         eyebrow="Gravium OS"
         title="Cost Estimates"
