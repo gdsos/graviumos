@@ -122,9 +122,78 @@ type CheckpointDetailTextField =
   | 'designFeeAmount'
   | 'designServiceEstimateNotes';
 
+type ClientRequirementRowForm = {
+  id: string;
+  areaName: string;
+  itemId: string;
+  itemName: string;
+  unit: string;
+  quantity: string;
+  notes: string;
+};
+
+type SiteVisitProcurementItemOption = {
+  id: string;
+  name: string;
+  category: string;
+  defaultUnitLabel: string;
+  sellingRatePerUnit: number;
+  defaultDescription: string;
+  status: string;
+};
+
+type SavedClientRequirementRow = {
+  id: string;
+  area_name: string;
+  item_id: string | null;
+  item_name: string;
+  unit: string;
+  quantity: number | null;
+  notes: string;
+};
+
+const SITE_VISIT_AREA_OPTIONS = [
+  'Living Room',
+  'Dining Area',
+  'Kitchen',
+  'Master Bedroom',
+  'Bedroom 2',
+  'Bedroom 3',
+  'Attached Bath',
+  'Common Bath',
+  'Foyer',
+  'Balcony',
+  'Utility',
+  'Prayer Area',
+  'Study',
+  'TV Unit Area',
+  'Wardrobe Area',
+] as const;
+
+function createWorkspaceLocalId(prefix: string) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createEmptyClientRequirementRow(): ClientRequirementRowForm {
+  return {
+    id: createWorkspaceLocalId('client-requirement'),
+    areaName: '',
+    itemId: '',
+    itemName: '',
+    unit: 'sqft',
+    quantity: '',
+    notes: '',
+  };
+}
+
 interface CheckpointDetailForm {
   notes: string;
   clientRequirements: string;
+  clientRequirementRows: ClientRequirementRowForm[];
   siteMeasurements: string;
   customRequirements: string;
   designApprovalNotes: string;
@@ -141,6 +210,7 @@ interface CheckpointDetailForm {
 const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
   notes: '',
   clientRequirements: '',
+  clientRequirementRows: [],
   siteMeasurements: '',
   customRequirements: '',
   designApprovalNotes: '',
@@ -340,6 +410,71 @@ function getDesignPhaseStatusLabel(status: DesignPhaseWorkflowStatus) {
   }
 }
 
+function getStoredClientRequirementRows(metadata: Record<string, unknown>) {
+  const rawRows =
+    metadata.client_requirement_items ??
+    metadata.clientRequirementItems ??
+    metadata.client_requirements_items;
+
+  if (!Array.isArray(rawRows)) return [];
+
+  return rawRows
+    .map(row => {
+      const record = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+
+      const areaName = toSafeString(record.area_name ?? record.areaName);
+      const itemId = toSafeString(record.item_id ?? record.itemId);
+      const itemName = toSafeString(record.item_name ?? record.itemName);
+      const unit = toSafeString(record.unit) || 'sqft';
+      const quantityValue = record.quantity;
+      const notes = toSafeString(record.notes);
+
+      return {
+        id: toSafeString(record.id) || createWorkspaceLocalId('client-requirement'),
+        areaName,
+        itemId,
+        itemName,
+        unit,
+        quantity:
+          typeof quantityValue === 'number' && Number.isFinite(quantityValue)
+            ? String(quantityValue)
+            : toSafeString(quantityValue),
+        notes,
+      };
+    })
+    .filter(row => row.areaName || row.itemName || row.notes);
+}
+
+function getCompactClientRequirementRows(
+  rows: ClientRequirementRowForm[]
+): SavedClientRequirementRow[] {
+  return rows
+    .map(row => {
+      const areaName = row.areaName.trim();
+      const itemName = row.itemName.trim();
+      const notes = row.notes.trim();
+      const quantity = Number(row.quantity);
+
+      return {
+        id: row.id || createWorkspaceLocalId('client-requirement'),
+        area_name: areaName,
+        item_id: row.itemId.trim() || null,
+        item_name: itemName,
+        unit: row.unit.trim() || 'sqft',
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : null,
+        notes,
+      };
+    })
+    .filter(row => row.area_name || row.item_name || row.notes);
+}
+
+function hasClientRequirementProgress(form: CheckpointDetailForm) {
+  return (
+    getCompactClientRequirementRows(form.clientRequirementRows).length > 0 ||
+    hasText(form.clientRequirements)
+  );
+}
+
 function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetailForm {
   const metadata = getCheckpointMetadata(checkpoint);
   const designPhaseStatus = getDesignPhaseWorkflowStatus(checkpoint, metadata);
@@ -347,6 +482,7 @@ function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetai
   return {
     notes: checkpoint.notes || '',
     clientRequirements: toSafeString(metadata.client_requirements ?? metadata.clientRequirements),
+    clientRequirementRows: getStoredClientRequirementRows(metadata),
     siteMeasurements: toSafeString(metadata.site_measurements ?? metadata.siteMeasurements),
     customRequirements: toSafeString(metadata.custom_requirements ?? metadata.customRequirements),
     designApprovalNotes: toSafeString(metadata.design_approval_notes ?? metadata.designApprovalNotes),
@@ -372,7 +508,7 @@ function buildInitialSiteVisitChecklist(
 ) {
   const completionByItemId: Record<string, boolean> = {
     'site-measurements': hasText(form.siteMeasurements),
-    'client-requirements': hasText(form.clientRequirements),
+    'client-requirements': hasClientRequirementProgress(form),
     'custom-requirements': hasText(form.customRequirements),
   };
 
@@ -452,7 +588,7 @@ function getCheckpointSaveStatus(
 
   const hasProgress =
     hasText(form.notes) ||
-    hasText(form.clientRequirements) ||
+    hasClientRequirementProgress(form) ||
     hasText(form.siteMeasurements) ||
     hasText(form.customRequirements) ||
     hasText(form.designApprovalNotes) ||
@@ -824,6 +960,14 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     useState<CheckpointDetailForm>(EMPTY_CHECKPOINT_DETAIL_FORM);
   const [checkpointDetailError, setCheckpointDetailError] = useState('');
   const [isSavingCheckpointDetail, setIsSavingCheckpointDetail] = useState(false);
+  const [siteVisitItemOptions, setSiteVisitItemOptions] = useState<
+    SiteVisitProcurementItemOption[]
+  >([]);
+  const [siteVisitItemError, setSiteVisitItemError] = useState('');
+  const [siteVisitAreaDropdownRowId, setSiteVisitAreaDropdownRowId] =
+    useState<string | null>(null);
+  const [siteVisitItemDropdownRowId, setSiteVisitItemDropdownRowId] =
+    useState<string | null>(null);
   const projectDocumentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
   const [projectDocumentsLoading, setProjectDocumentsLoading] = useState(false);
@@ -844,6 +988,51 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const canManageProjects = isAdminMode && isAdmin();
   const canManageProjectDocuments =
     canManageProjects || canManagePage(profile, 'portal.projects');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSiteVisitItemOptions = async () => {
+      setSiteVisitItemError('');
+
+      const { data, error } = await supabase
+        .from('procurement_items')
+        .select(
+          'id, name, category, default_unit_label, selling_rate_per_unit, default_description, status'
+        )
+        .eq('status', 'active')
+        .order('name', { ascending: true });
+
+      if (!isMounted) return;
+
+      if (error) {
+        setSiteVisitItemOptions([]);
+        setSiteVisitItemError(error.message);
+        return;
+      }
+
+      setSiteVisitItemOptions(
+        (data || []).map(item => ({
+          id: toSafeString(item.id),
+          name: toSafeString(item.name),
+          category: toSafeString(item.category),
+          defaultUnitLabel: toSafeString(item.default_unit_label) || 'sqft',
+          sellingRatePerUnit:
+            typeof item.selling_rate_per_unit === 'number'
+              ? item.selling_rate_per_unit
+              : 0,
+          defaultDescription: toSafeString(item.default_description),
+          status: toSafeString(item.status),
+        }))
+      );
+    };
+
+    void loadSiteVisitItemOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function fetchProjects() {
     setLoading(true);
@@ -1327,6 +1516,62 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     }));
   };
 
+  const addClientRequirementRow = () => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: [
+        ...current.clientRequirementRows,
+        createEmptyClientRequirementRow(),
+      ],
+    }));
+  };
+
+  const updateClientRequirementRow = (
+    rowId: string,
+    field: keyof Omit<ClientRequirementRowForm, 'id'>,
+    value: string
+  ) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId ? { ...row, [field]: value } : row
+      ),
+    }));
+  };
+
+  const removeClientRequirementRow = (rowId: string) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.filter(row => row.id !== rowId),
+    }));
+  };
+
+  const selectClientRequirementArea = (rowId: string, areaName: string) => {
+    updateClientRequirementRow(rowId, 'areaName', areaName);
+    setSiteVisitAreaDropdownRowId(null);
+  };
+
+  const selectClientRequirementItem = (
+    rowId: string,
+    item: SiteVisitProcurementItemOption
+  ) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      clientRequirementRows: current.clientRequirementRows.map(row =>
+        row.id === rowId
+          ? {
+              ...row,
+              itemId: item.id,
+              itemName: item.name,
+              unit: item.defaultUnitLabel || row.unit || 'sqft',
+              notes: row.notes || item.defaultDescription,
+            }
+          : row
+      ),
+    }));
+    setSiteVisitItemDropdownRowId(null);
+  };
+
   const saveCheckpointDetails = async (options?: {
     complete?: boolean;
     completeChecklist?: boolean;
@@ -1364,10 +1609,14 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       );
       const designEstimateTotal = calculateDesignEstimateTotal(designEstimateRows);
 
+      const clientRequirementRows = getCompactClientRequirementRows(
+        effectiveForm.clientRequirementRows
+      );
       const shouldGenerateQcReport = options?.qcReportGenerated === true;
       const nextMetadata = {
         ...metadata,
         client_requirements: effectiveForm.clientRequirements.trim(),
+        client_requirement_items: clientRequirementRows,
         site_measurements: effectiveForm.siteMeasurements.trim(),
         custom_requirements: effectiveForm.customRequirements.trim(),
         design_approval_notes: effectiveForm.designApprovalNotes.trim(),
@@ -2883,18 +3132,215 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
                 {selectedCheckpoint.checkpoint_key === 'initial_site_visit' && (
                   <div className="rounded-2xl border border-border bg-background p-4">
-                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Client Requirements
-                    </label>
-                    <textarea
-                      value={checkpointDetailForm.clientRequirements}
-                      onChange={event =>
-                        updateCheckpointDetailField('clientRequirements', event.target.value)
-                      }
-                      rows={4}
-                      className="mt-3 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                      placeholder="Record client expectations, functional needs, preferred style, materials, budget notes, and must-have requirements."
-                    />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Client Requirements
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Add room-wise requirement items from the Items master. This can be reused while creating the project cost estimate later.
+                        </p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={addClientRequirementRow}
+                        className="w-fit"
+                      >
+                        Add Requirement
+                      </Button>
+                    </div>
+
+                    {siteVisitItemError && (
+                      <p className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
+                        Item master could not be loaded: {siteVisitItemError}
+                      </p>
+                    )}
+
+                    {checkpointDetailForm.clientRequirementRows.length === 0 ? (
+                      <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                        No client requirement items added yet.
+                      </div>
+                    ) : (
+                      <div className="mt-4 space-y-3">
+                        {checkpointDetailForm.clientRequirementRows.map(row => {
+                          const areaSearch = row.areaName.trim().toLowerCase();
+                          const matchingAreas = SITE_VISIT_AREA_OPTIONS.filter(area =>
+                            area.toLowerCase().includes(areaSearch)
+                          ).slice(0, 8);
+                          const itemSearch = row.itemName.trim().toLowerCase();
+                          const matchingItems = (
+                            itemSearch
+                              ? siteVisitItemOptions.filter(item =>
+                                  item.name.toLowerCase().includes(itemSearch)
+                                )
+                              : siteVisitItemOptions
+                          ).slice(0, 8);
+
+                          return (
+                            <div
+                              key={row.id}
+                              className="rounded-2xl border border-border bg-card p-3"
+                            >
+                              <div className="grid gap-3 lg:grid-cols-[1fr_1.4fr_0.7fr_0.7fr_auto]">
+                                <label className="relative block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                  Area
+                                  <input
+                                    type="text"
+                                    value={row.areaName}
+                                    onChange={event => {
+                                      updateClientRequirementRow(
+                                        row.id,
+                                        'areaName',
+                                        event.target.value
+                                      );
+                                      setSiteVisitAreaDropdownRowId(row.id);
+                                    }}
+                                    onFocus={() => setSiteVisitAreaDropdownRowId(row.id)}
+                                    onBlur={() =>
+                                      window.setTimeout(
+                                        () => setSiteVisitAreaDropdownRowId(null),
+                                        140
+                                      )
+                                    }
+                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                    placeholder="Kitchen / Bedroom"
+                                  />
+
+                                  {siteVisitAreaDropdownRowId === row.id &&
+                                    matchingAreas.length > 0 && (
+                                      <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 max-h-56 overflow-y-auto rounded-2xl border border-border bg-popover p-1 shadow-xl">
+                                        {matchingAreas.map(area => (
+                                          <button
+                                            key={area}
+                                            type="button"
+                                            onMouseDown={event => event.preventDefault()}
+                                            onClick={() =>
+                                              selectClientRequirementArea(row.id, area)
+                                            }
+                                            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-popover-foreground hover:bg-muted"
+                                          >
+                                            {area}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                </label>
+
+                                <label className="relative block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                  Item
+                                  <input
+                                    type="text"
+                                    value={row.itemName}
+                                    onChange={event => {
+                                      updateClientRequirementRow(
+                                        row.id,
+                                        'itemName',
+                                        event.target.value
+                                      );
+                                      updateClientRequirementRow(row.id, 'itemId', '');
+                                      setSiteVisitItemDropdownRowId(row.id);
+                                    }}
+                                    onFocus={() => setSiteVisitItemDropdownRowId(row.id)}
+                                    onBlur={() =>
+                                      window.setTimeout(
+                                        () => setSiteVisitItemDropdownRowId(null),
+                                        140
+                                      )
+                                    }
+                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                    placeholder="Search item master"
+                                  />
+
+                                  {siteVisitItemDropdownRowId === row.id &&
+                                    matchingItems.length > 0 && (
+                                      <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 max-h-64 overflow-y-auto rounded-2xl border border-border bg-popover p-1 shadow-xl">
+                                        {matchingItems.map(item => (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            onMouseDown={event => event.preventDefault()}
+                                            onClick={() =>
+                                              selectClientRequirementItem(row.id, item)
+                                            }
+                                            className="block w-full rounded-xl px-3 py-2 text-left hover:bg-muted"
+                                          >
+                                            <span className="block text-sm font-semibold text-popover-foreground">
+                                              {item.name}
+                                            </span>
+                                            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                                              {item.category || 'Item'} ? {item.defaultUnitLabel || 'sqft'}
+                                            </span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                </label>
+
+                                <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                  Unit
+                                  <input
+                                    type="text"
+                                    value={row.unit}
+                                    onChange={event =>
+                                      updateClientRequirementRow(
+                                        row.id,
+                                        'unit',
+                                        event.target.value
+                                      )
+                                    }
+                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                    placeholder="sqft"
+                                  />
+                                </label>
+
+                                <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                  Qty
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={row.quantity}
+                                    onChange={event =>
+                                      updateClientRequirementRow(
+                                        row.id,
+                                        'quantity',
+                                        event.target.value
+                                      )
+                                    }
+                                    className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                    placeholder="0"
+                                  />
+                                </label>
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => removeClientRequirementRow(row.id)}
+                                  className="mt-6 w-fit"
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+
+                              <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                Notes
+                                <textarea
+                                  value={row.notes}
+                                  onChange={event =>
+                                    updateClientRequirementRow(row.id, 'notes', event.target.value)
+                                  }
+                                  rows={2}
+                                  className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-normal normal-case tracking-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                  placeholder="Client preference, material note, finish, or scope detail."
+                                />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
