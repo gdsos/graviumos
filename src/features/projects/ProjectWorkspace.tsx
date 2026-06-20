@@ -452,6 +452,28 @@ const CLIENT_REQUIREMENT_SQFT_PER_SQM = 10.7639104167;
 const CLIENT_REQUIREMENT_CM_PER_RFT = 30.48;
 const DEFAULT_SITE_VISIT_UNITS = ['sqft', 'sqm', 'rft', 'set'];
 
+const SITE_VISIT_QUICK_AREA_OPTIONS = [
+  'Living Area',
+  'Dining Area',
+  'Kitchen',
+  'Utility',
+  'Balcony',
+  'Prayer Room',
+  'Patio',
+  'Porch',
+  'Deck',
+] as const;
+
+function normalizeSiteVisitAreaName(value: string) {
+  const trimmedValue = value.trim();
+  const normalizedValue = trimmedValue.toLowerCase();
+
+  if (normalizedValue === 'living room') return 'Living Area';
+  if (normalizedValue === 'dining room') return 'Dining Area';
+
+  return trimmedValue;
+}
+
 function normalizeClientRequirementUnit(value: string) {
   const normalizedValue = value.trim().toLowerCase();
 
@@ -645,7 +667,7 @@ function getStoredClientRequirementRows(metadata: Record<string, unknown>) {
       const record =
         row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
 
-      const areaName = toSafeString(record.area_name ?? record.areaName);
+      const areaName = normalizeSiteVisitAreaName(toSafeString(record.area_name ?? record.areaName));
       const itemId = toSafeString(record.item_id ?? record.itemId);
       const itemName = toSafeString(record.item_name ?? record.itemName);
       const outputUnit = getClientRequirementOutputUnitFromLabel(
@@ -1227,6 +1249,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     useState<string | null>(null);
   const [siteVisitUnitDropdownRowId, setSiteVisitUnitDropdownRowId] =
     useState<string | null>(null);
+  const [siteVisitCustomAreaName, setSiteVisitCustomAreaName] = useState('');
   const projectDocumentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
   const [projectDocumentsLoading, setProjectDocumentsLoading] = useState(false);
@@ -1883,7 +1906,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   };
 
   const addClientRequirementItemToArea = (areaName: string) => {
-    const normalizedAreaName = areaName.trim();
+    const normalizedAreaName = normalizeSiteVisitAreaName(areaName);
 
     setCheckpointDetailForm(current => ({
       ...current,
@@ -1895,6 +1918,134 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         },
       ],
     }));
+  };
+
+  const addClientRequirementArea = (areaName: string) => {
+    const normalizedAreaName = normalizeSiteVisitAreaName(areaName);
+
+    if (!normalizedAreaName) return;
+
+    setCheckpointDetailForm(current => {
+      const areaExists = current.clientRequirementRows.some(
+        row =>
+          normalizeSiteVisitAreaName(row.areaName).toLowerCase() ===
+          normalizedAreaName.toLowerCase()
+      );
+
+      if (areaExists) {
+        return {
+          ...current,
+          clientRequirementRows: [
+            ...current.clientRequirementRows,
+            {
+              ...createEmptyClientRequirementRow(),
+              areaName: normalizedAreaName,
+            },
+          ],
+        };
+      }
+
+      return {
+        ...current,
+        clientRequirementRows: [
+          ...current.clientRequirementRows,
+          {
+            ...createEmptyClientRequirementRow(),
+            areaName: normalizedAreaName,
+          },
+        ],
+      };
+    });
+  };
+
+  const getRequirementAreaNames = () =>
+    checkpointDetailForm.clientRequirementRows
+      .map(row => normalizeSiteVisitAreaName(row.areaName))
+      .filter(Boolean);
+
+  const hasRequirementArea = (areaName: string) =>
+    getRequirementAreaNames().some(
+      currentAreaName => currentAreaName.toLowerCase() === areaName.toLowerCase()
+    );
+
+  const getNextNumberedRequirementAreaName = (
+    baseName: string,
+    masterName: string
+  ) => {
+    const currentAreaNames = getRequirementAreaNames();
+
+    if (!currentAreaNames.some(areaName => areaName.toLowerCase() === masterName.toLowerCase())) {
+      return masterName;
+    }
+
+    const escapedBaseName = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const matcher = new RegExp(`^${escapedBaseName}\\s+(\\d+)$`, 'i');
+    const existingNumbers = currentAreaNames
+      .map(areaName => {
+        const match = areaName.match(matcher);
+        return match ? Number(match[1]) : 0;
+      })
+      .filter(number => Number.isFinite(number) && number > 0);
+
+    const nextNumber = existingNumbers.length > 0
+      ? Math.max(...existingNumbers) + 1
+      : 2;
+
+    return `${baseName} ${nextNumber}`;
+  };
+
+  const addRequirementBedroom = () => {
+    addClientRequirementArea(
+      getNextNumberedRequirementAreaName('Bedroom', 'Master Bedroom')
+    );
+  };
+
+  const addRequirementAttachedBathroom = () => {
+    addClientRequirementArea(
+      getNextNumberedRequirementAreaName('Attached Bathroom', 'Master Bathroom')
+    );
+  };
+
+  const addRequirementBedroomSet = () => {
+    const bedroomName = getNextNumberedRequirementAreaName('Bedroom', 'Master Bedroom');
+    const bathroomName = getNextNumberedRequirementAreaName(
+      'Attached Bathroom',
+      'Master Bathroom'
+    );
+
+    addClientRequirementArea(bedroomName);
+    addClientRequirementArea(bathroomName);
+  };
+
+  const addRequirementCommonBathroom = () => {
+    const baseName = 'Common Bathroom';
+
+    if (!hasRequirementArea(baseName)) {
+      addClientRequirementArea(baseName);
+      return;
+    }
+
+    const currentAreaNames = getRequirementAreaNames();
+    const existingNumbers = currentAreaNames
+      .map(areaName => {
+        const match = areaName.match(/^Common Bathroom\s+(\d+)$/i);
+        return match ? Number(match[1]) : 0;
+      })
+      .filter(number => Number.isFinite(number) && number > 0);
+    const nextNumber = existingNumbers.length > 0
+      ? Math.max(...existingNumbers) + 1
+      : 2;
+
+    addClientRequirementArea(`${baseName} ${nextNumber}`);
+  };
+
+  const addRequirementCustomArea = () => {
+    const normalizedAreaName = normalizeSiteVisitAreaName(siteVisitCustomAreaName);
+
+    if (!normalizedAreaName) return;
+
+    addClientRequirementArea(normalizedAreaName);
+    setSiteVisitCustomAreaName('');
   };
 
   const updateClientRequirementRow = (
@@ -2046,7 +2197,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
               unit: getClientRequirementOutputUnitFromLabel(
                 item.defaultUnitLabel || row.outputUnit || row.unit || 'sqft'
               ),
-              notes: row.notes || item.defaultDescription,
+              notes: row.notes,
             }
           : row
       ),
@@ -3742,6 +3893,93 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         Item master could not be loaded: {siteVisitItemError}
                       </p>
                     )}
+
+                    <div className="mt-4 rounded-2xl border border-border bg-muted/25 p-3">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            Add Area
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Use consistent area names here so Cost Estimate does not create duplicate room suggestions.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addRequirementBedroomSet}
+                          className="justify-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Bedroom Set
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addRequirementBedroom}
+                          className="justify-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Bedroom
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addRequirementAttachedBathroom}
+                          className="justify-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Bathroom
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addRequirementCommonBathroom}
+                          className="justify-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Common Bathroom
+                        </Button>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {SITE_VISIT_QUICK_AREA_OPTIONS.map(areaName => (
+                          <button
+                            key={areaName}
+                            type="button"
+                            onClick={() => addClientRequirementArea(areaName)}
+                            className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          >
+                            + {areaName}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          value={siteVisitCustomAreaName}
+                          onChange={event => setSiteVisitCustomAreaName(event.target.value)}
+                          placeholder="Custom area, e.g. Foyer"
+                          className="min-h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                        />
+
+                        <Button
+                          type="button"
+                          onClick={addRequirementCustomArea}
+                          disabled={!siteVisitCustomAreaName.trim()}
+                          className="gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Custom Area
+                        </Button>
+                      </div>
+                    </div>
 
                     {checkpointDetailForm.clientRequirementRows.length === 0 ? (
                       <div className="mt-4 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">

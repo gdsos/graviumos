@@ -71,15 +71,15 @@ interface SiteVisitRequirementRow {
 const UNASSIGNED_PROJECT_ID = 'unassigned-draft';
 
 const customAreaSuggestions = [
+  'Living Area',
+  'Dining Area',
+  'Kitchen',
+  'Utility',
+  'Balcony',
+  'Prayer Room',
   'Patio',
   'Porch',
-  'Prayer Room',
-  'Balcony Sit-out',
   'Deck',
-  'Courtyard',
-  'Work Area',
-  'Upper Living',
-  'Store Room',
 ];
 
 function nowTimestamp() {
@@ -158,6 +158,16 @@ function convertRequirementLengthCm(lengthCm: number, unit: string) {
   return lengthCm / 30.48;
 }
 
+function normalizeRequirementAreaName(value: string) {
+  const trimmedValue = value.trim();
+  const normalizedValue = trimmedValue.toLowerCase();
+
+  if (normalizedValue === 'living room') return 'Living Area';
+  if (normalizedValue === 'dining room') return 'Dining Area';
+
+  return trimmedValue;
+}
+
 function getRequirementRowsFromMetadata(metadata: unknown): SiteVisitRequirementRow[] {
   const record =
     metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
@@ -172,7 +182,7 @@ function getRequirementRowsFromMetadata(metadata: unknown): SiteVisitRequirement
     .map(row => {
       const rowRecord =
         row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
-      const areaName = toSafeString(rowRecord.area_name ?? rowRecord.areaName).trim();
+      const areaName = normalizeRequirementAreaName(toSafeString(rowRecord.area_name ?? rowRecord.areaName));
       const itemName = toSafeString(rowRecord.item_name ?? rowRecord.itemName).trim();
       const notes = toSafeString(rowRecord.notes).trim();
       const unitLabel = normalizeRequirementUnit(
@@ -308,15 +318,13 @@ function buildEstimatePrefillFromSiteVisitRequirements(rows: SiteVisitRequiremen
     const areaName = row.areaName.trim() || fallbackArea.name;
     const areaId = areaIdByName.get(areaName.toLowerCase()) ?? fallbackArea.id;
     const itemName = row.itemName.trim() || 'Custom Requirement';
-    const description =
-      row.defaultDescription.trim() ||
-      createEstimateRequirementDescription({
-        areaName,
-        itemName,
-        quantity: row.quantity,
-        unitLabel: row.unitLabel,
-        notes: row.notes,
-      });
+    const description = createEstimateRequirementDescription({
+      areaName,
+      itemName,
+      quantity: row.quantity,
+      unitLabel: row.unitLabel,
+      notes: '',
+    });
 
     return {
       id: createId('estimate-line'),
