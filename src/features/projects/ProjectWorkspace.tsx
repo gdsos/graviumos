@@ -2587,7 +2587,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             </div>
           </div>
 
-          <div className="p-5">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-border bg-background p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -2919,9 +2919,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         {deleteDialog}
 
         {isProjectDocumentModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:items-center sm:p-4">
             <div className="w-full max-w-2xl rounded-3xl border border-border bg-card shadow-2xl">
-              <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+              <div className="shrink-0 flex items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                     Project Documents
@@ -3026,7 +3026,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
           return (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
-              <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+              <div className="flex max-h-[calc(100dvh-7rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl sm:max-h-[90vh]">
                 <div className="flex items-start justify-between gap-4 border-b border-border p-5">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -3059,12 +3059,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                         <iframe
                           title={selectedProjectDocument.name}
                           src={previewUrl || documentUrl}
-                          className="h-[58vh] w-full bg-background"
+                          className="h-[40dvh] w-full bg-background sm:h-[58vh]"
                         />
                       </div>
 
                       {canManageProjectDocuments && (
-                        <div className="flex justify-end">
+                        <div className="flex justify-end pb-2 sm:pb-0">
                           <Button
                             type="button"
                             variant="destructive"
