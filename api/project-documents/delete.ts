@@ -36,8 +36,22 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    let driveDeleteWarning: string | null = null;
+
     if (document.drive_file_id) {
-      await deleteGoogleDriveFile(document.drive_file_id);
+      try {
+        await deleteGoogleDriveFile(document.drive_file_id);
+      } catch (driveError) {
+        driveDeleteWarning =
+          driveError instanceof Error
+            ? driveError.message
+            : 'Google Drive delete failed.';
+        console.warn('Project document Drive delete failed. Continuing with record delete.', {
+          documentId,
+          driveFileId: document.drive_file_id,
+          error: driveDeleteWarning,
+        });
+      }
     }
 
     const { error: deleteError } = await serviceClient
@@ -47,7 +61,7 @@ export default async function handler(req: any, res: any) {
 
     if (deleteError) throw deleteError;
 
-    sendJson(res, 200, { ok: true });
+    sendJson(res, 200, { ok: true, driveDeleteWarning });
   } catch (error) {
     handleApiError(res, error);
   }

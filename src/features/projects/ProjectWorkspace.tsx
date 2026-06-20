@@ -983,6 +983,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const [isSavingProjectDocument, setIsSavingProjectDocument] = useState(false);
   const [selectedProjectDocument, setSelectedProjectDocument] =
     useState<ProjectDocument | null>(null);
+  const [projectDocumentWebviewTarget, setProjectDocumentWebviewTarget] =
+    useState<ProjectDocument | null>(null);
 
   const isAdminMode = mode === 'admin';
   const canManageProjects = isAdminMode && isAdmin();
@@ -1413,6 +1415,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         current.filter(projectDocument => projectDocument.id !== document.id)
       );
       setSelectedProjectDocument(current =>
+        current?.id === document.id ? null : current
+      );
+      setProjectDocumentWebviewTarget(current =>
         current?.id === document.id ? null : current
       );
       setProjectDocumentDeleteTarget(null);
@@ -3025,9 +3030,9 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
           );
 
           return (
-            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
-              <div className="flex max-h-[calc(100dvh-7rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl sm:max-h-[90vh]">
-                <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+            <div className="fixed left-0 right-0 top-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 flex items-end justify-center bg-black/55 p-3 sm:inset-0 sm:items-center sm:p-4">
+              <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl sm:h-auto sm:max-h-[90vh]">
+                <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       {getProjectDocumentCategory(selectedProjectDocument)}
@@ -3052,32 +3057,14 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </button>
                 </div>
 
-                <div className="p-5">
+                <div className="min-h-0 flex-1 p-4 sm:p-5">
                   {documentUrl ? (
-                    <div className="space-y-4">
-                      <div className="overflow-hidden rounded-2xl border border-border bg-background">
-                        <iframe
-                          title={selectedProjectDocument.name}
-                          src={previewUrl || documentUrl}
-                          className="h-[40dvh] w-full bg-background sm:h-[58vh]"
-                        />
-                      </div>
-
-                      {canManageProjectDocuments && (
-                        <div className="flex justify-end pb-2 sm:pb-0">
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={() =>
-                              setProjectDocumentDeleteTarget(selectedProjectDocument)
-                            }
-                            className="w-fit gap-2"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete Document
-                          </Button>
-                        </div>
-                      )}
+                    <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-border bg-background">
+                      <iframe
+                        title={selectedProjectDocument.name}
+                        src={previewUrl || documentUrl}
+                        className="h-full w-full bg-background sm:h-[58vh]"
+                      />
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
@@ -3085,13 +3072,89 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     </div>
                   )}
                 </div>
+
+                <div className="shrink-0 border-t border-border bg-card p-3 sm:p-5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setProjectDocumentWebviewTarget(selectedProjectDocument)
+                      }
+                      disabled={!documentUrl}
+                      className="w-full gap-2 sm:w-fit"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open Full View
+                    </Button>
+
+                    {canManageProjectDocuments && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() =>
+                          setProjectDocumentDeleteTarget(selectedProjectDocument)
+                        }
+                        className="w-full gap-2 sm:w-fit"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Document
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {projectDocumentWebviewTarget && (() => {
+          const documentUrl = getSafeDocumentUrl(projectDocumentWebviewTarget.document_url);
+          const previewUrl = getSafeDocumentUrl(
+            getProjectDocumentPreviewUrl(projectDocumentWebviewTarget)
+          );
+
+          return (
+            <div className="fixed inset-0 z-[90] flex flex-col bg-card text-card-foreground">
+              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card p-4 sm:p-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Full Document
+                  </p>
+                  <h2 className="mt-2 text-base font-semibold text-foreground sm:text-lg">
+                    {projectDocumentWebviewTarget.name}
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setProjectDocumentWebviewTarget(null)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Close document web view"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="min-h-0 flex-1 bg-background">
+                {documentUrl ? (
+                  <iframe
+                    title={projectDocumentWebviewTarget.name}
+                    src={previewUrl || documentUrl}
+                    className="h-full w-full bg-background"
+                  />
+                ) : (
+                  <div className="m-4 rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                    This document does not have a valid preview link.
+                  </div>
+                )}
               </div>
             </div>
           );
         })()}
 
         {projectDocumentDeleteTarget && (
-          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-4 sm:items-center">
+          <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/60 p-4 sm:items-center">
             <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-2xl">
               <div className="flex items-start gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
@@ -3110,6 +3173,12 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </p>
                 </div>
               </div>
+
+              {projectDocumentError && (
+                <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                  {projectDocumentError}
+                </div>
+              )}
 
               <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button
