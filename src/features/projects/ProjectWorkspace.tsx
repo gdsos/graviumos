@@ -55,6 +55,12 @@ type ProjectDocumentForm = {
   notes: string;
 };
 
+type ProjectTimelineSummary = {
+  project_id: string;
+  has_timeline: boolean;
+  timeline_confirmed_at: string | null;
+};
+
 const EMPTY_PROJECT_DOCUMENT_FORM: ProjectDocumentForm = {
   name: '',
   document_url: '',
@@ -711,6 +717,21 @@ function getProjectFormFromRecord(project: Project): ProjectFormState {
   };
 }
 
+function getProjectTimelineStatusLabel(
+  timeline: ProjectTimelineSummary | null | undefined,
+  isLoading = false
+) {
+  if (!timeline) {
+    return isLoading ? 'Checking...' : 'Yet to Approve';
+  }
+
+  if (timeline.has_timeline) {
+    return timeline.timeline_confirmed_at ? 'Approved' : 'Timeline Built';
+  }
+
+  return 'Yet to Approve';
+}
+
 function getRouteBase(mode: ProjectWorkspaceMode) {
   return mode === 'admin' ? '/admin' : '/portal';
 }
@@ -955,6 +976,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   const [projectCheckpoints, setProjectCheckpoints] = useState<ProjectCheckpoint[]>([]);
   const [projectCheckpointsLoading, setProjectCheckpointsLoading] = useState(false);
   const [projectCheckpointError, setProjectCheckpointError] = useState('');
+  const [projectTimelineSummaries, setProjectTimelineSummaries] = useState<
+    Record<string, ProjectTimelineSummary>
+  >({});
+  const [projectTimelineSummariesLoading, setProjectTimelineSummariesLoading] =
+    useState(false);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<ProjectCheckpoint | null>(null);
   const [checkpointDetailForm, setCheckpointDetailForm] =
     useState<CheckpointDetailForm>(EMPTY_CHECKPOINT_DETAIL_FORM);
@@ -1031,6 +1057,62 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       isMounted = false;
     };
   }, []);
+
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProjectTimelineSummaries = async () => {
+      const projectIds = projects
+        .map(project => project.id)
+        .filter(Boolean);
+
+      if (projectIds.length === 0) {
+        setProjectTimelineSummaries({});
+        setProjectTimelineSummariesLoading(false);
+        return;
+      }
+
+      setProjectTimelineSummariesLoading(true);
+
+      const { data, error } = await supabase
+        .from('project_timelines')
+        .select('project_id, has_timeline, timeline_confirmed_at')
+        .in('project_id', projectIds);
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error('Could not load project timeline summaries.', error);
+        setProjectTimelineSummaries({});
+        setProjectTimelineSummariesLoading(false);
+        return;
+      }
+
+      setProjectTimelineSummaries(
+        (data || []).reduce<Record<string, ProjectTimelineSummary>>((summaryMap, timeline) => {
+          const projectId = toSafeString(timeline.project_id);
+
+          if (!projectId) return summaryMap;
+
+          summaryMap[projectId] = {
+            project_id: projectId,
+            has_timeline: timeline.has_timeline === true,
+            timeline_confirmed_at: toSafeString(timeline.timeline_confirmed_at) || null,
+          };
+
+          return summaryMap;
+        }, {})
+      );
+      setProjectTimelineSummariesLoading(false);
+    };
+
+    void loadProjectTimelineSummaries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projects]);
 
   async function fetchProjects() {
     setLoading(true);
@@ -2617,7 +2699,10 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   Timeline
                 </p>
                 <p className="mt-3 text-sm font-semibold text-foreground">
-                  Yet to Approve
+                  {getProjectTimelineStatusLabel(
+                    projectTimelineSummaries[selectedProject.id],
+                    projectTimelineSummariesLoading
+                  )}
                 </p>
               </div>
             </div>
@@ -4130,7 +4215,10 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                       </td>
 
                       <td className="px-5 py-4 text-muted-foreground">
-                        Yet to Approve
+                        {getProjectTimelineStatusLabel(
+                          projectTimelineSummaries[project.id],
+                          projectTimelineSummariesLoading
+                        )}
                       </td>
 
                       {canManageProjects && (
@@ -4180,7 +4268,10 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     </div>
 
                     <div className="mt-3 text-xs text-muted-foreground">
-                      Timeline: Yet to Approve
+                      Timeline: {getProjectTimelineStatusLabel(
+                        projectTimelineSummaries[project.id],
+                        projectTimelineSummariesLoading
+                      )}
                     </div>
                   </button>
 
