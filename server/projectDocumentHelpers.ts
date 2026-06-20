@@ -274,7 +274,7 @@ export async function getOrCreateGoogleDriveFolder(
     body: JSON.stringify({
       name: safeFolderName,
       mimeType: DRIVE_FOLDER_MIME_TYPE,
-      parents: [targetParentFolderId],
+      parents: [parentFolderId],
     }),
   });
 
@@ -304,7 +304,7 @@ export async function uploadFileToGoogleDrive({
 
   const metadata = {
     name: fileName,
-    parents: [parentFolderId],
+    parents: [targetParentFolderId],
   };
 
   const metadataPart = Buffer.from(
