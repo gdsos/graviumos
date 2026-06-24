@@ -4,7 +4,7 @@ create table if not exists public.project_work_package_qc (
   timeline_id uuid null references public.project_timelines(id) on delete cascade,
   work_package_id text not null,
   work_package_title text not null,
-  vendor_id uuid null references public.vendors(id) on delete set null,
+  vendor_id text null references public.vendors(id) on delete set null,
   vendor_name text null,
   status text not null default 'pending'
     check (status in ('pending', 'needs_rework', 'passed', 'accepted_exception')),
