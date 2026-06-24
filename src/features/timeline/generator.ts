@@ -133,6 +133,7 @@ export function generateTimelineFromApprovedEstimate({
       phase: 'execution',
       title: `${areaName} - ${lineItem.name}`,
       description: lineItem.description,
+      sourceEstimateLineItemId: lineItem.id,
       assigneeName: lineItem.vendorName ?? 'Assign Vendor',
       department: lineItem.vendorName ? 'procurement_logistics' : 'design_execution',
       estimatedStartDate,

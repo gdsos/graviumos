@@ -106,6 +106,7 @@ export interface WorkPackage {
   phase: ProjectPhase;
   title: string;
   description?: string;
+  sourceEstimateLineItemId?: string;
   vendorId?: string;
   assigneeName: string;
   department: TimelineDepartment;

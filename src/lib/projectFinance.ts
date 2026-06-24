@@ -1,7 +1,10 @@
 import {
   supabase,
+  type ProjectCogsEntry,
   type ProjectFinanceAccount,
   type ProjectFinancePaymentGate,
+  type ProjectVendorAccount,
+  type ProjectVendorPayment,
 } from './supabase';
 import {
   DEFAULT_GST_PERCENT,
@@ -217,6 +220,341 @@ interface ProjectTimelineGateRow {
   timeline_confirmed_at: string | null;
   payment_gates: unknown;
 }
+
+
+interface ProjectTimelineWorkPackageRow {
+  id: string;
+  project_id: string;
+  has_timeline: boolean | null;
+  work_packages: unknown;
+}
+
+interface TimelineWorkPackageSnapshot {
+  id: string;
+  title?: string;
+  sourceEstimateLineItemId?: string;
+  vendorId?: string | null;
+  assigneeName?: string | null;
+}
+
+function isTimelineWorkPackageSnapshot(
+  value: unknown
+): value is TimelineWorkPackageSnapshot {
+  if (!isObjectRecord(value)) return false;
+
+  return typeof value.id === 'string';
+}
+
+function normalizeAccountKey(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'in_house'
+  );
+}
+
+function getLineItemAmount(lineItem: CostEstimateLineItem) {
+  return Math.round(toNumber(lineItem.quantity) * toNumber(lineItem.ratePerUnit));
+}
+
+function getLineItemVendorName(lineItem: CostEstimateLineItem) {
+  return lineItem.vendorName?.trim() || 'In-House';
+}
+
+function getLineItemSourceType(lineItem: CostEstimateLineItem) {
+  return lineItem.vendorName?.trim() ? 'vendor' : 'in_house';
+}
+
+function getLineItemCategory(
+  lineItem: CostEstimateLineItem,
+  estimate: ApprovedEstimateFinancePayload
+) {
+  return estimate.areas.find(area => area.id === lineItem.areaId)?.name ?? 'Project Scope';
+}
+
+function getExpectedWorkPackageTitle(
+  lineItem: CostEstimateLineItem,
+  estimate: ApprovedEstimateFinancePayload
+) {
+  return `${getLineItemCategory(lineItem, estimate)} - ${lineItem.name}`;
+}
+
+function getCogsPaymentStatus(payableAmount: number, paidAmount: number) {
+  if (paidAmount <= 0) return 'unpaid';
+  if (paidAmount < payableAmount) return 'partial';
+  if (paidAmount === payableAmount) return 'paid';
+
+  return 'overpaid';
+}
+
+async function fetchProjectTimelineWorkPackages(projectId: string) {
+  const { data, error } = await supabase
+    .from('project_timelines')
+    .select('id, project_id, has_timeline, work_packages')
+    .eq('project_id', projectId)
+    .eq('has_timeline', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) {
+    return {
+      workPackages: [] as TimelineWorkPackageSnapshot[],
+    };
+  }
+
+  const row = data as ProjectTimelineWorkPackageRow;
+
+  return {
+    workPackages: Array.isArray(row.work_packages)
+      ? row.work_packages.filter(isTimelineWorkPackageSnapshot)
+      : [],
+  };
+}
+
+function findWorkPackageForLineItem({
+  lineItem,
+  estimate,
+  workPackages,
+}: {
+  lineItem: CostEstimateLineItem;
+  estimate: ApprovedEstimateFinancePayload;
+  workPackages: TimelineWorkPackageSnapshot[];
+}) {
+  const expectedTitle = getExpectedWorkPackageTitle(lineItem, estimate);
+
+  return (
+    workPackages.find(
+      workPackage => workPackage.sourceEstimateLineItemId === lineItem.id
+    ) ??
+    workPackages.find(workPackage => workPackage.title === expectedTitle) ??
+    null
+  );
+}
+
+async function syncVendorAccountsAndCogsEntriesFromEstimate({
+  account,
+  estimate,
+  userId,
+}: {
+  account: ProjectFinanceAccount;
+  estimate: ApprovedEstimateFinancePayload;
+  userId?: string | null;
+}) {
+  const { workPackages } = await fetchProjectTimelineWorkPackages(estimate.projectId);
+
+  const { data: existingVendorAccountRows, error: existingVendorAccountError } =
+    await supabase
+      .from('project_vendor_accounts')
+      .select('*')
+      .eq('finance_account_id', account.id);
+
+  if (existingVendorAccountError) throw existingVendorAccountError;
+
+  const { data: existingCogsRows, error: existingCogsError } = await supabase
+    .from('project_cogs_entries')
+    .select('*')
+    .eq('finance_account_id', account.id);
+
+  if (existingCogsError) throw existingCogsError;
+
+  const { data: existingPaymentRows, error: existingPaymentError } = await supabase
+    .from('project_vendor_payments')
+    .select('*')
+    .eq('finance_account_id', account.id);
+
+  if (existingPaymentError) throw existingPaymentError;
+
+  const existingVendorAccounts =
+    (existingVendorAccountRows ?? []) as ProjectVendorAccount[];
+  const existingCogsEntries = (existingCogsRows ?? []) as ProjectCogsEntry[];
+  const existingVendorPayments =
+    (existingPaymentRows ?? []) as ProjectVendorPayment[];
+
+  const vendorAccountByKey = new Map(
+    existingVendorAccounts.map(vendorAccount => [
+      vendorAccount.account_key,
+      vendorAccount,
+    ])
+  );
+
+  const lineItemsByVendorKey = new Map<string, CostEstimateLineItem[]>();
+
+  estimate.lineItems.forEach(lineItem => {
+    const sourceType = getLineItemSourceType(lineItem);
+    const vendorName = getLineItemVendorName(lineItem);
+    const accountKey =
+      sourceType === 'vendor'
+        ? `vendor:${normalizeAccountKey(vendorName)}`
+        : 'in_house';
+
+    lineItemsByVendorKey.set(accountKey, [
+      ...(lineItemsByVendorKey.get(accountKey) ?? []),
+      lineItem,
+    ]);
+  });
+
+  for (const [accountKey, lineItems] of lineItemsByVendorKey.entries()) {
+    const firstLineItem = lineItems[0];
+    const sourceType = getLineItemSourceType(firstLineItem);
+    const vendorName =
+      sourceType === 'vendor' ? getLineItemVendorName(firstLineItem) : 'In-House';
+    const payableAmount = lineItems.reduce(
+      (total, lineItem) => total + getLineItemAmount(lineItem),
+      0
+    );
+
+    if (!vendorAccountByKey.has(accountKey)) {
+      const { data: insertedAccount, error: insertAccountError } = await supabase
+        .from('project_vendor_accounts')
+        .insert({
+          finance_account_id: account.id,
+          project_id: estimate.projectId,
+          account_key: accountKey,
+          account_type: sourceType,
+          vendor_id: null,
+          vendor_name: vendorName,
+          payable_amount: payableAmount,
+          advance_paid_amount: 0,
+          total_paid_amount: 0,
+          outstanding_amount: payableAmount,
+          status: 'open',
+          notes: `Synced from approved estimate v${estimate.version}.`,
+        })
+        .select('*')
+        .single();
+
+      if (insertAccountError) throw insertAccountError;
+
+      vendorAccountByKey.set(accountKey, insertedAccount as ProjectVendorAccount);
+    }
+  }
+
+  const cogsByEstimateLineId = new Map(
+    existingCogsEntries
+      .filter(entry => entry.source_estimate_line_id)
+      .map(entry => [entry.source_estimate_line_id, entry])
+  );
+
+  for (const lineItem of estimate.lineItems) {
+    const sourceType = getLineItemSourceType(lineItem);
+    const vendorName = getLineItemVendorName(lineItem);
+    const accountKey =
+      sourceType === 'vendor'
+        ? `vendor:${normalizeAccountKey(vendorName)}`
+        : 'in_house';
+    const vendorAccount = vendorAccountByKey.get(accountKey);
+
+    if (!vendorAccount) continue;
+
+    const payableAmount = getLineItemAmount(lineItem);
+    const existingEntry = cogsByEstimateLineId.get(lineItem.id);
+    const paidAmount = existingEntry ? toNumber(existingEntry.paid_amount) : 0;
+    const linkedWorkPackage = findWorkPackageForLineItem({
+      lineItem,
+      estimate,
+      workPackages,
+    });
+
+    const rowPayload = {
+      finance_account_id: account.id,
+      project_id: estimate.projectId,
+      vendor_account_id: vendorAccount.id,
+      source_type: sourceType,
+      vendor_id: null,
+      vendor_name: vendorName,
+      category: getLineItemCategory(lineItem, estimate),
+      description: lineItem.name,
+      estimated_amount: payableAmount,
+      payable_amount: payableAmount,
+      paid_amount: paidAmount,
+      outstanding_amount: Math.max(payableAmount - paidAmount, 0),
+      payment_status: getCogsPaymentStatus(payableAmount, paidAmount),
+      entry_date: new Date().toISOString().slice(0, 10),
+      source_estimate_line_id: lineItem.id,
+      source_work_package_id: linkedWorkPackage?.id ?? null,
+      source_snapshot: {
+        estimateId: estimate.id,
+        estimateVersion: estimate.version,
+        lineItem,
+        linkedWorkPackage,
+      },
+      remarks: lineItem.remarks ?? '',
+      created_by: userId ?? null,
+    };
+
+    if (existingEntry) {
+      const { error: updateEntryError } = await supabase
+        .from('project_cogs_entries')
+        .update(rowPayload)
+        .eq('id', existingEntry.id);
+
+      if (updateEntryError) throw updateEntryError;
+    } else {
+      const { error: insertEntryError } = await supabase
+        .from('project_cogs_entries')
+        .insert(rowPayload);
+
+      if (insertEntryError) throw insertEntryError;
+    }
+  }
+
+  const { data: syncedCogsRows, error: syncedCogsError } = await supabase
+    .from('project_cogs_entries')
+    .select('*')
+    .eq('finance_account_id', account.id);
+
+  if (syncedCogsError) throw syncedCogsError;
+
+  const syncedCogsEntries = (syncedCogsRows ?? []) as ProjectCogsEntry[];
+
+  for (const vendorAccount of vendorAccountByKey.values()) {
+    const accountCogsEntries = syncedCogsEntries.filter(
+      entry => entry.vendor_account_id === vendorAccount.id
+    );
+    const accountPayments = existingVendorPayments.filter(
+      payment => payment.vendor_account_id === vendorAccount.id
+    );
+    const payableAmount = accountCogsEntries.reduce(
+      (total, entry) => total + toNumber(entry.payable_amount),
+      0
+    );
+    const totalPaidAmount = accountPayments.reduce((total, payment) => {
+      const amount = toNumber(payment.amount);
+
+      return payment.payment_type === 'refund' ? total - amount : total + amount;
+    }, 0);
+    const advancePaidAmount = accountPayments.reduce((total, payment) => {
+      return payment.payment_type === 'advance'
+        ? total + toNumber(payment.amount)
+        : total;
+    }, 0);
+    const outstandingAmount = Math.max(payableAmount - totalPaidAmount, 0);
+
+    const { error: updateVendorAccountError } = await supabase
+      .from('project_vendor_accounts')
+      .update({
+        payable_amount: payableAmount,
+        advance_paid_amount: advancePaidAmount,
+        total_paid_amount: totalPaidAmount,
+        outstanding_amount: outstandingAmount,
+        status:
+          payableAmount > 0 && outstandingAmount <= 0
+            ? 'settled'
+            : vendorAccount.status === 'closed'
+              ? 'closed'
+              : 'open',
+      })
+      .eq('id', vendorAccount.id);
+
+    if (updateVendorAccountError) throw updateVendorAccountError;
+  }
+}
+
 
 function isTimelinePaymentGate(value: unknown): value is TimelinePaymentGateSnapshot {
   if (!isObjectRecord(value)) return false;
@@ -464,8 +802,16 @@ export async function syncProjectFinanceAccountFromApprovedEstimate(
 
   if (error) throw error;
 
+  const account = data as ProjectFinanceAccount;
+
+  await syncVendorAccountsAndCogsEntriesFromEstimate({
+    account,
+    estimate,
+    userId: input.userId ?? null,
+  });
+
   const syncedPaymentGates = await syncFinancePaymentGatesFromTimeline({
-    account: data as ProjectFinanceAccount,
+    account,
     estimate,
     revenueAmount,
   });
@@ -484,7 +830,7 @@ export async function syncProjectFinanceAccountFromApprovedEstimate(
   }
 
   return {
-    account: data as ProjectFinanceAccount,
+    account,
     estimate,
     summary,
     paymentGates: syncedPaymentGates,
