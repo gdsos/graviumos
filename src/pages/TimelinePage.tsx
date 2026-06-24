@@ -24,6 +24,13 @@ import { Button } from '@/components/ui/button';
 import { DateInput } from '@/components/common/DateInput';
 
 import { supabase, type VendorRecord } from '@/lib/supabase';
+import {
+  getWorkPackageQcStatusLabel,
+  listProjectWorkPackageQc,
+  upsertProjectWorkPackageQc,
+  type ProjectWorkPackageQcRecord,
+  type ProjectWorkPackageQcStatus,
+} from '@/lib/projectWorkPackageQc';
 
 import {
   calculateTimelineSummary,
@@ -189,6 +196,22 @@ function formatWorkPackageStatusLabel(status: string) {
   return status
     .replaceAll('_', ' ')
     .replace(/\b\w/g, character => character.toUpperCase());
+}
+
+function getPhaseQcStatusVariant(status?: ProjectWorkPackageQcStatus | null) {
+  if (status === 'passed') return 'success';
+  if (status === 'needs_rework') return 'danger';
+  if (status === 'accepted_exception') return 'warning';
+
+  return 'outline';
+}
+
+function getPhaseQcStatusDescription(status?: ProjectWorkPackageQcStatus | null) {
+  if (status === 'passed') return 'Vendor payment can be released after Finance approval.';
+  if (status === 'needs_rework') return 'Payment remains locked until the issue is corrected and passed.';
+  if (status === 'accepted_exception') return 'Payable with exception note. This should be used carefully.';
+
+  return 'Completed work is waiting for QC inspection.';
 }
 
 function getEstimateStatusTitle(status?: LinkedCostEstimateStatus) {
@@ -1165,6 +1188,14 @@ export default function TimelinePage() {
   const [workPackages, setWorkPackages] = useState<WorkPackage[]>(
     () => storedTimeline?.workPackages ?? []
   );
+
+  const [phaseQcRecordsByWorkPackageId, setPhaseQcRecordsByWorkPackageId] =
+    useState<Record<string, ProjectWorkPackageQcRecord>>({});
+  const [phaseQcLoading, setPhaseQcLoading] = useState(false);
+  const [phaseQcError, setPhaseQcError] = useState('');
+  const [phaseQcSavingWorkPackageId, setPhaseQcSavingWorkPackageId] =
+    useState<string | null>(null);
+
   const [ignoredAlertIds, setIgnoredAlertIds] = useState<string[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [pendingTimelineDraft, setPendingTimelineDraft] =
@@ -1853,6 +1884,58 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
       setSelectedTimelineProjectId(onlyApprovedProjectEstimate.projectId);
     }
   }, [approvedCostEstimateRecords, hasTimeline, selectedTimelineProjectId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPhaseQcRecords() {
+      if (!selectedTimelineProjectId) {
+        setPhaseQcRecordsByWorkPackageId({});
+        setPhaseQcLoading(false);
+        setPhaseQcError('');
+        return;
+      }
+
+      setPhaseQcLoading(true);
+      setPhaseQcError('');
+
+      try {
+        const records = await listProjectWorkPackageQc(selectedTimelineProjectId);
+
+        if (!isMounted) return;
+
+        setPhaseQcRecordsByWorkPackageId(
+          records.reduce<Record<string, ProjectWorkPackageQcRecord>>(
+            (recordMap, record) => {
+              recordMap[record.work_package_id] = record;
+              return recordMap;
+            },
+            {}
+          )
+        );
+      } catch (error) {
+        if (!isMounted) return;
+
+        setPhaseQcRecordsByWorkPackageId({});
+        setPhaseQcError(
+          error instanceof Error
+            ? error.message
+            : 'Could not load phase QC records.'
+        );
+      } finally {
+        if (isMounted) {
+          setPhaseQcLoading(false);
+        }
+      }
+    }
+
+    void loadPhaseQcRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedTimelineProjectId]);
+
 
   const paymentGateAmountTotal = paymentGates.reduce(
     (total, paymentGate) => total + paymentGate.amount,
@@ -3045,6 +3128,60 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
     setIsDelayOwnerPickerOpen(false);
     setTimelineInputDialog(null);
+  };
+
+  const handleUpdatePhaseQcStatus = async (
+    workPackage: WorkPackage,
+    status: ProjectWorkPackageQcStatus
+  ) => {
+    if (!selectedTimelineProjectId) {
+      setPhaseQcError('Select a project timeline before updating phase QC.');
+      return;
+    }
+
+    const vendorName =
+      vendorRecords.find(vendor => vendor.id === workPackage.vendorId)?.name ??
+      workPackage.assigneeName ??
+      null;
+
+    setPhaseQcSavingWorkPackageId(workPackage.id);
+    setPhaseQcError('');
+
+    try {
+      const savedRecord = await upsertProjectWorkPackageQc({
+        projectId: selectedTimelineProjectId,
+        workPackageId: workPackage.id,
+        workPackageTitle: workPackage.title,
+        vendorId: workPackage.vendorId ?? null,
+        vendorName,
+        status,
+        remarks:
+          status === 'accepted_exception'
+            ? 'Accepted exception recorded from Timeline Phase QC.'
+            : null,
+        reworkNotes:
+          status === 'needs_rework'
+            ? 'Rework required before vendor payment can be released.'
+            : null,
+        acceptedExceptionReason:
+          status === 'accepted_exception'
+            ? 'Accepted exception recorded from Timeline Phase QC.'
+            : null,
+      });
+
+      setPhaseQcRecordsByWorkPackageId(current => ({
+        ...current,
+        [savedRecord.work_package_id]: savedRecord,
+      }));
+    } catch (error) {
+      setPhaseQcError(
+        error instanceof Error
+          ? error.message
+          : 'Could not update phase QC status.'
+      );
+    } finally {
+      setPhaseQcSavingWorkPackageId(null);
+    }
   };
 
   const renderGeneratedTimelineReview = () => {
@@ -4261,6 +4398,100 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     }
   }, [activeTab, isCompactTimelineViewport]);
 
+  const renderPhaseQcPanel = () => {
+    const completedWorkPackages = workPackages.filter(
+      workPackage => workPackage.status === 'completed'
+    );
+
+    return (
+      <SectionCard
+        title="Phase QC"
+        description="Completed work packages must pass QC before vendor payment becomes payable."
+      >
+        {phaseQcError && (
+          <div className="mb-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {phaseQcError}
+          </div>
+        )}
+
+        {phaseQcLoading ? (
+          <p className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+            Loading phase QC records...
+          </p>
+        ) : completedWorkPackages.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+            No completed work packages yet. Phase QC opens after a package is marked completed.
+          </p>
+        ) : (
+          <div className="grid gap-3">
+            {completedWorkPackages.map(workPackage => {
+              const qcRecord = phaseQcRecordsByWorkPackageId[workPackage.id];
+              const qcStatus = qcRecord?.status ?? 'pending';
+              const isSaving = phaseQcSavingWorkPackageId === workPackage.id;
+              const vendorName =
+                vendorRecords.find(vendor => vendor.id === workPackage.vendorId)?.name ??
+                workPackage.assigneeName ??
+                'Unassigned';
+
+              return (
+                <div
+                  key={workPackage.id}
+                  className="rounded-2xl border border-border bg-background p-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">
+                          {workPackage.title}
+                        </p>
+                        <StatusBadge variant={getPhaseQcStatusVariant(qcStatus)}>
+                          {getWorkPackageQcStatusLabel(qcStatus)}
+                        </StatusBadge>
+                      </div>
+
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Vendor: {vendorName}
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {getPhaseQcStatusDescription(qcStatus)}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[520px]">
+                      {(
+                        [
+                          ['pending', 'QC Pending'],
+                          ['needs_rework', 'Needs Rework'],
+                          ['passed', 'QC Passed'],
+                          ['accepted_exception', 'Accepted Exception'],
+                        ] as const
+                      ).map(([status, label]) => (
+                        <button
+                          key={`${workPackage.id}-${status}`}
+                          type="button"
+                          onClick={() => handleUpdatePhaseQcStatus(workPackage, status)}
+                          disabled={isSaving}
+                          className={`min-h-10 rounded-xl border px-3 py-2 text-[11px] font-semibold transition ${
+                            qcStatus === status
+                              ? 'border-foreground bg-foreground text-background'
+                              : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                          }`}
+                        >
+                          {isSaving ? 'Saving...' : label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </SectionCard>
+    );
+  };
+
   const renderTabContent = () => {
     if (activeTab === 'overview') {
       return (
@@ -4280,19 +4511,23 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
 
     if (activeTab === 'work') {
       return (
-        <TimelineWorkPackages
-          workPackages={workPackages}
-          onStartWork={handleStartWorkPackage}
-          onPauseWork={handlePauseWorkPackage}
-          onResumeWork={handleResumeWorkPackage}
-          onCompleteWork={handleCompleteWorkPackage}
-          onMarkDelayed={handleMarkWorkPackageDelayed}
-          onUpdateDelayReason={handleUpdateDelayReason}
-          onResolveDelay={handleResolveWorkPackageDelay}
-          onUpdatePrerequisites={handleUpdateWorkPackageDependencies}
-                    vendors={vendorRecords}
+        <div className="grid min-w-0 gap-6">
+          {renderPhaseQcPanel()}
+
+          <TimelineWorkPackages
+            workPackages={workPackages}
+            onStartWork={handleStartWorkPackage}
+            onPauseWork={handlePauseWorkPackage}
+            onResumeWork={handleResumeWorkPackage}
+            onCompleteWork={handleCompleteWorkPackage}
+            onMarkDelayed={handleMarkWorkPackageDelayed}
+            onUpdateDelayReason={handleUpdateDelayReason}
+            onResolveDelay={handleResolveWorkPackageDelay}
+            onUpdatePrerequisites={handleUpdateWorkPackageDependencies}
+            vendors={vendorRecords}
             onAssignVendor={handleAssignWorkPackageVendor}
-/>
+          />
+        </div>
       );
     }
 
@@ -5055,4 +5290,3 @@ const applyStoredTimelineState = (nextTimelineState: StoredTimelineState) => {
     </div>
   );
 }
-
