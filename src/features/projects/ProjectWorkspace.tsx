@@ -56,10 +56,19 @@ type ProjectDocumentForm = {
   notes: string;
 };
 
+type ProjectTimelineWorkPackageSummary = {
+  id: string;
+  title: string;
+  status: string;
+  actualEndDate: string | null;
+  estimatedEndDate: string | null;
+};
+
 type ProjectTimelineSummary = {
   project_id: string;
   has_timeline: boolean;
   timeline_confirmed_at: string | null;
+  work_packages: ProjectTimelineWorkPackageSummary[];
 };
 
 type ProjectCostEstimateStatus = 'draft' | 'approved' | 'revision';
@@ -260,6 +269,16 @@ interface CheckpointDetailForm {
   designEstimateRows: DesignEstimateLineForm[];
   designEstimateApproved: boolean;
   designPhaseStatus: DesignPhaseWorkflowStatus;
+  executionCompletionNotes: string;
+  executionPendingWorks: string;
+  executionHandoverReadiness: string;
+  qcChecklistNotes: string;
+  qcSnagList: string;
+  qcReportNotes: string;
+  handoverClientConfirmation: string;
+  handoverDocuments: string;
+  warrantyNotes: string;
+  finalHandoverNotes: string;
 }
 
 const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
@@ -277,6 +296,16 @@ const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
   designEstimateRows: [createEmptyDesignEstimateLine()],
   designEstimateApproved: false,
   designPhaseStatus: 'waiting',
+  executionCompletionNotes: '',
+  executionPendingWorks: '',
+  executionHandoverReadiness: '',
+  qcChecklistNotes: '',
+  qcSnagList: '',
+  qcReportNotes: '',
+  handoverClientConfirmation: '',
+  handoverDocuments: '',
+  warrantyNotes: '',
+  finalHandoverNotes: '',
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -808,6 +837,34 @@ function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetai
       metadata.designEstimateApproved === true ||
       designPhaseStatus === 'approved',
     designPhaseStatus,
+    executionCompletionNotes: toSafeString(
+      metadata.execution_completion_notes ?? metadata.executionCompletionNotes
+    ),
+    executionPendingWorks: toSafeString(
+      metadata.execution_pending_works ?? metadata.executionPendingWorks
+    ),
+    executionHandoverReadiness: toSafeString(
+      metadata.execution_handover_readiness ?? metadata.executionHandoverReadiness
+    ),
+    qcChecklistNotes: toSafeString(
+      metadata.qc_checklist_notes ?? metadata.qcChecklistNotes
+    ),
+    qcSnagList: toSafeString(metadata.qc_snag_list ?? metadata.qcSnagList),
+    qcReportNotes: toSafeString(
+      metadata.qc_report_notes ?? metadata.qcReportNotes
+    ),
+    handoverClientConfirmation: toSafeString(
+      metadata.handover_client_confirmation ?? metadata.handoverClientConfirmation
+    ),
+    handoverDocuments: toSafeString(
+      metadata.handover_documents ?? metadata.handoverDocuments
+    ),
+    warrantyNotes: toSafeString(
+      metadata.warranty_notes ?? metadata.warrantyNotes
+    ),
+    finalHandoverNotes: toSafeString(
+      metadata.final_handover_notes ?? metadata.finalHandoverNotes
+    ),
   };
 }
 
@@ -904,6 +961,16 @@ function getCheckpointSaveStatus(
     hasText(form.designEstimateNotes) ||
     hasText(form.designBypassReason) ||
     hasText(form.designServiceEstimateNotes) ||
+    hasText(form.executionCompletionNotes) ||
+    hasText(form.executionPendingWorks) ||
+    hasText(form.executionHandoverReadiness) ||
+    hasText(form.qcChecklistNotes) ||
+    hasText(form.qcSnagList) ||
+    hasText(form.qcReportNotes) ||
+    hasText(form.handoverClientConfirmation) ||
+    hasText(form.handoverDocuments) ||
+    hasText(form.warrantyNotes) ||
+    hasText(form.finalHandoverNotes) ||
     getValidDesignEstimateRows(form.designEstimateRows).length > 0 ||
     form.designEstimateApproved ||
     form.designPhaseStatus !== 'waiting';
@@ -992,6 +1059,122 @@ function isQcReportGenerated(checkpoint: ProjectCheckpoint | null | undefined) {
   const metadata = getCheckpointMetadata(checkpoint);
 
   return getBooleanMetadataValue(metadata, 'qc_report_generated', 'qcReportGenerated');
+}
+
+function getProjectTimelineSummaryWorkPackages(value: unknown): ProjectTimelineWorkPackageSummary[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(workPackage => {
+      const record = isRecord(workPackage) ? workPackage : {};
+      const id = toSafeString(record.id) || createWorkspaceLocalId('timeline-work-package');
+      const title =
+        toSafeString(record.title) ||
+        toSafeString(record.name) ||
+        'Untitled work package';
+
+      return {
+        id,
+        title,
+        status: toSafeString(record.status) || 'pending',
+        actualEndDate:
+          toSafeString(record.actualEndDate ?? record.actual_end_date) || null,
+        estimatedEndDate:
+          toSafeString(record.estimatedEndDate ?? record.estimated_end_date) || null,
+      };
+    })
+    .filter(workPackage => workPackage.title.trim().length > 0);
+}
+
+function getTimelineWorkPackages(
+  timeline: ProjectTimelineSummary | null | undefined
+) {
+  return timeline?.work_packages ?? [];
+}
+
+function getCompletedTimelineWorkPackages(
+  timeline: ProjectTimelineSummary | null | undefined
+) {
+  return getTimelineWorkPackages(timeline).filter(
+    workPackage => workPackage.status === 'completed'
+  );
+}
+
+function getPendingTimelineWorkPackages(
+  timeline: ProjectTimelineSummary | null | undefined
+) {
+  return getTimelineWorkPackages(timeline).filter(
+    workPackage => workPackage.status !== 'completed'
+  );
+}
+
+function getExecutionTransferReadiness({
+  estimate,
+  timeline,
+  isEstimateLoading,
+  isTimelineLoading,
+}: {
+  estimate: ProjectCostEstimateSummary | null | undefined;
+  timeline: ProjectTimelineSummary | null | undefined;
+  isEstimateLoading: boolean;
+  isTimelineLoading: boolean;
+}) {
+  if (isEstimateLoading || isTimelineLoading) {
+    return {
+      canTransfer: false,
+      label: 'Checking project readiness...',
+      reason: 'Checking approved estimate and timeline completion.',
+    };
+  }
+
+  if (!hasApprovedProjectEstimate(estimate)) {
+    return {
+      canTransfer: false,
+      label: 'Waiting for approved estimate',
+      reason: 'Approve the project Cost Estimate before transferring Execution for QC.',
+    };
+  }
+
+  if (!timeline || !timeline.has_timeline) {
+    return {
+      canTransfer: false,
+      label: 'Timeline not built',
+      reason: 'Build the project Timeline from the approved Cost Estimate first.',
+    };
+  }
+
+  if (!timeline.timeline_confirmed_at) {
+    return {
+      canTransfer: false,
+      label: 'Timeline not confirmed',
+      reason: 'Confirm the project Timeline before transferring Execution for QC.',
+    };
+  }
+
+  const totalWorkPackages = getTimelineWorkPackages(timeline).length;
+  const completedWorkPackages = getCompletedTimelineWorkPackages(timeline).length;
+
+  if (totalWorkPackages === 0) {
+    return {
+      canTransfer: false,
+      label: 'No work packages',
+      reason: 'The confirmed Timeline has no work packages to verify.',
+    };
+  }
+
+  if (completedWorkPackages < totalWorkPackages) {
+    return {
+      canTransfer: false,
+      label: `${completedWorkPackages}/${totalWorkPackages} work packages completed`,
+      reason: 'All Timeline work packages must be marked completed before QC transfer.',
+    };
+  }
+
+  return {
+    canTransfer: true,
+    label: 'Ready to transfer for QC',
+    reason: 'All Timeline work packages are completed and ready for QC inspection.',
+  };
 }
 
 function getCheckpointDescription(checkpointKey: ProjectCheckpoint['checkpoint_key']) {
@@ -1482,7 +1665,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
       const { data, error } = await supabase
         .from('project_timelines')
-        .select('project_id, has_timeline, timeline_confirmed_at')
+        .select('project_id, has_timeline, timeline_confirmed_at, work_packages')
         .in('project_id', projectIds);
 
       if (!isMounted) return;
@@ -1504,6 +1687,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
             project_id: projectId,
             has_timeline: timeline.has_timeline === true,
             timeline_confirmed_at: toSafeString(timeline.timeline_confirmed_at) || null,
+            work_packages: getProjectTimelineSummaryWorkPackages(timeline.work_packages),
           };
 
           return summaryMap;
@@ -2095,7 +2279,18 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
   };
 
   const updateCheckpointDetailField = (
-    field: CheckpointDetailTextField,
+    field:
+      | CheckpointDetailTextField
+      | 'executionCompletionNotes'
+      | 'executionPendingWorks'
+      | 'executionHandoverReadiness'
+      | 'qcChecklistNotes'
+      | 'qcSnagList'
+      | 'qcReportNotes'
+      | 'handoverClientConfirmation'
+      | 'handoverDocuments'
+      | 'warrantyNotes'
+      | 'finalHandoverNotes',
     value: string
   ) => {
     setCheckpointDetailForm(current => ({
@@ -2420,6 +2615,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     qcReportGenerated?: boolean;
     designPhaseStatus?: DesignPhaseWorkflowStatus;
     designEstimateApproved?: boolean;
+    executionTransferredForQc?: boolean;
   }) => {
     if (!selectedCheckpoint) return;
 
@@ -2455,12 +2651,24 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         effectiveForm.clientRequirementRows
       );
       const shouldGenerateQcReport = options?.qcReportGenerated === true;
+      const shouldTransferExecutionForQc =
+        options?.executionTransferredForQc === true;
       const nextMetadata = {
         ...metadata,
         client_requirements: effectiveForm.clientRequirements.trim(),
         client_requirement_items: clientRequirementRows,
         site_measurements: effectiveForm.siteMeasurements.trim(),
         custom_requirements: effectiveForm.customRequirements.trim(),
+        execution_completion_notes: effectiveForm.executionCompletionNotes.trim(),
+        execution_pending_works: effectiveForm.executionPendingWorks.trim(),
+        execution_handover_readiness: effectiveForm.executionHandoverReadiness.trim(),
+        qc_checklist_notes: effectiveForm.qcChecklistNotes.trim(),
+        qc_snag_list: effectiveForm.qcSnagList.trim(),
+        qc_report_notes: effectiveForm.qcReportNotes.trim(),
+        handover_client_confirmation: effectiveForm.handoverClientConfirmation.trim(),
+        handover_documents: effectiveForm.handoverDocuments.trim(),
+        warranty_notes: effectiveForm.warrantyNotes.trim(),
+        final_handover_notes: effectiveForm.finalHandoverNotes.trim(),
         design_approval_notes: effectiveForm.designApprovalNotes.trim(),
         design_estimate_notes: effectiveForm.designEstimateNotes.trim(),
         design_bypass_reason: effectiveForm.designBypassReason.trim(),
@@ -2470,6 +2678,28 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         design_estimate_rows: designEstimateRows,
         design_estimate_approved: effectiveForm.designEstimateApproved,
         design_phase_status: effectiveForm.designPhaseStatus,
+        execution_transferred_for_qc:
+          shouldTransferExecutionForQc ||
+          getBooleanMetadataValue(
+            metadata,
+            'execution_transferred_for_qc',
+            'executionTransferredForQc'
+          ),
+        execution_transferred_for_qc_at: shouldTransferExecutionForQc
+          ? new Date().toISOString()
+          : metadata.execution_transferred_for_qc_at ??
+            metadata.executionTransferredForQcAt ??
+            null,
+        execution_transferred_for_qc_by: shouldTransferExecutionForQc
+          ? profile?.id ?? null
+          : metadata.execution_transferred_for_qc_by ??
+            metadata.executionTransferredForQcBy ??
+            null,
+        execution_transfer_summary: shouldTransferExecutionForQc
+          ? `Execution transferred for QC after all Timeline work packages were completed for ${selectedProject?.name ?? 'project'}.`
+          : metadata.execution_transfer_summary ??
+            metadata.executionTransferSummary ??
+            '',
         qc_report_generated:
           shouldGenerateQcReport ||
           getBooleanMetadataValue(metadata, 'qc_report_generated', 'qcReportGenerated'),
@@ -2480,7 +2710,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
           ? profile?.id ?? null
           : metadata.qc_report_generated_by ?? metadata.qcReportGeneratedBy ?? null,
         qc_report_summary: shouldGenerateQcReport
-          ? `QC report generated for ${selectedProject?.name ?? 'project'} after checklist verification.`
+          ? `QC report generated for ${selectedProject?.name ?? 'project'} after checklist verification.${effectiveForm.qcSnagList.trim() ? ` Snags: ${effectiveForm.qcSnagList.trim()}` : ''}${effectiveForm.qcReportNotes.trim() ? ` Notes: ${effectiveForm.qcReportNotes.trim()}` : ''}`
           : metadata.qc_report_summary ?? metadata.qcReportSummary ?? '',
       };
 
@@ -2625,6 +2855,39 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       complete: true,
       designPhaseStatus: 'bypassed',
       designEstimateApproved: false,
+    });
+  };
+
+  const transferExecutionForQc = async () => {
+    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'execution') {
+      return;
+    }
+
+    if (selectedCheckpoint.status === 'locked') {
+      setCheckpointDetailError('Execution is locked. Complete the previous stages first.');
+      return;
+    }
+
+    if (!selectedProject) {
+      setCheckpointDetailError('Select a project before transferring Execution for QC.');
+      return;
+    }
+
+    const readiness = getExecutionTransferReadiness({
+      estimate: projectCostEstimateSummaries[selectedProject.id],
+      timeline: projectTimelineSummaries[selectedProject.id],
+      isEstimateLoading: projectCostEstimateSummariesLoading,
+      isTimelineLoading: projectTimelineSummariesLoading,
+    });
+
+    if (!readiness.canTransfer) {
+      setCheckpointDetailError(readiness.reason);
+      return;
+    }
+
+    await saveCheckpointDetails({
+      complete: true,
+      executionTransferredForQc: true,
     });
   };
 
@@ -4954,6 +5217,272 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </div>
                 )}
 
+                {false &&
+                  selectedProject &&
+                  (() => {
+                    const timeline = projectTimelineSummaries[selectedProject!.id];
+                    const estimate = projectCostEstimateSummaries[selectedProject!.id];
+                    const workPackages = getTimelineWorkPackages(timeline);
+                    const completedWorkPackages =
+                      getCompletedTimelineWorkPackages(timeline);
+                    const pendingWorkPackages =
+                      getPendingTimelineWorkPackages(timeline);
+                    const readiness = getExecutionTransferReadiness({
+                      estimate,
+                      timeline,
+                      isEstimateLoading: projectCostEstimateSummariesLoading,
+                      isTimelineLoading: projectTimelineSummariesLoading,
+                    });
+
+                    return (
+                      <div className="rounded-2xl border border-border bg-background p-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                              Execution Transfer Gate
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Execution can move to Quality Control only after the linked Cost Estimate is approved, Timeline is confirmed, and every Timeline work package is completed.
+                            </p>
+                          </div>
+
+                          <span
+                            className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
+                              readiness.canTransfer
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                                : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300'
+                            }`}
+                          >
+                            {readiness.label}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                          <div className="rounded-2xl border border-border bg-card p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Cost Estimate
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-foreground">
+                              {getProjectCostEstimateStatusLabel(
+                                estimate,
+                                projectCostEstimateSummariesLoading
+                              )}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Approved estimate is required before QC transfer.
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl border border-border bg-card p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Timeline
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-foreground">
+                              {timeline?.has_timeline
+                                ? timeline.timeline_confirmed_at
+                                  ? 'Confirmed'
+                                  : 'Timeline Built'
+                                : projectTimelineSummariesLoading
+                                  ? 'Checking...'
+                                  : 'Not Built'}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Timeline must be confirmed before QC transfer.
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl border border-border bg-card p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Work Packages
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-foreground">
+                              {completedWorkPackages.length}/{workPackages.length} completed
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Every work package must be marked completed in Timeline.
+                            </p>
+                          </div>
+                        </div>
+
+                        {pendingWorkPackages.length > 0 && (
+                          <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Pending Work Packages
+                            </p>
+                            <div className="mt-3 grid gap-2 md:grid-cols-2">
+                              {pendingWorkPackages.slice(0, 8).map(workPackage => (
+                                <div
+                                  key={workPackage.id}
+                                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2"
+                                >
+                                  <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                    {workPackage.title}
+                                  </span>
+                                  <span className="shrink-0 rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                    {workPackage.status.replaceAll('_', ' ')}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {pendingWorkPackages.length > 8 && (
+                              <p className="mt-3 text-xs text-muted-foreground">
+                                + {pendingWorkPackages.length - 8} more pending work package(s).
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            {readiness.reason}
+                          </p>
+
+                          <Button
+                            type="button"
+                            onClick={transferExecutionForQc}
+                            disabled={!readiness.canTransfer || isSavingCheckpointDetail}
+                            className="gap-2"
+                          >
+                            <Check className="h-4 w-4" />
+                            {isSavingCheckpointDetail ? 'Saving...' : 'Transfer for QC'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                {selectedCheckpoint.checkpoint_key === 'quality_control' && (
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Quality Control Details
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      Capture QC observations before generating the QC Report.
+                    </p>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          QC Checklist Notes
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.qcChecklistNotes}
+                          onChange={event =>
+                            updateCheckpointDetailField('qcChecklistNotes', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="Record what was checked and verified."
+                        />
+                      </label>
+
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Snag List
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.qcSnagList}
+                          onChange={event =>
+                            updateCheckpointDetailField('qcSnagList', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="List snags, corrections, or open quality issues."
+                        />
+                      </label>
+
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          QC Report Notes
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.qcReportNotes}
+                          onChange={event =>
+                            updateCheckpointDetailField('qcReportNotes', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="Add report summary or final QC remarks."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {selectedCheckpoint.checkpoint_key === 'handover' && (
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Final Handover Details
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      Record closeout confirmation, final documents, and warranty notes.
+                    </p>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Client Confirmation
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.handoverClientConfirmation}
+                          onChange={event =>
+                            updateCheckpointDetailField('handoverClientConfirmation', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="Record client confirmation or sign-off notes."
+                        />
+                      </label>
+
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Final Documents
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.handoverDocuments}
+                          onChange={event =>
+                            updateCheckpointDetailField('handoverDocuments', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="List final drawings, invoices, warranty cards, manuals, or documents handed over."
+                        />
+                      </label>
+
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Warranty / Maintenance Notes
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.warrantyNotes}
+                          onChange={event =>
+                            updateCheckpointDetailField('warrantyNotes', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="Mention warranty periods, maintenance instructions, or service conditions."
+                        />
+                      </label>
+
+                      <label className="grid gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Final Remarks
+                        </span>
+                        <textarea
+                          value={checkpointDetailForm.finalHandoverNotes}
+                          onChange={event =>
+                            updateCheckpointDetailField('finalHandoverNotes', event.target.value)
+                          }
+                          rows={4}
+                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                          placeholder="Add any final closeout notes."
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 <div className="rounded-2xl border border-border bg-background p-4">
                   <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Checkpoint Notes
@@ -5026,6 +5555,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 {canManageProjects &&
                   selectedCheckpoint.checkpoint_key !== 'design_phase' &&
                   selectedCheckpoint.checkpoint_key !== 'quality_control' &&
+                  selectedCheckpoint.checkpoint_key !== 'execution' &&
                   selectedCheckpoint.status !== 'locked' &&
                   !isCheckpointComplete(selectedCheckpoint) && (
                     <Button
@@ -5035,9 +5565,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     >
                       {isSavingCheckpointDetail
                         ? 'Saving...'
-                        : selectedCheckpoint.checkpoint_key === 'execution'
-                          ? 'Work Finished / Ready for QC'
-                          : 'Mark Complete & Unlock Next'}
+                        : 'Mark Complete & Unlock Next'}
                     </Button>
                   )}
               </div>
