@@ -73,11 +73,61 @@ type ProjectTimelineSummary = {
 
 type ProjectCostEstimateStatus = 'draft' | 'approved' | 'revision';
 
+type ProjectCostEstimateScopeArea = {
+  id: string;
+  name: string;
+};
+
+type ProjectCostEstimateScopeLineItem = {
+  id: string;
+  areaId: string;
+  name: string;
+  description: string;
+  quantity: number;
+  unitLabel: string;
+  vendorName: string;
+  remarks: string;
+};
+
 type ProjectCostEstimateSummary = {
+  id: string;
   project_id: string;
   status: ProjectCostEstimateStatus;
   version: number;
   updated_at: string | null;
+  areas: ProjectCostEstimateScopeArea[];
+  line_items: ProjectCostEstimateScopeLineItem[];
+};
+
+const QC_INSPECTION_STATUSES = [
+  'pending',
+  'needs_rework',
+  'pass',
+  'accepted_exception',
+] as const;
+
+type QcInspectionStatus = (typeof QC_INSPECTION_STATUSES)[number];
+
+const QC_SEVERITIES = ['minor', 'major', 'critical'] as const;
+
+type QcSeverity = (typeof QC_SEVERITIES)[number];
+
+type QcInspectionRow = {
+  id: string;
+  sourceLineItemId: string;
+  areaId: string;
+  areaName: string;
+  itemName: string;
+  description: string;
+  quantity: number;
+  unitLabel: string;
+  vendorName: string;
+  status: QcInspectionStatus;
+  severity: QcSeverity;
+  owner: string;
+  remarks: string;
+  retestNotes: string;
+  completedAt: string | null;
 };
 
 type ProjectFinanceSummary = {
@@ -275,6 +325,7 @@ interface CheckpointDetailForm {
   qcChecklistNotes: string;
   qcSnagList: string;
   qcReportNotes: string;
+  qcInspectionRows: QcInspectionRow[];
   handoverClientConfirmation: string;
   handoverDocuments: string;
   warrantyNotes: string;
@@ -302,6 +353,7 @@ const EMPTY_CHECKPOINT_DETAIL_FORM: CheckpointDetailForm = {
   qcChecklistNotes: '',
   qcSnagList: '',
   qcReportNotes: '',
+  qcInspectionRows: [],
   handoverClientConfirmation: '',
   handoverDocuments: '',
   warrantyNotes: '',
@@ -319,6 +371,261 @@ function toSafeString(value: unknown) {
 function hasText(value: string) {
   return value.trim().length > 0;
 }
+
+function normalizeQcInspectionStatus(value: unknown): QcInspectionStatus {
+  if (value === 'snag' || value === 'rework') return 'needs_rework';
+  if (value === 'na') return 'pending';
+
+  return QC_INSPECTION_STATUSES.includes(value as QcInspectionStatus)
+    ? (value as QcInspectionStatus)
+    : 'pending';
+}
+
+function normalizeQcSeverity(value: unknown): QcSeverity {
+  return QC_SEVERITIES.includes(value as QcSeverity)
+    ? (value as QcSeverity)
+    : 'minor';
+}
+
+function getProjectCostEstimateScopeAreas(value: unknown): ProjectCostEstimateScopeArea[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(area => {
+      const record = isRecord(area) ? area : {};
+      const id = toSafeString(record.id);
+      const name = toSafeString(record.name);
+
+      return id && name ? { id, name } : null;
+    })
+    .filter((area): area is ProjectCostEstimateScopeArea => Boolean(area));
+}
+
+function getProjectCostEstimateScopeLineItems(
+  value: unknown
+): ProjectCostEstimateScopeLineItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(lineItem => {
+      const record = isRecord(lineItem) ? lineItem : {};
+      const id = toSafeString(record.id);
+      const name = toSafeString(record.name);
+      const quantity =
+        typeof record.quantity === 'number'
+          ? record.quantity
+          : Number(record.quantity ?? 0);
+
+      return id && name
+        ? {
+            id,
+            areaId: toSafeString(record.areaId ?? record.area_id),
+            name,
+            description: toSafeString(record.description),
+            quantity: Number.isFinite(quantity) ? quantity : 0,
+            unitLabel: toSafeString(record.unitLabel ?? record.unit_label),
+            vendorName: toSafeString(record.vendorName ?? record.vendor_name),
+            remarks: toSafeString(record.remarks),
+          }
+        : null;
+    })
+    .filter((lineItem): lineItem is ProjectCostEstimateScopeLineItem =>
+      Boolean(lineItem)
+    );
+}
+
+function getStoredQcInspectionRows(metadata: Record<string, unknown>): QcInspectionRow[] {
+  const rows = metadata.qc_inspection_rows ?? metadata.qcInspectionRows;
+
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map(row => {
+      const record = isRecord(row) ? row : {};
+      const sourceLineItemId = toSafeString(
+        record.sourceLineItemId ?? record.source_line_item_id
+      );
+
+      if (!sourceLineItemId) return null;
+
+      const quantity =
+        typeof record.quantity === 'number'
+          ? record.quantity
+          : Number(record.quantity ?? 0);
+
+      return {
+        id: toSafeString(record.id) || createWorkspaceLocalId('qc-row'),
+        sourceLineItemId,
+        areaId: toSafeString(record.areaId ?? record.area_id),
+        areaName: toSafeString(record.areaName ?? record.area_name),
+        itemName: toSafeString(record.itemName ?? record.item_name),
+        description: toSafeString(record.description),
+        quantity: Number.isFinite(quantity) ? quantity : 0,
+        unitLabel: toSafeString(record.unitLabel ?? record.unit_label),
+        vendorName: toSafeString(record.vendorName ?? record.vendor_name),
+        status: normalizeQcInspectionStatus(record.status),
+        severity: normalizeQcSeverity(record.severity),
+        owner: toSafeString(record.owner) || 'Gravium',
+        remarks: toSafeString(record.remarks),
+        retestNotes: toSafeString(record.retestNotes ?? record.retest_notes),
+        completedAt: toSafeString(record.completedAt ?? record.completed_at) || null,
+      };
+    })
+    .filter((row): row is QcInspectionRow => Boolean(row));
+}
+
+function getEstimateAreaName(
+  estimate: ProjectCostEstimateSummary | null | undefined,
+  areaId: string
+) {
+  return estimate?.areas.find(area => area.id === areaId)?.name || 'Unassigned Area';
+}
+
+function buildQcInspectionRowsFromEstimate(
+  estimate: ProjectCostEstimateSummary | null | undefined,
+  existingRows: QcInspectionRow[]
+) {
+  if (!estimate || estimate.status !== 'approved') return existingRows;
+
+  const existingByLineItemId = new Map(
+    existingRows.map(row => [row.sourceLineItemId, row])
+  );
+
+  return estimate.line_items.map(lineItem => {
+    const existingRow = existingByLineItemId.get(lineItem.id);
+
+    return {
+      id: existingRow?.id || createWorkspaceLocalId('qc-row'),
+      sourceLineItemId: lineItem.id,
+      areaId: lineItem.areaId,
+      areaName: getEstimateAreaName(estimate, lineItem.areaId),
+      itemName: lineItem.name,
+      description: lineItem.description,
+      quantity: lineItem.quantity,
+      unitLabel: lineItem.unitLabel,
+      vendorName: lineItem.vendorName,
+      status: existingRow?.status ?? 'pending',
+      severity: existingRow?.severity ?? 'minor',
+      owner: existingRow?.owner || lineItem.vendorName || 'Gravium',
+      remarks: existingRow?.remarks ?? '',
+      retestNotes: existingRow?.retestNotes ?? '',
+      completedAt: existingRow?.completedAt ?? null,
+    };
+  });
+}
+
+function getQcInspectionGroups(rows: QcInspectionRow[]) {
+  const groups = new Map<string, { areaName: string; rows: QcInspectionRow[] }>();
+
+  rows.forEach(row => {
+    const areaName = row.areaName || 'Unassigned Area';
+
+    if (!groups.has(areaName)) {
+      groups.set(areaName, { areaName, rows: [] });
+    }
+
+    groups.get(areaName)?.rows.push(row);
+  });
+
+  return Array.from(groups.values());
+}
+
+function getQcInspectionStats(rows: QcInspectionRow[]) {
+  const total = rows.length;
+  const passed = rows.filter(row => row.status === 'pass').length;
+  const acceptedExceptions = rows.filter(
+    row => row.status === 'accepted_exception'
+  ).length;
+  const pending = rows.filter(row => row.status === 'pending').length;
+  const needsRework = rows.filter(row => row.status === 'needs_rework').length;
+  const acceptedExceptionsMissingRemarks = rows.filter(
+    row => row.status === 'accepted_exception' && !hasText(row.remarks)
+  ).length;
+  const resolved = passed + acceptedExceptions;
+
+  return {
+    total,
+    passed,
+    acceptedExceptions,
+    pending,
+    needsRework,
+    acceptedExceptionsMissingRemarks,
+    resolved,
+    canGenerateReport:
+      total > 0 &&
+      pending === 0 &&
+      needsRework === 0 &&
+      acceptedExceptionsMissingRemarks === 0,
+  };
+}
+function getQcInspectionStatusLabel(status: QcInspectionStatus) {
+  switch (status) {
+    case 'pass':
+      return 'Passed';
+    case 'needs_rework':
+      return 'Needs Rework';
+    case 'accepted_exception':
+      return 'Accepted Exception';
+    default:
+      return 'Pending';
+  }
+}
+
+function getQcInspectionStatusClass(status: QcInspectionStatus) {
+  switch (status) {
+    case 'pass':
+      return 'border-emerald-400/70 bg-emerald-500/20 text-emerald-700 dark:text-emerald-200';
+    case 'needs_rework':
+      return 'border-red-400/70 bg-red-500/20 text-red-700 dark:text-red-200';
+    case 'accepted_exception':
+      return 'border-violet-400/70 bg-violet-500/20 text-violet-700 dark:text-violet-200';
+    default:
+      return 'border-amber-400/70 bg-amber-500/20 text-amber-700 dark:text-amber-200';
+  }
+}
+
+function getQcInspectionRowCardClass(status: QcInspectionStatus) {
+  switch (status) {
+    case 'pass':
+      return 'border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_22px_rgba(16,185,129,0.08)]';
+    case 'needs_rework':
+      return 'border-red-400/55 bg-red-500/10 shadow-[0_0_22px_rgba(239,68,68,0.08)]';
+    case 'accepted_exception':
+      return 'border-violet-400/55 bg-violet-500/10 shadow-[0_0_22px_rgba(139,92,246,0.08)]';
+    default:
+      return 'border-amber-400/45 bg-amber-500/10 shadow-[0_0_22px_rgba(245,158,11,0.06)]';
+  }
+}
+function createQcReportSnapshot({
+  project,
+  estimate,
+  rows,
+  generatedBy,
+}: {
+  project: Project | null;
+  estimate: ProjectCostEstimateSummary | null | undefined;
+  rows: QcInspectionRow[];
+  generatedBy: string | null;
+}) {
+  const stats = getQcInspectionStats(rows);
+
+  return {
+    generated_at: new Date().toISOString(),
+    generated_by: generatedBy,
+    project_id: project?.id ?? null,
+    project_name: project?.name ?? '',
+    client_name: project?.client ?? '',
+    source_estimate_id: estimate?.id ?? null,
+    source_estimate_version: estimate?.version ?? null,
+    total_items: stats.total,
+    passed_items: stats.passed,
+    accepted_exception_items: stats.acceptedExceptions,
+    needs_rework_items: stats.needsRework,
+    pending_items: stats.pending,
+    rows,
+  };
+}
+
 
 function formatINR(amount: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -853,6 +1160,7 @@ function getCheckpointDetailForm(checkpoint: ProjectCheckpoint): CheckpointDetai
     qcReportNotes: toSafeString(
       metadata.qc_report_notes ?? metadata.qcReportNotes
     ),
+    qcInspectionRows: getStoredQcInspectionRows(metadata),
     handoverClientConfirmation: toSafeString(
       metadata.handover_client_confirmation ?? metadata.handoverClientConfirmation
     ),
@@ -1723,7 +2031,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       const [estimatesResult, financeResult] = await Promise.all([
         supabase
           .from('cost_estimates')
-          .select('project_id, status, version, updated_at')
+          .select('id, project_id, status, version, updated_at, areas, line_items')
           .in('project_id', projectIds)
           .order('updated_at', { ascending: false }),
         supabase
@@ -1752,10 +2060,13 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
           const version = Number(estimate.version);
 
           summaryMap[projectId] = {
+            id: toSafeString(estimate.id),
             project_id: projectId,
             status,
             version: Number.isFinite(version) && version > 0 ? version : 1,
             updated_at: toSafeString(estimate.updated_at) || null,
+            areas: getProjectCostEstimateScopeAreas(estimate.areas),
+            line_items: getProjectCostEstimateScopeLineItems(estimate.line_items),
           };
 
           return summaryMap;
@@ -1800,6 +2111,35 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
 
     void loadProjectActionSummaries();
   }, [projects]);
+
+  useEffect(() => {
+    if (
+      !selectedCheckpoint ||
+      selectedCheckpoint.checkpoint_key !== 'quality_control' ||
+      !selectedProject
+    ) {
+      return;
+    }
+
+    const estimate = projectCostEstimateSummaries[selectedProject.id];
+
+    if (!estimate || estimate.status !== 'approved') return;
+
+    setCheckpointDetailForm(current => ({
+      ...current,
+      qcInspectionRows: buildQcInspectionRowsFromEstimate(
+        estimate,
+        current.qcInspectionRows
+      ),
+    }));
+  }, [
+    selectedCheckpoint?.id,
+    selectedCheckpoint?.checkpoint_key,
+    selectedProject?.id,
+    projectCostEstimateSummaries,
+  ]);
+
+
 
 
 
@@ -2653,6 +2993,17 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       const shouldGenerateQcReport = options?.qcReportGenerated === true;
       const shouldTransferExecutionForQc =
         options?.executionTransferredForQc === true;
+      const selectedApprovedEstimateForQc = selectedProject
+        ? projectCostEstimateSummaries[selectedProject.id]
+        : null;
+      const qcReportSnapshot = shouldGenerateQcReport
+        ? createQcReportSnapshot({
+            project: selectedProject,
+            estimate: selectedApprovedEstimateForQc,
+            rows: effectiveForm.qcInspectionRows,
+            generatedBy: profile?.id ?? null,
+          })
+        : null;
       const nextMetadata = {
         ...metadata,
         client_requirements: effectiveForm.clientRequirements.trim(),
@@ -2665,6 +3016,7 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
         qc_checklist_notes: effectiveForm.qcChecklistNotes.trim(),
         qc_snag_list: effectiveForm.qcSnagList.trim(),
         qc_report_notes: effectiveForm.qcReportNotes.trim(),
+        qc_inspection_rows: effectiveForm.qcInspectionRows,
         handover_client_confirmation: effectiveForm.handoverClientConfirmation.trim(),
         handover_documents: effectiveForm.handoverDocuments.trim(),
         warranty_notes: effectiveForm.warrantyNotes.trim(),
@@ -2704,17 +3056,20 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
           shouldGenerateQcReport ||
           getBooleanMetadataValue(metadata, 'qc_report_generated', 'qcReportGenerated'),
         qc_report_generated_at: shouldGenerateQcReport
-          ? new Date().toISOString()
+          ? qcReportSnapshot?.generated_at ?? new Date().toISOString()
           : metadata.qc_report_generated_at ?? metadata.qcReportGeneratedAt ?? null,
         qc_report_generated_by: shouldGenerateQcReport
           ? profile?.id ?? null
           : metadata.qc_report_generated_by ?? metadata.qcReportGeneratedBy ?? null,
         qc_report_summary: shouldGenerateQcReport
-          ? `QC report generated for ${selectedProject?.name ?? 'project'} after checklist verification.${effectiveForm.qcSnagList.trim() ? ` Snags: ${effectiveForm.qcSnagList.trim()}` : ''}${effectiveForm.qcReportNotes.trim() ? ` Notes: ${effectiveForm.qcReportNotes.trim()}` : ''}`
+          ? `QC report generated for ${selectedProject?.name ?? 'project'} with ${getQcInspectionStats(effectiveForm.qcInspectionRows).resolved}/${qcReportSnapshot?.total_items ?? 0} scope items passed or accepted.`
           : metadata.qc_report_summary ?? metadata.qcReportSummary ?? '',
+        qc_report_snapshot: shouldGenerateQcReport
+          ? qcReportSnapshot
+          : metadata.qc_report_snapshot ?? metadata.qcReportSnapshot ?? null,
       };
 
-      const shouldCompleteChecklist = options?.complete || options?.completeChecklist;
+      const shouldCompleteChecklist = options?.complete || options?.completeChecklist || shouldGenerateQcReport;
       const updates = {
         notes: effectiveForm.notes.trim(),
         metadata: nextMetadata,
@@ -2891,19 +3246,51 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     });
   };
 
-  const completeQcChecklist = async () => {
-    if (!selectedCheckpoint || selectedCheckpoint.checkpoint_key !== 'quality_control') {
+  const syncQcInspectionRowsFromApprovedEstimate = () => {
+    if (!selectedProject) {
+      setCheckpointDetailError('Select a project before preparing QC inspection.');
       return;
     }
 
-    if (selectedCheckpoint.status === 'locked') {
-      setCheckpointDetailError('Quality Control is locked. Complete Execution first.');
+    const estimate = projectCostEstimateSummaries[selectedProject.id];
+
+    if (!estimate || estimate.status !== 'approved') {
+      setCheckpointDetailError('Approve the project Cost Estimate before preparing QC inspection.');
       return;
     }
 
-    await saveCheckpointDetails({
-      completeChecklist: true,
-    });
+    setCheckpointDetailForm(current => ({
+      ...current,
+      qcInspectionRows: buildQcInspectionRowsFromEstimate(
+        estimate,
+        current.qcInspectionRows
+      ),
+    }));
+    setCheckpointDetailError('');
+  };
+
+  const updateQcInspectionRow = (
+    rowId: string,
+    updates: Partial<QcInspectionRow>
+  ) => {
+    setCheckpointDetailForm(current => ({
+      ...current,
+      qcInspectionRows: current.qcInspectionRows.map(row => {
+        if (row.id !== rowId) return row;
+
+        const nextStatus = updates.status ?? row.status;
+        const shouldSetCompletedAt =
+          nextStatus === 'pass' || nextStatus === 'accepted_exception';
+
+        return {
+          ...row,
+          ...updates,
+          completedAt: shouldSetCompletedAt
+            ? row.completedAt ?? new Date().toISOString()
+            : null,
+        };
+      }),
+    }));
   };
 
   const generateQcReport = async () => {
@@ -2916,12 +3303,17 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       return;
     }
 
-    if (!isCheckpointChecklistComplete(selectedCheckpoint)) {
-      setCheckpointDetailError('Complete the QC checklist before generating the QC Report.');
+    const stats = getQcInspectionStats(checkpointDetailForm.qcInspectionRows);
+
+    if (!stats.canGenerateReport) {
+      setCheckpointDetailError(
+        'Resolve all QC inspection rows before generating the QC Report. Pending and Needs Rework rows cannot remain open, and Accepted Exception rows require remarks.'
+      );
       return;
     }
 
     await saveCheckpointDetails({
+      completeChecklist: true,
       qcReportGenerated: true,
     });
   };
@@ -2931,8 +3323,17 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       return;
     }
 
+    const stats = getQcInspectionStats(checkpointDetailForm.qcInspectionRows);
+
+    if (!stats.canGenerateReport) {
+      setCheckpointDetailError(
+        'QC Phase can be completed only after all items are Passed or Accepted Exception with remarks.'
+      );
+      return;
+    }
+
     if (!isCheckpointChecklistComplete(selectedCheckpoint)) {
-      setCheckpointDetailError('Complete the QC checklist before completing Quality Control.');
+      setCheckpointDetailError('Generate the QC Report before completing Quality Control.');
       return;
     }
 
@@ -5153,71 +5554,8 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                   </div>
                 )}
 
-                {selectedCheckpoint.checkpoint_key === 'quality_control' && (
-                  <div className="rounded-2xl border border-border bg-background p-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          QC Completion Gate
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          Final handover payment in Finance unlocks only after Execution is completed, QC checklist is completed, QC Report is generated, and QC Phase is completed.
-                        </p>
-                      </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-                            isCheckpointChecklistComplete(selectedCheckpoint)
-                              ? 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50'
-                              : 'border-border bg-muted text-muted-foreground'
-                          }`}
-                        >
-                          {isCheckpointChecklistComplete(selectedCheckpoint) ? 'Checklist Done' : 'Checklist Pending'}
-                        </span>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-                            isQcReportGenerated(selectedCheckpoint)
-                              ? 'border-emerald-300/80 bg-emerald-500/35 text-emerald-950 dark:text-emerald-50'
-                              : 'border-border bg-muted text-muted-foreground'
-                          }`}
-                        >
-                          {isQcReportGenerated(selectedCheckpoint) ? 'QC Report Generated' : 'QC Report Pending'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {canManageProjects &&
-                      selectedCheckpoint.status !== 'locked' &&
-                      !isCheckpointComplete(selectedCheckpoint) && (
-                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={completeQcChecklist}
-                            disabled={isSavingCheckpointDetail || isCheckpointChecklistComplete(selectedCheckpoint)}
-                          >
-                            {isCheckpointChecklistComplete(selectedCheckpoint) ? 'QC Checklist Completed' : 'Complete QC Checklist'}
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={generateQcReport}
-                            disabled={
-                              isSavingCheckpointDetail ||
-                              !isCheckpointChecklistComplete(selectedCheckpoint) ||
-                              isQcReportGenerated(selectedCheckpoint)
-                            }
-                          >
-                            {isQcReportGenerated(selectedCheckpoint) ? 'QC Report Generated' : 'Generate QC Report'}
-                          </Button>
-                        </div>
-                      )}
-                  </div>
-                )}
-
-                {false &&
+                {selectedCheckpoint.checkpoint_key === 'execution' &&
                   selectedProject &&
                   (() => {
                     const timeline = projectTimelineSummaries[selectedProject!.id];
@@ -5352,136 +5690,225 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                     );
                   })()}
 
-                {selectedCheckpoint.checkpoint_key === 'quality_control' && (
-                  <div className="rounded-2xl border border-border bg-background p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Quality Control Details
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      Capture QC observations before generating the QC Report.
-                    </p>
+                {selectedCheckpoint.checkpoint_key === 'quality_control' &&
+                  selectedProject &&
+                  (() => {
+                    const estimate = projectCostEstimateSummaries[selectedProject!.id];
+                    const rows = checkpointDetailForm.qcInspectionRows;
+                    const stats = getQcInspectionStats(rows);
+                    const groups = getQcInspectionGroups(rows);
 
-                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          QC Checklist Notes
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.qcChecklistNotes}
-                          onChange={event =>
-                            updateCheckpointDetailField('qcChecklistNotes', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="Record what was checked and verified."
-                        />
-                      </label>
+                    return (
+                      <div className="rounded-2xl border border-border bg-background p-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                              QC Scope Inspection
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Inspect approved estimate scope area-wise. Mark each item as Pending, Needs Rework, Passed, or Accepted Exception before generating the QC Report.
+                            </p>
+                          </div>
 
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Snag List
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.qcSnagList}
-                          onChange={event =>
-                            updateCheckpointDetailField('qcSnagList', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="List snags, corrections, or open quality issues."
-                        />
-                      </label>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground">
+                              {stats.resolved}/{stats.total} resolved
+                            </span>
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                stats.needsRework > 0
+                                  ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300'
+                                  : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                              }`}
+                            >
+                              {stats.needsRework} needs rework
+                            </span>
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                              {stats.pending} pending
+                            </span>
+                          </div>
+                        </div>
 
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          QC Report Notes
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.qcReportNotes}
-                          onChange={event =>
-                            updateCheckpointDetailField('qcReportNotes', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="Add report summary or final QC remarks."
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
+                        {!estimate || estimate.status !== 'approved' ? (
+                          <div className="mt-4 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
+                            Approve the project Cost Estimate before preparing the QC inspection checklist.
+                          </div>
+                        ) : rows.length === 0 ? (
+                          <div className="mt-4 rounded-2xl border border-dashed border-border bg-card p-4">
+                            <p className="text-sm font-semibold text-foreground">
+                              No QC inspection rows prepared yet.
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              This will generate area-wise inspection rows from the approved estimate items.
+                            </p>
+                            <Button
+                              type="button"
+                              onClick={syncQcInspectionRowsFromApprovedEstimate}
+                              disabled={isSavingCheckpointDetail}
+                              className="mt-4"
+                            >
+                              Prepare QC Inspection
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mt-4 space-y-4">
+                            {groups.map(group => (
+                              <div
+                                key={group.areaName}
+                                className="overflow-hidden rounded-2xl border border-border bg-card"
+                              >
+                                <div className="border-b border-border bg-background px-4 py-3">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {group.areaName}
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {group.rows.length} inspection item(s)
+                                  </p>
+                                </div>
 
-                {selectedCheckpoint.checkpoint_key === 'handover' && (
-                  <div className="rounded-2xl border border-border bg-background p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Final Handover Details
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      Record closeout confirmation, final documents, and warranty notes.
-                    </p>
+                                <div className="divide-y divide-border">
+                                  {group.rows.map(row => (
+                                    <div
+                                      key={row.id}
+                                      className={`m-3 rounded-2xl border p-4 transition ${getQcInspectionRowCardClass(row.status)}`}
+                                    >
+                                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-semibold text-foreground">
+                                            {row.itemName}
+                                          </p>
+                                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                            {row.quantity} {row.unitLabel || 'unit'}
+                                            {row.vendorName ? ` ? ${row.vendorName}` : ''}
+                                          </p>
+                                          {row.description ? (
+                                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                              {row.description}
+                                            </p>
+                                          ) : null}
+                                        </div>
 
-                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Client Confirmation
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.handoverClientConfirmation}
-                          onChange={event =>
-                            updateCheckpointDetailField('handoverClientConfirmation', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="Record client confirmation or sign-off notes."
-                        />
-                      </label>
+                                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[460px]">
+                                          {QC_INSPECTION_STATUSES.map(status => (
+                                            <button
+                                              key={`${row.id}-${status}`}
+                                              type="button"
+                                              onClick={() =>
+                                                updateQcInspectionRow(row.id, { status })
+                                              }
+                                              className={`min-h-9 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
+                                                row.status === status
+                                                  ? getQcInspectionStatusClass(status)
+                                                  : 'border-border bg-background/80 text-muted-foreground hover:bg-muted hover:text-foreground'
+                                              }`}
+                                            >
+                                              {getQcInspectionStatusLabel(status)}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
 
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Final Documents
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.handoverDocuments}
-                          onChange={event =>
-                            updateCheckpointDetailField('handoverDocuments', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="List final drawings, invoices, warranty cards, manuals, or documents handed over."
-                        />
-                      </label>
+                                      {(row.status === 'needs_rework' ||
+                                        row.status === 'accepted_exception') && (
+                                        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                                          <div>
+                                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                              Severity
+                                            </p>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                              {QC_SEVERITIES.map(severity => (
+                                                <button
+                                                  key={`${row.id}-${severity}`}
+                                                  type="button"
+                                                  onClick={() =>
+                                                    updateQcInspectionRow(row.id, { severity })
+                                                  }
+                                                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold capitalize transition ${
+                                                    row.severity === severity
+                                                      ? 'border-foreground bg-foreground text-background'
+                                                      : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                                                  }`}
+                                                >
+                                                  {severity}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
 
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Warranty / Maintenance Notes
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.warrantyNotes}
-                          onChange={event =>
-                            updateCheckpointDetailField('warrantyNotes', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="Mention warranty periods, maintenance instructions, or service conditions."
-                        />
-                      </label>
+                                          <label className="grid gap-2">
+                                            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                              Owner
+                                            </span>
+                                            <input
+                                              value={row.owner}
+                                              onChange={event =>
+                                                updateQcInspectionRow(row.id, {
+                                                  owner: event.target.value,
+                                                })
+                                              }
+                                              className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                              placeholder="Gravium / Vendor / Client"
+                                            />
+                                          </label>
 
-                      <label className="grid gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          Final Remarks
-                        </span>
-                        <textarea
-                          value={checkpointDetailForm.finalHandoverNotes}
-                          onChange={event =>
-                            updateCheckpointDetailField('finalHandoverNotes', event.target.value)
-                          }
-                          rows={4}
-                          className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
-                          placeholder="Add any final closeout notes."
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
+                                          <label className="grid gap-2">
+                                            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                              Retest / Closure Notes
+                                            </span>
+                                            <input
+                                              value={row.retestNotes}
+                                              onChange={event =>
+                                                updateQcInspectionRow(row.id, {
+                                                  retestNotes: event.target.value,
+                                                })
+                                              }
+                                              className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                              placeholder="Retest result or accepted reason"
+                                            />
+                                          </label>
+                                        </div>
+                                      )}
+
+                                      <label className="mt-4 grid gap-2">
+                                        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                          Inspection Remarks
+                                        </span>
+                                        <textarea
+                                          value={row.remarks}
+                                          onChange={event =>
+                                            updateQcInspectionRow(row.id, {
+                                              remarks: event.target.value,
+                                            })
+                                          }
+                                          rows={2}
+                                          className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+                                          placeholder="Add observation, correction, finish quality, alignment, damage, or site note."
+                                        />
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+
+                            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="text-xs leading-5 text-muted-foreground">
+                                QC Report unlocks only when all rows are Passed or Accepted Exception with remarks.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={syncQcInspectionRowsFromApprovedEstimate}
+                                disabled={isSavingCheckpointDetail}
+                              >
+                                Refresh Scope From Estimate
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                 <div className="rounded-2xl border border-border bg-background p-4">
                   <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -5538,19 +5965,40 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 {canManageProjects &&
                   selectedCheckpoint.checkpoint_key === 'quality_control' &&
                   selectedCheckpoint.status !== 'locked' &&
-                  !isCheckpointComplete(selectedCheckpoint) && (
-                    <Button
-                      type="button"
-                      onClick={completeQcPhase}
-                      disabled={
-                        isSavingCheckpointDetail ||
-                        !isCheckpointChecklistComplete(selectedCheckpoint) ||
-                        !isQcReportGenerated(selectedCheckpoint)
-                      }
-                    >
-                      {isSavingCheckpointDetail ? 'Saving...' : 'Complete QC Phase'}
-                    </Button>
-                  )}
+                  !isCheckpointComplete(selectedCheckpoint) &&
+                  (() => {
+                    const qcStats = getQcInspectionStats(checkpointDetailForm.qcInspectionRows);
+                    const isReportGenerated = isQcReportGenerated(selectedCheckpoint);
+
+                    return (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={generateQcReport}
+                          disabled={
+                            isSavingCheckpointDetail ||
+                            !qcStats.canGenerateReport ||
+                            isReportGenerated
+                          }
+                        >
+                          {isReportGenerated ? 'QC Report Generated' : 'Generate QC Report'}
+                        </Button>
+
+                        <Button
+                          type="button"
+                          onClick={completeQcPhase}
+                          disabled={
+                            isSavingCheckpointDetail ||
+                            !qcStats.canGenerateReport ||
+                            !isReportGenerated
+                          }
+                        >
+                          {isSavingCheckpointDetail ? 'Saving...' : 'Complete QC Phase'}
+                        </Button>
+                      </>
+                    );
+                  })()}
 
                 {canManageProjects &&
                   selectedCheckpoint.checkpoint_key !== 'design_phase' &&
