@@ -62,6 +62,23 @@ type ProjectTimelineSummary = {
   timeline_confirmed_at: string | null;
 };
 
+type ProjectCostEstimateStatus = 'draft' | 'approved' | 'revision';
+
+type ProjectCostEstimateSummary = {
+  project_id: string;
+  status: ProjectCostEstimateStatus;
+  version: number;
+  updated_at: string | null;
+};
+
+type ProjectFinanceSummary = {
+  project_id: string;
+  source_estimate_id: string | null;
+  source_estimate_version: number | null;
+  last_synced_at: string | null;
+  updated_at: string | null;
+};
+
 type ProjectStageAction = {
   label: string;
   description: string;
@@ -1018,6 +1035,71 @@ function getProjectTimelineStatusLabel(
   return 'Yet to Approve';
 }
 
+function getProjectCostEstimateStatusLabel(
+  estimate: ProjectCostEstimateSummary | null | undefined,
+  isLoading = false
+) {
+  if (isLoading) return 'Checking...';
+  if (!estimate) return 'Not Started';
+
+  if (estimate.status === 'approved') return `Approved - v${estimate.version}`;
+  if (estimate.status === 'revision') return `Revision Draft - v${estimate.version}`;
+
+  return 'Draft';
+}
+
+function hasApprovedProjectEstimate(
+  estimate: ProjectCostEstimateSummary | null | undefined
+) {
+  return estimate?.status === 'approved';
+}
+
+function getProjectActionTimelineStatusLabel(
+  timeline: ProjectTimelineSummary | null | undefined,
+  estimate: ProjectCostEstimateSummary | null | undefined,
+  isLoading = false
+) {
+  if (isLoading) return 'Checking...';
+
+  if (!hasApprovedProjectEstimate(estimate)) {
+    return 'Waiting for Estimate';
+  }
+
+  if (!timeline || !timeline.has_timeline) {
+    return 'Ready to Build';
+  }
+
+  return timeline.timeline_confirmed_at ? 'Confirmed' : 'Timeline Built';
+}
+
+function getProjectFinanceStatusLabel(
+  finance: ProjectFinanceSummary | null | undefined,
+  estimate: ProjectCostEstimateSummary | null | undefined,
+  isLoading = false
+) {
+  if (!hasApprovedProjectEstimate(estimate)) {
+    return 'Waiting for Estimate';
+  }
+
+  if (isLoading) return 'Checking...';
+
+  if (!finance) return 'Ready to Sync';
+
+  const estimateVersion = estimate?.version ?? null;
+
+  if (
+    estimateVersion &&
+    finance.source_estimate_version &&
+    finance.source_estimate_version !== estimateVersion
+  ) {
+    return 'Needs Sync';
+  }
+
+  return finance.source_estimate_version
+    ? `Synced - v${finance.source_estimate_version}`
+    : 'Synced';
+}
+
 function getRouteBase(mode: ProjectWorkspaceMode) {
   return mode === 'admin' ? '/admin' : '/portal';
 }
@@ -1042,14 +1124,31 @@ function createProjectStageActions(
   projectId: string,
   checkpoints: ProjectCheckpoint[],
   timeline: ProjectTimelineSummary | null | undefined,
-  isTimelineLoading = false
+  isTimelineLoading = false,
+  costEstimate?: ProjectCostEstimateSummary | null,
+  isCostEstimateLoading = false,
+  finance?: ProjectFinanceSummary | null,
+  isFinanceLoading = false
 ): ProjectStageAction[] {
   const base = getRouteBase(mode);
   const query = `?projectId=${encodeURIComponent(projectId)}`;
 
   const designCheckpoint = getCheckpointByKey(checkpoints, 'design_phase');
   const isDesignComplete = isCheckpointComplete(designCheckpoint);
-  const timelineStatusLabel = getProjectTimelineStatusLabel(timeline, isTimelineLoading);
+  const costEstimateStatusLabel = getProjectCostEstimateStatusLabel(
+    costEstimate,
+    isCostEstimateLoading
+  );
+  const timelineStatusLabel = getProjectActionTimelineStatusLabel(
+    timeline,
+    costEstimate,
+    isTimelineLoading
+  );
+  const financeStatusLabel = getProjectFinanceStatusLabel(
+    finance,
+    costEstimate,
+    isFinanceLoading
+  );
 
   return [
     {
@@ -1058,7 +1157,7 @@ function createProjectStageActions(
       lockedReason: 'Complete Design Phase first.',
       isAvailable: isDesignComplete,
       to: `${base}/cost-estimates${query}`,
-      statusLabel: isDesignComplete ? 'Open project estimate' : 'Locked',
+      statusLabel: isDesignComplete ? costEstimateStatusLabel : 'Locked',
     },
     {
       label: 'Timeline',
@@ -1074,7 +1173,7 @@ function createProjectStageActions(
       lockedReason: 'Complete Design Phase first.',
       isAvailable: isDesignComplete,
       to: `${base}/financials${query}`,
-      statusLabel: isDesignComplete ? 'Open project finance' : 'Locked',
+      statusLabel: isDesignComplete ? financeStatusLabel : 'Locked',
     },
   ];
 }
@@ -1232,6 +1331,16 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
     Record<string, ProjectTimelineSummary>
   >({});
   const [projectTimelineSummariesLoading, setProjectTimelineSummariesLoading] =
+    useState(false);
+  const [projectCostEstimateSummaries, setProjectCostEstimateSummaries] =
+    useState<Record<string, ProjectCostEstimateSummary>>({});
+  const [
+    projectCostEstimateSummariesLoading,
+    setProjectCostEstimateSummariesLoading,
+  ] = useState(false);
+  const [projectFinanceSummaries, setProjectFinanceSummaries] =
+    useState<Record<string, ProjectFinanceSummary>>({});
+  const [projectFinanceSummariesLoading, setProjectFinanceSummariesLoading] =
     useState(false);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<ProjectCheckpoint | null>(null);
   const [checkpointDetailForm, setCheckpointDetailForm] =
@@ -1409,6 +1518,106 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
       isMounted = false;
     };
   }, [projects]);
+
+  useEffect(() => {
+    const loadProjectActionSummaries = async () => {
+      const projectIds = projects
+        .map(project => project.id)
+        .filter((projectId): projectId is string => Boolean(projectId));
+
+      if (projectIds.length === 0) {
+        setProjectCostEstimateSummaries({});
+        setProjectFinanceSummaries({});
+        setProjectCostEstimateSummariesLoading(false);
+        setProjectFinanceSummariesLoading(false);
+        return;
+      }
+
+      setProjectCostEstimateSummariesLoading(true);
+      setProjectFinanceSummariesLoading(true);
+
+      const [estimatesResult, financeResult] = await Promise.all([
+        supabase
+          .from('cost_estimates')
+          .select('project_id, status, version, updated_at')
+          .in('project_id', projectIds)
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('project_finance_accounts')
+          .select('project_id, source_estimate_id, source_estimate_version, last_synced_at, updated_at')
+          .in('project_id', projectIds)
+          .order('updated_at', { ascending: false }),
+      ]);
+
+      if (estimatesResult.error) {
+        console.error('Could not load project cost estimate summaries.', estimatesResult.error);
+        setProjectCostEstimateSummaries({});
+      } else {
+        const nextCostEstimateSummaries = (estimatesResult.data || []).reduce<
+          Record<string, ProjectCostEstimateSummary>
+        >((summaryMap, estimate) => {
+          const projectId = toSafeString(estimate.project_id);
+          const status = toSafeString(estimate.status) as ProjectCostEstimateStatus;
+
+          if (!projectId || !['draft', 'approved', 'revision'].includes(status)) {
+            return summaryMap;
+          }
+
+          if (summaryMap[projectId]) return summaryMap;
+
+          const version = Number(estimate.version);
+
+          summaryMap[projectId] = {
+            project_id: projectId,
+            status,
+            version: Number.isFinite(version) && version > 0 ? version : 1,
+            updated_at: toSafeString(estimate.updated_at) || null,
+          };
+
+          return summaryMap;
+        }, {});
+
+        setProjectCostEstimateSummaries(nextCostEstimateSummaries);
+      }
+
+      if (financeResult.error) {
+        console.error('Could not load project finance summaries.', financeResult.error);
+        setProjectFinanceSummaries({});
+      } else {
+        const nextFinanceSummaries = (financeResult.data || []).reduce<
+          Record<string, ProjectFinanceSummary>
+        >((summaryMap, finance) => {
+          const projectId = toSafeString(finance.project_id);
+
+          if (!projectId || summaryMap[projectId]) return summaryMap;
+
+          const sourceEstimateVersion = Number(finance.source_estimate_version);
+
+          summaryMap[projectId] = {
+            project_id: projectId,
+            source_estimate_id: toSafeString(finance.source_estimate_id) || null,
+            source_estimate_version:
+              Number.isFinite(sourceEstimateVersion) && sourceEstimateVersion > 0
+                ? sourceEstimateVersion
+                : null,
+            last_synced_at: toSafeString(finance.last_synced_at) || null,
+            updated_at: toSafeString(finance.updated_at) || null,
+          };
+
+          return summaryMap;
+        }, {});
+
+        setProjectFinanceSummaries(nextFinanceSummaries);
+      }
+
+      setProjectCostEstimateSummariesLoading(false);
+      setProjectFinanceSummariesLoading(false);
+    };
+
+    void loadProjectActionSummaries();
+  }, [projects]);
+
+
 
   async function fetchProjects() {
     setLoading(true);
@@ -3116,7 +3325,11 @@ export default function ProjectWorkspace({ mode }: ProjectWorkspaceProps) {
                 selectedProject.id,
                 projectCheckpoints,
                 projectTimelineSummaries[selectedProject.id],
-                projectTimelineSummariesLoading
+                projectTimelineSummariesLoading,
+                projectCostEstimateSummaries[selectedProject.id],
+                projectCostEstimateSummariesLoading,
+                projectFinanceSummaries[selectedProject.id],
+                projectFinanceSummariesLoading
               );
     const completedCheckpointCount = projectCheckpoints.filter(
       checkpoint => checkpoint.status === 'completed' || checkpoint.status === 'skipped'
