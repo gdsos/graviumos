@@ -907,11 +907,13 @@ function FinancialsInner() {
   const needsInitialFinanceSync = Boolean(
     selectedApprovedEstimate && !selectedFinanceAccount
   );
-  const needsManualFinanceSync = needsInitialFinanceSync || hasTimelineGateSyncDrift;
+  const needsManualFinanceSync = Boolean(selectedApprovedEstimate);
   const isSyncingSelectedProject =
     Boolean(selectedProject) && syncingProjectId === selectedProject?.id;
   const syncActionLabel = selectedFinanceAccount
-    ? 'Sync Timeline Gates'
+    ? hasTimelineGateSyncDrift
+      ? 'Sync Timeline Gates'
+      : 'Resync Finance Ledgers'
     : 'Sync Finance Account';
   const selectedSyncStatus = !selectedApprovedEstimate
     ? { tone: 'muted' as const, label: 'No Approved Estimate' }
