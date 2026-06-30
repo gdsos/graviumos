@@ -66,6 +66,57 @@ type ProjectFinancePaymentGateRow = {
   source_gate_snapshot: Record<string, unknown>;
 };
 
+type ProjectVendorAccountRow = {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  account_key: string;
+  account_type: 'in_house' | 'vendor' | string;
+  vendor_id: string | null;
+  vendor_name: string;
+  payable_amount: number | string | null;
+  advance_paid_amount: number | string | null;
+  total_paid_amount: number | string | null;
+  outstanding_amount: number | string | null;
+  status: 'open' | 'settled' | 'on_hold' | 'closed' | string;
+  notes: string;
+};
+
+type ProjectCogsEntryRow = {
+  id: string;
+  finance_account_id: string;
+  project_id: string;
+  vendor_account_id: string | null;
+  source_type: 'in_house' | 'vendor' | string;
+  vendor_id: string | null;
+  vendor_name: string;
+  category: string;
+  description: string;
+  estimated_amount: number | string | null;
+  payable_amount: number | string | null;
+  paid_amount: number | string | null;
+  outstanding_amount: number | string | null;
+  payment_status: 'unpaid' | 'partial' | 'paid' | 'overpaid' | 'cancelled' | string;
+  entry_date: string | null;
+  source_estimate_line_id: string | null;
+  source_work_package_id: string | null;
+  remarks: string;
+};
+
+type ProjectWorkPackageQcRow = {
+  id: string;
+  project_id: string;
+  work_package_id: string;
+  work_package_title: string;
+  vendor_name: string | null;
+  status: 'pending' | 'needs_rework' | 'passed' | 'accepted_exception' | string;
+  remarks: string | null;
+  rework_notes: string | null;
+  accepted_exception_reason: string | null;
+  inspected_at: string | null;
+  passed_at: string | null;
+};
+
 type ProjectTimelineGateSourceRow = {
   id: string;
   project_id: string;
@@ -124,6 +175,92 @@ function getFinanceGateStatusFromCollection(requiredAmount: number, collectedAmo
   if (collectedAmount === requiredAmount) return 'paid';
 
   return 'overpaid';
+}
+
+function getWorkPackageQcLabel(status: ProjectWorkPackageQcRow['status'] | undefined) {
+  switch (status) {
+    case 'needs_rework':
+      return 'Needs Rework';
+    case 'passed':
+      return 'QC Passed';
+    case 'accepted_exception':
+      return 'Accepted Exception';
+    case 'pending':
+      return 'QC Pending';
+    default:
+      return 'QC Not Linked';
+  }
+}
+
+function getWorkPackageQcTone(status: ProjectWorkPackageQcRow['status'] | undefined) {
+  switch (status) {
+    case 'passed':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+    case 'accepted_exception':
+      return 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300';
+    case 'needs_rework':
+      return 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300';
+    case 'pending':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+    default:
+      return 'border-border bg-muted/40 text-muted-foreground';
+  }
+}
+
+function getVendorFinalPaymentState({
+  cogsEntry,
+  qcRecord,
+}: {
+  cogsEntry: ProjectCogsEntryRow;
+  qcRecord?: ProjectWorkPackageQcRow;
+}) {
+  const outstandingAmount = toNumber(cogsEntry.outstanding_amount);
+
+  if (outstandingAmount <= 0) {
+    return {
+      label: 'Settled',
+      helper: 'This COGS entry is already fully paid.',
+      className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    };
+  }
+
+  if (!cogsEntry.source_work_package_id) {
+    return {
+      label: 'Manual Review',
+      helper: 'This COGS entry is not linked to a Timeline work package yet.',
+      className: 'border-border bg-muted/40 text-muted-foreground',
+    };
+  }
+
+  if (qcRecord?.status === 'passed') {
+    return {
+      label: 'Final Payable',
+      helper: 'Phase QC passed. Final vendor payment can be released.',
+      className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    };
+  }
+
+  if (qcRecord?.status === 'accepted_exception') {
+    return {
+      label: 'Payable With Exception',
+      helper: 'Phase QC has an accepted exception. Final payment can be released with warning.',
+      className: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+    };
+  }
+
+  if (qcRecord?.status === 'needs_rework') {
+    return {
+      label: 'Final Locked',
+      helper: 'Phase QC needs rework. Final vendor payment is locked.',
+      className: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
+    };
+  }
+
+  return {
+    label: 'Final Locked',
+    helper: 'Phase QC is pending. Final vendor payment is locked.',
+    className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  };
 }
 
 function isFinanceGateComplete(gate: ProjectFinancePaymentGateRow) {
@@ -576,6 +713,9 @@ function FinancialsInner() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [financeAccounts, setFinanceAccounts] = useState<ProjectFinanceAccountRow[]>([]);
   const [financePaymentGates, setFinancePaymentGates] = useState<ProjectFinancePaymentGateRow[]>([]);
+  const [projectVendorAccounts, setProjectVendorAccounts] = useState<ProjectVendorAccountRow[]>([]);
+  const [projectCogsEntries, setProjectCogsEntries] = useState<ProjectCogsEntryRow[]>([]);
+  const [workPackageQcRecords, setWorkPackageQcRecords] = useState<ProjectWorkPackageQcRow[]>([]);
   const [projectCheckpoints, setProjectCheckpoints] = useState<ProjectCheckpoint[]>([]);
   const [timelineGateSources, setTimelineGateSources] = useState<ProjectTimelineGateSourceRow[]>([]);
   const [approvedEstimates, setApprovedEstimates] = useState<ApprovedEstimateRow[]>([]);
@@ -607,10 +747,23 @@ function FinancialsInner() {
     }
     setError('');
 
-    const [projectsRes, accountsRes, gatesRes, timelinesRes, estimatesRes, checkpointsRes] = await Promise.all([
+    const [
+      projectsRes,
+      accountsRes,
+      gatesRes,
+      vendorAccountsRes,
+      cogsEntriesRes,
+      workPackageQcRes,
+      timelinesRes,
+      estimatesRes,
+      checkpointsRes,
+    ] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('project_finance_accounts').select('*').order('updated_at', { ascending: false }),
       supabase.from('project_finance_payment_gates').select('*').order('gate_order', { ascending: true }),
+      supabase.from('project_vendor_accounts').select('*').order('vendor_name', { ascending: true }),
+      supabase.from('project_cogs_entries').select('*').order('created_at', { ascending: false }),
+      supabase.from('project_work_package_qc').select('*').order('updated_at', { ascending: false }),
       supabase
         .from('project_timelines')
         .select('id, project_id, source_estimate_id, source_estimate_version, has_timeline, payment_gates, updated_at')
@@ -644,6 +797,24 @@ function FinancialsInner() {
       return;
     }
 
+    if (vendorAccountsRes.error) {
+      setError(vendorAccountsRes.error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (cogsEntriesRes.error) {
+      setError(cogsEntriesRes.error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (workPackageQcRes.error) {
+      setError(workPackageQcRes.error.message);
+      setLoading(false);
+      return;
+    }
+
     if (timelinesRes.error) {
       setError(timelinesRes.error.message);
       setLoading(false);
@@ -667,6 +838,9 @@ function FinancialsInner() {
     setProjects(nextProjects);
     setFinanceAccounts((accountsRes.data ?? []) as ProjectFinanceAccountRow[]);
     setFinancePaymentGates((gatesRes.data ?? []) as ProjectFinancePaymentGateRow[]);
+    setProjectVendorAccounts((vendorAccountsRes.data ?? []) as ProjectVendorAccountRow[]);
+    setProjectCogsEntries((cogsEntriesRes.data ?? []) as ProjectCogsEntryRow[]);
+    setWorkPackageQcRecords((workPackageQcRes.data ?? []) as ProjectWorkPackageQcRow[]);
     setProjectCheckpoints((checkpointsRes.data ?? []) as ProjectCheckpoint[]);
     setTimelineGateSources((timelinesRes.data ?? []) as ProjectTimelineGateSourceRow[]);
     setApprovedEstimates((estimatesRes.data ?? []) as ApprovedEstimateRow[]);
@@ -731,6 +905,27 @@ function FinancialsInner() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'project_finance_payment_gates' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_vendor_accounts' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_cogs_entries' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_work_package_qc' },
         () => {
           void fetchFinanceData({ silent: true });
         }
@@ -879,6 +1074,39 @@ function FinancialsInner() {
         .filter(gate => gate.finance_account_id === selectedFinanceAccount.id)
         .sort((a, b) => toNumber(a.gate_order) - toNumber(b.gate_order))
     : [];
+  const selectedVendorAccounts = selectedFinanceAccount
+    ? projectVendorAccounts.filter(
+        vendorAccount => vendorAccount.finance_account_id === selectedFinanceAccount.id
+      )
+    : [];
+  const selectedCogsEntries = selectedFinanceAccount
+    ? projectCogsEntries
+        .filter(entry => entry.finance_account_id === selectedFinanceAccount.id)
+        .sort((a, b) => {
+          const vendorCompare = a.vendor_name.localeCompare(b.vendor_name);
+
+          if (vendorCompare !== 0) return vendorCompare;
+
+          return a.category.localeCompare(b.category);
+        })
+    : [];
+  const selectedWorkPackageQcByWorkPackageId = new Map(
+    workPackageQcRecords
+      .filter(record => record.project_id === selectedProject?.id)
+      .map(record => [record.work_package_id, record])
+  );
+  const selectedCogsPayableTotal = selectedCogsEntries.reduce(
+    (sum, entry) => sum + toNumber(entry.payable_amount),
+    0
+  );
+  const selectedCogsPaidTotal = selectedCogsEntries.reduce(
+    (sum, entry) => sum + toNumber(entry.paid_amount),
+    0
+  );
+  const selectedCogsOutstandingTotal = selectedCogsEntries.reduce(
+    (sum, entry) => sum + toNumber(entry.outstanding_amount),
+    0
+  );
   const selectedTimelineGateSource = selectedProject
     ? timelineGateSources.find(
         timeline =>
@@ -1994,40 +2222,143 @@ function FinancialsInner() {
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {[
-              {
-                title: 'Cash Received',
-                description: 'Next phase: record client payments against Finance payment gates.',
-                icon: CircleDollarSign,
-              },
-              {
-                title: 'COGS Entries',
-                description: 'Next phase: add vendor selector, In-House default, and COGS rows.',
-                icon: Database,
-              },
-              {
-                title: 'Vendor Payments',
-                description: 'Next phase: project vendor ledgers, advances, paid, and outstanding.',
-                icon: FileText,
-              },
-            ].map(card => {
-              const Icon = card.icon;
-
-              return (
-                <div key={card.title} className="rounded-3xl border border-dashed border-border bg-card p-6">
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-background">
-                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    <Database className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-foreground">
-                    {card.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {card.description}
-                  </p>
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      COGS & Vendor Payables
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Estimate-led COGS rows linked to Timeline work-package QC. Final vendor payment stays locked until Phase QC is cleared.
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[420px]">
+                <MetricCard
+                  label="Payable"
+                  value={formatINR(selectedCogsPayableTotal)}
+                  helper={`${selectedCogsEntries.length} COGS row${selectedCogsEntries.length === 1 ? '' : 's'}`}
+                />
+                <MetricCard
+                  label="Paid"
+                  value={formatINR(selectedCogsPaidTotal)}
+                  helper={`${selectedVendorAccounts.length} vendor ledger${selectedVendorAccounts.length === 1 ? '' : 's'}`}
+                  tone="success"
+                />
+                <MetricCard
+                  label="Outstanding"
+                  value={formatINR(selectedCogsOutstandingTotal)}
+                  helper="Vendor balance pending"
+                  tone={selectedCogsOutstandingTotal > 0 ? 'warning' : 'success'}
+                />
+              </div>
+            </div>
+
+            {selectedCogsEntries.length === 0 ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-border bg-background p-5">
+                <p className="text-sm font-semibold text-foreground">
+                  No COGS rows synced yet.
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  Use Resync Finance Ledgers after approving the estimate and confirming the Timeline.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-3">
+                {selectedCogsEntries.map(entry => {
+                  const qcRecord = entry.source_work_package_id
+                    ? selectedWorkPackageQcByWorkPackageId.get(entry.source_work_package_id)
+                    : undefined;
+                  const finalPaymentState = getVendorFinalPaymentState({
+                    cogsEntry: entry,
+                    qcRecord,
+                  });
+                  const payableAmount = toNumber(entry.payable_amount);
+                  const paidAmount = toNumber(entry.paid_amount);
+                  const outstandingAmount = toNumber(entry.outstanding_amount);
+                  const progress =
+                    payableAmount > 0
+                      ? Math.min(100, Math.round((paidAmount / payableAmount) * 100))
+                      : 0;
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-2xl border border-border bg-background p-4"
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-foreground">
+                              {entry.category} - {entry.description}
+                            </p>
+                            <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                              {entry.vendor_name || 'In-House'}
+                            </span>
+                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getWorkPackageQcTone(entry.source_work_package_id ? qcRecord?.status ?? 'pending' : undefined)}`}>
+                              {getWorkPackageQcLabel(entry.source_work_package_id ? qcRecord?.status ?? 'pending' : undefined)}
+                            </span>
+                            <span
+                              title={finalPaymentState.helper}
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${finalPaymentState.className}`}
+                            >
+                              {finalPaymentState.label}
+                            </span>
+                          </div>
+
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            {entry.source_work_package_id
+                              ? `Linked work package: ${qcRecord?.work_package_title ?? 'Timeline work package linked'}`
+                              : 'No linked Timeline work package. Final payment should be manually reviewed.'}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 text-left sm:text-right">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Payable
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">
+                              {formatINR(payableAmount)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Paid
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                              {formatINR(paidAmount)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Outstanding
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-300">
+                              {formatINR(outstandingAmount)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-emerald-600 dark:bg-emerald-400"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
       )}
