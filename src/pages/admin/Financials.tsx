@@ -100,7 +100,24 @@ type ProjectCogsEntryRow = {
   entry_date: string | null;
   source_estimate_line_id: string | null;
   source_work_package_id: string | null;
+  source_snapshot?: Record<string, unknown> | null;
   remarks: string;
+};
+
+type ProjectVendorPaymentRow = {
+  id: string;
+  vendor_account_id: string;
+  finance_account_id: string;
+  project_id: string;
+  vendor_id: string | null;
+  cogs_entry_id: string;
+  payment_date: string | null;
+  amount: number | string | null;
+  payment_type: 'advance' | 'bill_payment' | 'refund' | string;
+  payment_mode: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  created_at: string | null;
 };
 
 type ProjectWorkPackageQcRow = {
@@ -169,7 +186,7 @@ type VendorPaymentDraft = {
   cogsEntryId: string;
   amount: string;
   paymentDate: string;
-  paymentType: 'advance' | 'bill_payment' | 'adjustment' | 'refund';
+  paymentType: 'advance' | 'bill_payment' | 'refund';
   paymentMode: string;
   referenceNumber: string;
   notes: string;
@@ -185,6 +202,24 @@ function getFinanceGateStatusFromCollection(requiredAmount: number, collectedAmo
   if (collectedAmount === requiredAmount) return 'paid';
 
   return 'overpaid';
+}
+
+function getVendorLedgerDisplayName(entry: ProjectCogsEntryRow | null | undefined) {
+  if (!entry) return 'Vendor Ledger';
+
+  const vendorName = entry.vendor_name?.trim();
+
+  if (vendorName && vendorName.toLowerCase() !== 'in-house') {
+    return vendorName;
+  }
+
+  return entry.source_type === 'vendor' ? 'Unassigned Vendor' : 'In-House Ledger';
+}
+
+function getVendorLedgerTypeLabel(entry: ProjectCogsEntryRow | null | undefined) {
+  if (!entry) return 'Vendor Ledger';
+
+  return entry.source_type === 'vendor' ? 'Vendor Ledger' : 'In-House Ledger';
 }
 
 function getWorkPackageQcLabel(status: ProjectWorkPackageQcRow['status'] | undefined) {
@@ -244,31 +279,31 @@ function getVendorFinalPaymentState({
 
   if (qcRecord?.status === 'passed') {
     return {
-      label: 'Final Payable',
-      helper: 'Phase QC passed. Final vendor payment can be released.',
+      label: 'Bill Payable',
+      helper: 'Phase QC passed. Bill payment can be released.',
       className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     };
   }
 
   if (qcRecord?.status === 'accepted_exception') {
     return {
-      label: 'Payable With Exception',
-      helper: 'Phase QC has an accepted exception. Final payment can be released with warning.',
+      label: 'Bill Locked',
+      helper: 'Accepted Exception does not unlock bill payment. Phase QC must be Passed.',
       className: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
     };
   }
 
   if (qcRecord?.status === 'needs_rework') {
     return {
-      label: 'Final Locked',
-      helper: 'Phase QC needs rework. Final vendor payment is locked.',
+      label: 'Bill Locked',
+      helper: 'Phase QC needs rework. Bill payment is locked.',
       className: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
     };
   }
 
   return {
-    label: 'Final Locked',
-    helper: 'Phase QC is pending. Final vendor payment is locked.',
+    label: 'Bill Locked',
+    helper: 'Phase QC is pending. Bill payment is locked.',
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   };
 }
@@ -281,70 +316,108 @@ function getProjectCogsPaymentStatusFromAmounts(payableAmount: number, paidAmoun
   return 'overpaid';
 }
 
+function getVendorPaymentTypeLabel(paymentType: ProjectVendorPaymentRow['payment_type']) {
+  switch (paymentType) {
+    case 'advance':
+      return 'Advance';
+    case 'bill_payment':
+      return 'Bill Payment';
+    case 'refund':
+      return 'Refund';
+    default:
+      return 'Payment';
+  }
+}
+
+function getVendorPaymentSignedAmount(payment: ProjectVendorPaymentRow) {
+  const amount = toNumber(payment.amount);
+
+  return payment.payment_type === 'refund' ? -amount : amount;
+}
+
+function getCogsPaidAmountFromJournal(
+  payments: ProjectVendorPaymentRow[],
+  cogsEntryId: string
+) {
+  return Math.max(
+    payments
+      .filter(payment => payment.cogs_entry_id === cogsEntryId)
+      .reduce((sum, payment) => sum + getVendorPaymentSignedAmount(payment), 0),
+    0
+  );
+}
+
+function getPaymentDateLabel(date: string | null) {
+  if (!date) return 'No date';
+
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function getVendorPaymentBlockState({
   cogsEntry,
   qcRecord,
-  amount,
   paymentType,
 }: {
   cogsEntry: ProjectCogsEntryRow;
   qcRecord?: ProjectWorkPackageQcRow;
-  amount: number;
   paymentType: VendorPaymentDraft['paymentType'];
 }) {
-  const payableAmount = toNumber(cogsEntry.payable_amount);
-  const paidAmount = toNumber(cogsEntry.paid_amount);
-  const willSettleEntry =
-    paymentType !== 'advance' &&
-    paymentType !== 'refund' &&
-    payableAmount > 0 &&
-    amount > 0 &&
-    paidAmount + amount >= payableAmount;
-
-  if (!willSettleEntry) {
+  if (paymentType === 'advance') {
     return {
       blocked: false,
-      label: 'Allowed',
-      helper: 'Advance and partial vendor payments are allowed before Phase QC.',
+      label: 'Advance Allowed',
+      helper: 'Advance payments are allowed before Phase QC.',
+    };
+  }
+
+  if (paymentType === 'refund') {
+    return {
+      blocked: false,
+      label: 'Refund Journal Allowed',
+      helper: 'Refund entries reduce the paid amount recorded against this vendor ledger.',
     };
   }
 
   if (!cogsEntry.source_work_package_id) {
     return {
       blocked: true,
-      label: 'Final Payment Locked',
-      helper: 'This COGS row is not linked to a Timeline work package. Link/review QC before settling the final payment.',
+      label: 'Bill Payment Locked',
+      helper: 'This COGS row is not linked to a Timeline work package. Link/review QC before recording bill payment.',
     };
   }
 
   if (qcRecord?.status === 'passed') {
     return {
       blocked: false,
-      label: 'Final Payment Allowed',
-      helper: 'Phase QC passed. Final vendor payment can be released.',
+      label: 'Bill Payment Allowed',
+      helper: 'Phase QC passed. Bill payment can be released.',
     };
   }
 
   if (qcRecord?.status === 'accepted_exception') {
     return {
-      blocked: false,
-      label: 'Final Payment Allowed With Exception',
-      helper: 'Phase QC has an accepted exception. Final payment can be released with warning.',
+      blocked: true,
+      label: 'Bill Payment Locked',
+      helper: 'Accepted Exception does not unlock bill payment. Mark Phase QC as Passed before recording bill payment.',
     };
   }
 
   if (qcRecord?.status === 'needs_rework') {
     return {
       blocked: true,
-      label: 'Final Payment Locked',
-      helper: 'Phase QC needs rework. Final vendor payment cannot be released.',
+      label: 'Bill Payment Locked',
+      helper: 'Phase QC needs rework. Bill payment cannot be released.',
     };
   }
 
   return {
     blocked: true,
-    label: 'Final Payment Locked',
-    helper: 'Phase QC is pending. Final vendor payment cannot be released.',
+    label: 'Bill Payment Locked',
+    helper: 'Phase QC is pending. Bill payment cannot be released.',
   };
 }
 
@@ -799,6 +872,7 @@ function FinancialsInner() {
   const [financeAccounts, setFinanceAccounts] = useState<ProjectFinanceAccountRow[]>([]);
   const [financePaymentGates, setFinancePaymentGates] = useState<ProjectFinancePaymentGateRow[]>([]);
   const [projectVendorAccounts, setProjectVendorAccounts] = useState<ProjectVendorAccountRow[]>([]);
+  const [projectVendorPayments, setProjectVendorPayments] = useState<ProjectVendorPaymentRow[]>([]);
   const [projectCogsEntries, setProjectCogsEntries] = useState<ProjectCogsEntryRow[]>([]);
   const [workPackageQcRecords, setWorkPackageQcRecords] = useState<ProjectWorkPackageQcRow[]>([]);
   const [projectCheckpoints, setProjectCheckpoints] = useState<ProjectCheckpoint[]>([]);
@@ -841,6 +915,7 @@ function FinancialsInner() {
       accountsRes,
       gatesRes,
       vendorAccountsRes,
+      vendorPaymentsRes,
       cogsEntriesRes,
       workPackageQcRes,
       timelinesRes,
@@ -851,6 +926,11 @@ function FinancialsInner() {
       supabase.from('project_finance_accounts').select('*').order('updated_at', { ascending: false }),
       supabase.from('project_finance_payment_gates').select('*').order('gate_order', { ascending: true }),
       supabase.from('project_vendor_accounts').select('*').order('vendor_name', { ascending: true }),
+      supabase
+        .from('project_vendor_payments')
+        .select('*')
+        .order('payment_date', { ascending: false })
+        .order('created_at', { ascending: false }),
       supabase.from('project_cogs_entries').select('*').order('created_at', { ascending: false }),
       supabase.from('project_work_package_qc').select('*').order('updated_at', { ascending: false }),
       supabase
@@ -892,6 +972,12 @@ function FinancialsInner() {
       return;
     }
 
+    if (vendorPaymentsRes.error) {
+      setError(vendorPaymentsRes.error.message);
+      setLoading(false);
+      return;
+    }
+
     if (cogsEntriesRes.error) {
       setError(cogsEntriesRes.error.message);
       setLoading(false);
@@ -928,6 +1014,7 @@ function FinancialsInner() {
     setFinanceAccounts((accountsRes.data ?? []) as ProjectFinanceAccountRow[]);
     setFinancePaymentGates((gatesRes.data ?? []) as ProjectFinancePaymentGateRow[]);
     setProjectVendorAccounts((vendorAccountsRes.data ?? []) as ProjectVendorAccountRow[]);
+    setProjectVendorPayments((vendorPaymentsRes.data ?? []) as ProjectVendorPaymentRow[]);
     setProjectCogsEntries((cogsEntriesRes.data ?? []) as ProjectCogsEntryRow[]);
     setWorkPackageQcRecords((workPackageQcRes.data ?? []) as ProjectWorkPackageQcRow[]);
     setProjectCheckpoints((checkpointsRes.data ?? []) as ProjectCheckpoint[]);
@@ -1028,6 +1115,13 @@ function FinancialsInner() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'project_vendor_accounts' },
+        () => {
+          void fetchFinanceData({ silent: true });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_vendor_payments' },
         () => {
           void fetchFinanceData({ silent: true });
         }
@@ -1206,6 +1300,21 @@ function FinancialsInner() {
           return a.category.localeCompare(b.category);
         })
     : [];
+  const selectedVendorPayments = selectedFinanceAccount
+    ? projectVendorPayments.filter(
+        payment => payment.finance_account_id === selectedFinanceAccount.id
+      )
+    : [];
+  const selectedVendorPaymentsByCogsEntryId = new Map<string, ProjectVendorPaymentRow[]>();
+
+  selectedVendorPayments.forEach(payment => {
+    const existingPayments = selectedVendorPaymentsByCogsEntryId.get(payment.cogs_entry_id) ?? [];
+
+    selectedVendorPaymentsByCogsEntryId.set(payment.cogs_entry_id, [
+      ...existingPayments,
+      payment,
+    ]);
+  });
   const selectedWorkPackageQcByWorkPackageId = new Map(
     workPackageQcRecords
       .filter(record => record.project_id === selectedProject?.id)
@@ -1234,7 +1343,6 @@ function FinancialsInner() {
       ? getVendorPaymentBlockState({
           cogsEntry: selectedVendorPaymentEntry,
           qcRecord: selectedVendorPaymentQcRecord,
-          amount: toNumber(vendorPaymentDraft.amount),
           paymentType: vendorPaymentDraft.paymentType,
         })
       : null;
@@ -1552,6 +1660,106 @@ function FinancialsInner() {
     }
   };
 
+  const recalculateVendorLedgerFromJournal = async ({
+    vendorAccountId,
+    nextPayments,
+  }: {
+    vendorAccountId: string;
+    nextPayments: ProjectVendorPaymentRow[];
+  }) => {
+    const relatedCogsEntries = selectedCogsEntries.filter(
+      entry => entry.vendor_account_id === vendorAccountId
+    );
+    const relatedPayments = nextPayments.filter(
+      payment => payment.vendor_account_id === vendorAccountId
+    );
+
+    await Promise.all(
+      relatedCogsEntries.map(async entry => {
+        const payableAmount = toNumber(entry.payable_amount);
+        const paidAmount = getCogsPaidAmountFromJournal(relatedPayments, entry.id);
+        const outstandingAmount = Math.max(payableAmount - paidAmount, 0);
+
+        const { error: cogsUpdateError } = await supabase
+          .from('project_cogs_entries')
+          .update({
+            paid_amount: paidAmount,
+            outstanding_amount: outstandingAmount,
+            payment_status: getProjectCogsPaymentStatusFromAmounts(
+              payableAmount,
+              paidAmount
+            ),
+          })
+          .eq('id', entry.id);
+
+        if (cogsUpdateError) throw cogsUpdateError;
+      })
+    );
+
+    const payableAmount = relatedCogsEntries.reduce(
+      (sum, entry) => sum + toNumber(entry.payable_amount),
+      0
+    );
+    const totalPaidAmount = relatedCogsEntries.reduce(
+      (sum, entry) => sum + getCogsPaidAmountFromJournal(relatedPayments, entry.id),
+      0
+    );
+    const advancePaidAmount = relatedPayments
+      .filter(payment => payment.payment_type === 'advance')
+      .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
+    const outstandingAmount = Math.max(payableAmount - totalPaidAmount, 0);
+
+    const { error: vendorAccountUpdateError } = await supabase
+      .from('project_vendor_accounts')
+      .update({
+        payable_amount: payableAmount,
+        advance_paid_amount: advancePaidAmount,
+        total_paid_amount: totalPaidAmount,
+        outstanding_amount: outstandingAmount,
+        status: outstandingAmount <= 0 ? 'settled' : 'open',
+      })
+      .eq('id', vendorAccountId);
+
+    if (vendorAccountUpdateError) throw vendorAccountUpdateError;
+  };
+
+  const handleDeleteVendorPayment = async (payment: ProjectVendorPaymentRow) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('project_vendor_payments')
+        .delete()
+        .eq('id', payment.id);
+
+      if (deleteError) throw deleteError;
+
+      const nextPayments = selectedVendorPayments.filter(
+        existingPayment => existingPayment.id !== payment.id
+      );
+
+      await recalculateVendorLedgerFromJournal({
+        vendorAccountId: payment.vendor_account_id,
+        nextPayments,
+      });
+
+      setNotice({
+        state: 'success',
+        heading: 'Journal Entry Removed',
+        description: `${getVendorPaymentTypeLabel(payment.payment_type)} entry of ${formatINR(toNumber(payment.amount))} was removed and ledger balances were recalculated.`,
+      });
+
+      await fetchFinanceData();
+    } catch (deleteError) {
+      setNotice({
+        state: 'error',
+        heading: 'Could Not Remove Journal Entry',
+        description:
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'Unable to remove this vendor payment journal entry.',
+      });
+    }
+  };
+
   const handleOpenVendorPaymentDraft = (entry: ProjectCogsEntryRow) => {
     setVendorPaymentDraft({
       cogsEntryId: entry.id,
@@ -1611,7 +1819,6 @@ function FinancialsInner() {
     const blockState = getVendorPaymentBlockState({
       cogsEntry: selectedEntry,
       qcRecord,
-      amount: paymentAmount,
       paymentType: vendorPaymentDraft.paymentType,
     });
 
@@ -1624,17 +1831,6 @@ function FinancialsInner() {
       return;
     }
 
-    const payableAmount = toNumber(selectedEntry.payable_amount);
-    const previousPaidAmount = toNumber(selectedEntry.paid_amount);
-    const signedAmount =
-      vendorPaymentDraft.paymentType === 'refund' ? -paymentAmount : paymentAmount;
-    const nextPaidAmount = Math.max(previousPaidAmount + signedAmount, 0);
-    const nextOutstandingAmount = Math.max(payableAmount - nextPaidAmount, 0);
-    const nextPaymentStatus = getProjectCogsPaymentStatusFromAmounts(
-      payableAmount,
-      nextPaidAmount
-    );
-
     setSavingVendorPayment(true);
     setNotice(null);
     setError('');
@@ -1644,7 +1840,7 @@ function FinancialsInner() {
 
       if (userError) throw userError;
 
-      const { error: paymentError } = await supabase
+      const { data: insertedPayment, error: paymentError } = await supabase
         .from('project_vendor_payments')
         .insert({
           vendor_account_id: selectedEntry.vendor_account_id,
@@ -1659,59 +1855,27 @@ function FinancialsInner() {
           reference_number: vendorPaymentDraft.referenceNumber.trim(),
           notes: vendorPaymentDraft.notes.trim(),
           created_by: userData.user?.id ?? null,
-        });
+        })
+        .select('*')
+        .single();
 
       if (paymentError) throw paymentError;
+      if (!insertedPayment) throw new Error('Vendor payment was saved without a journal ID.');
 
-      const { error: cogsUpdateError } = await supabase
-        .from('project_cogs_entries')
-        .update({
-          paid_amount: nextPaidAmount,
-          outstanding_amount: nextOutstandingAmount,
-          payment_status: nextPaymentStatus,
-        })
-        .eq('id', selectedEntry.id);
+      const nextPayments = [
+        ...selectedVendorPayments,
+        insertedPayment as ProjectVendorPaymentRow,
+      ];
 
-      if (cogsUpdateError) throw cogsUpdateError;
-
-      const relatedCogsEntries = selectedCogsEntries.filter(
-        entry => entry.vendor_account_id === selectedEntry.vendor_account_id
-      );
-      const accountPayableAmount = relatedCogsEntries.reduce(
-        (sum, entry) => sum + toNumber(entry.payable_amount),
-        0
-      );
-      const accountPaidAmount = relatedCogsEntries.reduce((sum, entry) => {
-        if (entry.id === selectedEntry.id) return sum + nextPaidAmount;
-
-        return sum + toNumber(entry.paid_amount);
-      }, 0);
-      const accountOutstandingAmount = Math.max(
-        accountPayableAmount - accountPaidAmount,
-        0
-      );
-      const nextAdvancePaidAmount =
-        vendorPaymentDraft.paymentType === 'advance'
-          ? toNumber(vendorAccount.advance_paid_amount) + paymentAmount
-          : toNumber(vendorAccount.advance_paid_amount);
-
-      const { error: vendorAccountUpdateError } = await supabase
-        .from('project_vendor_accounts')
-        .update({
-          payable_amount: accountPayableAmount,
-          advance_paid_amount: nextAdvancePaidAmount,
-          total_paid_amount: accountPaidAmount,
-          outstanding_amount: accountOutstandingAmount,
-          status: accountOutstandingAmount <= 0 ? 'settled' : 'open',
-        })
-        .eq('id', selectedEntry.vendor_account_id);
-
-      if (vendorAccountUpdateError) throw vendorAccountUpdateError;
+      await recalculateVendorLedgerFromJournal({
+        vendorAccountId: selectedEntry.vendor_account_id,
+        nextPayments,
+      });
 
       setNotice({
         state: 'success',
         heading: 'Vendor Payment Recorded',
-        description: `${formatINR(paymentAmount)} was recorded for ${selectedEntry.description}. Outstanding is now ${formatINR(nextOutstandingAmount)}.`,
+        description: `${formatINR(paymentAmount)} was recorded for ${selectedEntry.description}. Ledger balances were recalculated from journal entries.`,
       });
 
       setIsVendorPaymentModePickerOpen(false);
@@ -2630,6 +2794,8 @@ function FinancialsInner() {
                     payableAmount > 0
                       ? Math.min(100, Math.round((paidAmount / payableAmount) * 100))
                       : 0;
+                  const entryVendorPayments =
+                    selectedVendorPaymentsByCogsEntryId.get(entry.id) ?? [];
 
                   return (
                     <div
@@ -2643,7 +2809,7 @@ function FinancialsInner() {
                               {entry.category} - {entry.description}
                             </p>
                             <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                              {entry.vendor_name || 'In-House'}
+                              {getVendorLedgerDisplayName(entry)}
                             </span>
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getWorkPackageQcTone(entry.source_work_package_id ? qcRecord?.status ?? 'pending' : undefined)}`}>
                               {getWorkPackageQcLabel(entry.source_work_package_id ? qcRecord?.status ?? 'pending' : undefined)}
@@ -2656,11 +2822,17 @@ function FinancialsInner() {
                             </span>
                           </div>
 
-                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                            {entry.source_work_package_id
-                              ? `Linked work package: ${qcRecord?.work_package_title ?? 'Timeline work package linked'}`
-                              : 'No linked Timeline work package. Final payment should be manually reviewed.'}
-                          </p>
+                          <div className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                            <p>
+                              <span className="font-semibold text-foreground">Vendor / Ledger:</span>{' '}
+                              {getVendorLedgerDisplayName(entry)}
+                            </p>
+                            <p>
+                              {entry.source_work_package_id
+                                ? `Linked work package: ${qcRecord?.work_package_title ?? 'Timeline work package linked'}`
+                                : 'No linked Timeline work package. Bill payment should be manually reviewed.'}
+                            </p>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-4 text-left">
@@ -2726,6 +2898,40 @@ function FinancialsInner() {
                         <p className="text-xs leading-5 text-muted-foreground">
                           {finalPaymentState.helper}
                         </p>
+
+                        {entryVendorPayments.length > 0 && (
+                          <div className="rounded-2xl border border-border bg-card/60 p-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Payment Journal
+                            </p>
+                            <div className="mt-2 space-y-2">
+                              {entryVendorPayments.map(payment => (
+                                <div
+                                  key={payment.id}
+                                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-foreground">
+                                      {getVendorPaymentTypeLabel(payment.payment_type)} ? {formatINR(toNumber(payment.amount))}
+                                    </p>
+                                    <p className="truncate text-[11px] text-muted-foreground">
+                                      {getPaymentDateLabel(payment.payment_date)} ? {payment.payment_mode || 'Payment mode not set'}
+                                    </p>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteVendorPayment(payment)}
+                                    className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-destructive transition hover:bg-destructive/10"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => handleOpenVendorPaymentDraft(entry)}
@@ -2755,15 +2961,20 @@ function FinancialsInner() {
                   Vendor Payment Journal
                 </p>
                 <h3 className="mt-1 text-lg font-semibold text-foreground">
-                  {selectedVendorPaymentEntry.vendor_name || 'In-House'}
+                  {getVendorLedgerDisplayName(selectedVendorPaymentEntry)}
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {selectedVendorPaymentEntry.category} - {selectedVendorPaymentEntry.description}
                 </p>
-                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  <span>Vendor Ledger</span>
-                  <span className="text-foreground">
-                    {selectedVendorPaymentEntry.vendor_name || 'In-House'}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                    <span>{getVendorLedgerTypeLabel(selectedVendorPaymentEntry)}</span>
+                    <span className="text-foreground">
+                      {getVendorLedgerDisplayName(selectedVendorPaymentEntry)}
+                    </span>
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Bill Payment requires QC Passed
                   </span>
                 </div>
               </div>
@@ -2823,7 +3034,6 @@ function FinancialsInner() {
                   {[
                     { value: 'advance', label: 'Advance' },
                     { value: 'bill_payment', label: 'Bill Payment' },
-                    { value: 'adjustment', label: 'Adjustment' },
                     { value: 'refund', label: 'Refund' },
                   ].map(option => {
                     const isSelected = vendorPaymentDraft.paymentType === option.value;
