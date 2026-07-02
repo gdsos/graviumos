@@ -165,6 +165,16 @@ type CashReceiptDraft = {
   gstTreatment: 'GST' | 'NO_GST';
 };
 
+type VendorPaymentDraft = {
+  cogsEntryId: string;
+  amount: string;
+  paymentDate: string;
+  paymentType: 'advance' | 'bill_payment' | 'adjustment' | 'refund';
+  paymentMode: string;
+  referenceNumber: string;
+  notes: string;
+};
+
 function getTodayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -260,6 +270,81 @@ function getVendorFinalPaymentState({
     label: 'Final Locked',
     helper: 'Phase QC is pending. Final vendor payment is locked.',
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  };
+}
+
+function getProjectCogsPaymentStatusFromAmounts(payableAmount: number, paidAmount: number) {
+  if (paidAmount <= 0) return 'unpaid';
+  if (paidAmount < payableAmount) return 'partial';
+  if (paidAmount === payableAmount) return 'paid';
+
+  return 'overpaid';
+}
+
+function getVendorPaymentBlockState({
+  cogsEntry,
+  qcRecord,
+  amount,
+  paymentType,
+}: {
+  cogsEntry: ProjectCogsEntryRow;
+  qcRecord?: ProjectWorkPackageQcRow;
+  amount: number;
+  paymentType: VendorPaymentDraft['paymentType'];
+}) {
+  const payableAmount = toNumber(cogsEntry.payable_amount);
+  const paidAmount = toNumber(cogsEntry.paid_amount);
+  const willSettleEntry =
+    paymentType !== 'advance' &&
+    paymentType !== 'refund' &&
+    payableAmount > 0 &&
+    amount > 0 &&
+    paidAmount + amount >= payableAmount;
+
+  if (!willSettleEntry) {
+    return {
+      blocked: false,
+      label: 'Allowed',
+      helper: 'Advance and partial vendor payments are allowed before Phase QC.',
+    };
+  }
+
+  if (!cogsEntry.source_work_package_id) {
+    return {
+      blocked: true,
+      label: 'Final Payment Locked',
+      helper: 'This COGS row is not linked to a Timeline work package. Link/review QC before settling the final payment.',
+    };
+  }
+
+  if (qcRecord?.status === 'passed') {
+    return {
+      blocked: false,
+      label: 'Final Payment Allowed',
+      helper: 'Phase QC passed. Final vendor payment can be released.',
+    };
+  }
+
+  if (qcRecord?.status === 'accepted_exception') {
+    return {
+      blocked: false,
+      label: 'Final Payment Allowed With Exception',
+      helper: 'Phase QC has an accepted exception. Final payment can be released with warning.',
+    };
+  }
+
+  if (qcRecord?.status === 'needs_rework') {
+    return {
+      blocked: true,
+      label: 'Final Payment Locked',
+      helper: 'Phase QC needs rework. Final vendor payment cannot be released.',
+    };
+  }
+
+  return {
+    blocked: true,
+    label: 'Final Payment Locked',
+    helper: 'Phase QC is pending. Final vendor payment cannot be released.',
   };
 }
 
@@ -733,8 +818,12 @@ function FinancialsInner() {
   const [syncingProjectId, setSyncingProjectId] = useState<string | null>(null);
   const [autoSyncAttemptKey, setAutoSyncAttemptKey] = useState<string | null>(null);
   const [cashReceiptDraft, setCashReceiptDraft] = useState<CashReceiptDraft | null>(null);
+  const [vendorPaymentDraft, setVendorPaymentDraft] = useState<VendorPaymentDraft | null>(null);
+  const [savingVendorPayment, setSavingVendorPayment] = useState(false);
+  const [isVendorPaymentModePickerOpen, setIsVendorPaymentModePickerOpen] = useState(false);
   const [isCashPaymentModePickerOpen, setIsCashPaymentModePickerOpen] = useState(false);
   const [isCashGstPickerOpen, setIsCashGstPickerOpen] = useState(false);
+  const vendorPaymentModePickerRef = useRef<HTMLDivElement | null>(null);
   const cashPaymentModePickerRef = useRef<HTMLDivElement | null>(null);
   const cashGstPickerRef = useRef<HTMLDivElement | null>(null);
   const [savingCashReceipt, setSavingCashReceipt] = useState(false);
@@ -861,12 +950,39 @@ function FinancialsInner() {
   }, [fetchFinanceData]);
 
   useEffect(() => {
-    if (!isCashPaymentModePickerOpen && !isCashGstPickerOpen) return;
+    if (!notice) return;
+
+    const timeout = window.setTimeout(
+      () => setNotice(null),
+      notice.state === 'error' ? 6500 : 4200
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    const timeout = window.setTimeout(() => setError(''), 7500);
+
+    return () => window.clearTimeout(timeout);
+  }, [error]);
+
+  useEffect(() => {
+    if (!isVendorPaymentModePickerOpen && !isCashPaymentModePickerOpen && !isCashGstPickerOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
 
       if (!(target instanceof Node)) return;
+
+      if (
+        isVendorPaymentModePickerOpen &&
+        vendorPaymentModePickerRef.current &&
+        !vendorPaymentModePickerRef.current.contains(target)
+      ) {
+        setIsVendorPaymentModePickerOpen(false);
+      }
 
       if (
         isCashPaymentModePickerOpen &&
@@ -890,7 +1006,7 @@ function FinancialsInner() {
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, [isCashGstPickerOpen, isCashPaymentModePickerOpen]);
+  }, [isCashGstPickerOpen, isCashPaymentModePickerOpen, isVendorPaymentModePickerOpen]);
 
   useEffect(() => {
     const channel = supabase
@@ -1107,6 +1223,21 @@ function FinancialsInner() {
     (sum, entry) => sum + toNumber(entry.outstanding_amount),
     0
   );
+  const selectedVendorPaymentEntry = vendorPaymentDraft
+    ? selectedCogsEntries.find(entry => entry.id === vendorPaymentDraft.cogsEntryId) ?? null
+    : null;
+  const selectedVendorPaymentQcRecord = selectedVendorPaymentEntry?.source_work_package_id
+    ? selectedWorkPackageQcByWorkPackageId.get(selectedVendorPaymentEntry.source_work_package_id)
+    : undefined;
+  const selectedVendorPaymentBlockState =
+    selectedVendorPaymentEntry && vendorPaymentDraft
+      ? getVendorPaymentBlockState({
+          cogsEntry: selectedVendorPaymentEntry,
+          qcRecord: selectedVendorPaymentQcRecord,
+          amount: toNumber(vendorPaymentDraft.amount),
+          paymentType: vendorPaymentDraft.paymentType,
+        })
+      : null;
   const selectedTimelineGateSource = selectedProject
     ? timelineGateSources.find(
         timeline =>
@@ -1259,6 +1390,7 @@ function FinancialsInner() {
       gstTreatment: 'GST',
     });
 
+    setIsVendorPaymentModePickerOpen(false);
     setNotice(null);
   };
 
@@ -1420,6 +1552,187 @@ function FinancialsInner() {
     }
   };
 
+  const handleOpenVendorPaymentDraft = (entry: ProjectCogsEntryRow) => {
+    setVendorPaymentDraft({
+      cogsEntryId: entry.id,
+      amount: '',
+      paymentDate: getTodayDateString(),
+      paymentType: 'advance',
+      paymentMode: 'Bank Transfer',
+      referenceNumber: '',
+      notes: '',
+    });
+    setNotice(null);
+  };
+
+  const handleSaveVendorPayment = async () => {
+    if (!selectedProject || !selectedFinanceAccount || !vendorPaymentDraft) return;
+
+    const selectedEntry = selectedCogsEntries.find(
+      entry => entry.id === vendorPaymentDraft.cogsEntryId
+    );
+
+    if (!selectedEntry) {
+      setNotice({
+        state: 'error',
+        heading: 'COGS Entry Missing',
+        description: 'The selected COGS entry could not be found. Refresh Finance and try again.',
+      });
+      return;
+    }
+
+    const vendorAccount = selectedVendorAccounts.find(
+      account => account.id === selectedEntry.vendor_account_id
+    );
+
+    if (!vendorAccount || !selectedEntry.vendor_account_id) {
+      setNotice({
+        state: 'error',
+        heading: 'Vendor Ledger Missing',
+        description: 'This COGS row is not connected to a vendor ledger yet. Resync Finance Ledgers and try again.',
+      });
+      return;
+    }
+
+    const paymentAmount = toNumber(vendorPaymentDraft.amount);
+
+    if (paymentAmount <= 0) {
+      setNotice({
+        state: 'error',
+        heading: 'Invalid Payment Amount',
+        description: 'Enter a vendor payment amount greater than zero.',
+      });
+      return;
+    }
+
+    const qcRecord = selectedEntry.source_work_package_id
+      ? selectedWorkPackageQcByWorkPackageId.get(selectedEntry.source_work_package_id)
+      : undefined;
+    const blockState = getVendorPaymentBlockState({
+      cogsEntry: selectedEntry,
+      qcRecord,
+      amount: paymentAmount,
+      paymentType: vendorPaymentDraft.paymentType,
+    });
+
+    if (blockState.blocked) {
+      setNotice({
+        state: 'error',
+        heading: blockState.label,
+        description: blockState.helper,
+      });
+      return;
+    }
+
+    const payableAmount = toNumber(selectedEntry.payable_amount);
+    const previousPaidAmount = toNumber(selectedEntry.paid_amount);
+    const signedAmount =
+      vendorPaymentDraft.paymentType === 'refund' ? -paymentAmount : paymentAmount;
+    const nextPaidAmount = Math.max(previousPaidAmount + signedAmount, 0);
+    const nextOutstandingAmount = Math.max(payableAmount - nextPaidAmount, 0);
+    const nextPaymentStatus = getProjectCogsPaymentStatusFromAmounts(
+      payableAmount,
+      nextPaidAmount
+    );
+
+    setSavingVendorPayment(true);
+    setNotice(null);
+    setError('');
+
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+
+      const { error: paymentError } = await supabase
+        .from('project_vendor_payments')
+        .insert({
+          vendor_account_id: selectedEntry.vendor_account_id,
+          finance_account_id: selectedFinanceAccount.id,
+          project_id: selectedProject.id,
+          vendor_id: selectedEntry.vendor_id,
+          cogs_entry_id: selectedEntry.id,
+          payment_date: vendorPaymentDraft.paymentDate,
+          amount: paymentAmount,
+          payment_type: vendorPaymentDraft.paymentType,
+          payment_mode: vendorPaymentDraft.paymentMode.trim() || 'Bank Transfer',
+          reference_number: vendorPaymentDraft.referenceNumber.trim(),
+          notes: vendorPaymentDraft.notes.trim(),
+          created_by: userData.user?.id ?? null,
+        });
+
+      if (paymentError) throw paymentError;
+
+      const { error: cogsUpdateError } = await supabase
+        .from('project_cogs_entries')
+        .update({
+          paid_amount: nextPaidAmount,
+          outstanding_amount: nextOutstandingAmount,
+          payment_status: nextPaymentStatus,
+        })
+        .eq('id', selectedEntry.id);
+
+      if (cogsUpdateError) throw cogsUpdateError;
+
+      const relatedCogsEntries = selectedCogsEntries.filter(
+        entry => entry.vendor_account_id === selectedEntry.vendor_account_id
+      );
+      const accountPayableAmount = relatedCogsEntries.reduce(
+        (sum, entry) => sum + toNumber(entry.payable_amount),
+        0
+      );
+      const accountPaidAmount = relatedCogsEntries.reduce((sum, entry) => {
+        if (entry.id === selectedEntry.id) return sum + nextPaidAmount;
+
+        return sum + toNumber(entry.paid_amount);
+      }, 0);
+      const accountOutstandingAmount = Math.max(
+        accountPayableAmount - accountPaidAmount,
+        0
+      );
+      const nextAdvancePaidAmount =
+        vendorPaymentDraft.paymentType === 'advance'
+          ? toNumber(vendorAccount.advance_paid_amount) + paymentAmount
+          : toNumber(vendorAccount.advance_paid_amount);
+
+      const { error: vendorAccountUpdateError } = await supabase
+        .from('project_vendor_accounts')
+        .update({
+          payable_amount: accountPayableAmount,
+          advance_paid_amount: nextAdvancePaidAmount,
+          total_paid_amount: accountPaidAmount,
+          outstanding_amount: accountOutstandingAmount,
+          status: accountOutstandingAmount <= 0 ? 'settled' : 'open',
+        })
+        .eq('id', selectedEntry.vendor_account_id);
+
+      if (vendorAccountUpdateError) throw vendorAccountUpdateError;
+
+      setNotice({
+        state: 'success',
+        heading: 'Vendor Payment Recorded',
+        description: `${formatINR(paymentAmount)} was recorded for ${selectedEntry.description}. Outstanding is now ${formatINR(nextOutstandingAmount)}.`,
+      });
+
+      setIsVendorPaymentModePickerOpen(false);
+      setVendorPaymentDraft(null);
+      await fetchFinanceData();
+    } catch (paymentError) {
+      console.error('Could not record vendor payment', paymentError);
+
+      setNotice({
+        state: 'error',
+        heading: 'Could Not Record Vendor Payment',
+        description:
+          paymentError instanceof Error
+            ? paymentError.message
+            : 'Unable to record the vendor payment.',
+      });
+    } finally {
+      setSavingVendorPayment(false);
+    }
+  };
+
   const handleSyncFinanceAccount = async () => {
     if (!selectedProject) return;
 
@@ -1506,18 +1819,24 @@ function FinancialsInner() {
         </div>
       </header>
 
-      {error && (
-        <NoticeBlock
-          notice={{
-            state: 'error',
-            heading: 'Failed To Load Finance',
-            description: error,
-          }}
-          onDismiss={() => setError('')}
-        />
-      )}
+      {(error || notice) && (
+        <div className="fixed right-4 top-4 z-[70] flex w-[min(440px,calc(100vw-2rem))] flex-col gap-3">
+          {error && (
+            <NoticeBlock
+              notice={{
+                state: 'error',
+                heading: 'Failed To Load Finance',
+                description: error,
+              }}
+              onDismiss={() => setError('')}
+            />
+          )}
 
-      {notice && <NoticeBlock notice={notice} onDismiss={() => setNotice(null)} />}
+          {notice && (
+            <NoticeBlock notice={notice} onDismiss={() => setNotice(null)} />
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-3">
         {[
@@ -2108,7 +2427,7 @@ function FinancialsInner() {
                   </p>
                 </div>
               ) : (
-                <div className="mt-5 space-y-3">
+                <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
                   {selectedPaymentGates.map((gate, gateIndex) => {
                     const requiredAmount = toNumber(gate.required_amount);
                     const collectedAmount = toNumber(gate.collected_amount);
@@ -2133,9 +2452,9 @@ function FinancialsInner() {
                     return (
                       <div
                         key={gate.id}
-                        className="rounded-2xl border border-border bg-background p-4"
+                        className="flex h-full flex-col rounded-2xl border border-border bg-background p-4"
                       >
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="flex flex-col gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-semibold text-foreground">
@@ -2150,7 +2469,7 @@ function FinancialsInner() {
                             </p>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-4 text-right">
+                          <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-4 text-left">
                             <div>
                               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                 Required
@@ -2159,15 +2478,8 @@ function FinancialsInner() {
                                 {formatINR(requiredAmount)}
                               </p>
                             </div>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                Collected
-                              </p>
-                              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                                {formatINR(collectedAmount)}
-                              </p>
-                            </div>
-                            <div>
+
+                            <div className="text-right">
                               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                 Outstanding
                               </p>
@@ -2175,21 +2487,52 @@ function FinancialsInner() {
                                 {formatINR(outstandingAmount)}
                               </p>
                             </div>
+
+                            <div className="self-center">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Collected
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                                {formatINR(collectedAmount)}
+                              </p>
+                            </div>
+
+                            <div className="flex justify-end">
+                              <div className="relative flex h-16 w-16 items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <svg className="h-16 w-16 -rotate-90" viewBox="0 0 48 48" aria-hidden="true">
+                                  <circle
+                                    cx="24"
+                                    cy="24"
+                                    r="18"
+                                    fill="none"
+                                    strokeWidth="5"
+                                    className="stroke-muted"
+                                  />
+                                  <circle
+                                    cx="24"
+                                    cy="24"
+                                    r="18"
+                                    fill="none"
+                                    strokeWidth="5"
+                                    strokeLinecap="round"
+                                    strokeDasharray={113}
+                                    strokeDashoffset={113 - (progress / 100) * 113}
+                                    className="stroke-current transition-all"
+                                  />
+                                </svg>
+                                <span className="absolute text-xs font-semibold text-foreground">
+                                  {progress}%
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-emerald-600 dark:bg-emerald-400"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-auto pt-5">
                           {workflowState.state === 'completed' ? (
                             <div
                               title={workflowState.helper}
-                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm text-emerald-700 dark:text-emerald-300 sm:w-auto"
+                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm text-emerald-700 dark:text-emerald-300"
                             >
                               <CheckCircle2 className="h-4 w-4" />
                               Completed
@@ -2197,7 +2540,7 @@ function FinancialsInner() {
                           ) : workflowState.state === 'locked' ? (
                             <div
                               title={workflowState.helper}
-                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground sm:w-auto"
+                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground"
                             >
                               <Lock className="h-4 w-4" />
                               Locked
@@ -2207,7 +2550,7 @@ function FinancialsInner() {
                               type="button"
                               title={workflowState.helper}
                               onClick={() => handleOpenCashReceiptDraft(gate, gateIndex)}
-                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm text-foreground transition hover:bg-muted sm:w-auto"
+                              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm text-foreground transition hover:bg-muted"
                             >
                               <CircleDollarSign className="h-4 w-4" />
                               Record Cash
@@ -2271,7 +2614,7 @@ function FinancialsInner() {
                 </p>
               </div>
             ) : (
-              <div className="mt-5 space-y-3">
+              <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
                 {selectedCogsEntries.map(entry => {
                   const qcRecord = entry.source_work_package_id
                     ? selectedWorkPackageQcByWorkPackageId.get(entry.source_work_package_id)
@@ -2291,9 +2634,9 @@ function FinancialsInner() {
                   return (
                     <div
                       key={entry.id}
-                      className="rounded-2xl border border-border bg-background p-4"
+                      className="flex h-full flex-col rounded-2xl border border-border bg-background p-4"
                     >
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex flex-col gap-4">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-foreground">
@@ -2320,7 +2663,7 @@ function FinancialsInner() {
                           </p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4 text-left sm:text-right">
+                        <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-4 text-left">
                           <div>
                             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                               Payable
@@ -2329,15 +2672,8 @@ function FinancialsInner() {
                               {formatINR(payableAmount)}
                             </p>
                           </div>
-                          <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Paid
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                              {formatINR(paidAmount)}
-                            </p>
-                          </div>
-                          <div>
+
+                          <div className="text-right">
                             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                               Outstanding
                             </p>
@@ -2345,14 +2681,59 @@ function FinancialsInner() {
                               {formatINR(outstandingAmount)}
                             </p>
                           </div>
+
+                          <div className="self-center">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              Paid
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                              {formatINR(paidAmount)}
+                            </p>
+                          </div>
+
+                          <div className="flex justify-end">
+                            <div className="relative flex h-16 w-16 items-center justify-center text-emerald-600 dark:text-emerald-400">
+                              <svg className="h-16 w-16 -rotate-90" viewBox="0 0 48 48" aria-hidden="true">
+                                <circle
+                                  cx="24"
+                                  cy="24"
+                                  r="18"
+                                  fill="none"
+                                  strokeWidth="5"
+                                  className="stroke-muted"
+                                />
+                                <circle
+                                  cx="24"
+                                  cy="24"
+                                  r="18"
+                                  fill="none"
+                                  strokeWidth="5"
+                                  strokeLinecap="round"
+                                  strokeDasharray={113}
+                                  strokeDashoffset={113 - (progress / 100) * 113}
+                                  className="stroke-current transition-all"
+                                />
+                              </svg>
+                              <span className="absolute text-xs font-semibold text-foreground">
+                                {progress}%
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-emerald-600 dark:bg-emerald-400"
-                          style={{ width: `${progress}%` }}
-                        />
+                      <div className="mt-auto flex flex-col gap-3 pt-5">
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          {finalPaymentState.helper}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenVendorPaymentDraft(entry)}
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm text-foreground transition hover:bg-muted"
+                        >
+                          <CircleDollarSign className="h-4 w-4" />
+                          Record Payment
+                        </button>
                       </div>
                     </div>
                   );
@@ -2362,6 +2743,271 @@ function FinancialsInner() {
           </div>
         </section>
       )}
+      {vendorPaymentDraft && selectedVendorPaymentEntry && (
+        <div
+          data-finance-vendor-payment-modal
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6"
+        >
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-2xl">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Vendor Payment Journal
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-foreground">
+                  {selectedVendorPaymentEntry.vendor_name || 'In-House'}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {selectedVendorPaymentEntry.category} - {selectedVendorPaymentEntry.description}
+                </p>
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  <span>Vendor Ledger</span>
+                  <span className="text-foreground">
+                    {selectedVendorPaymentEntry.vendor_name || 'In-House'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setVendorPaymentDraft(null)}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <MetricCard
+                label="Payable"
+                value={formatINR(toNumber(selectedVendorPaymentEntry.payable_amount))}
+                helper="COGS value"
+              />
+              <MetricCard
+                label="Paid"
+                value={formatINR(toNumber(selectedVendorPaymentEntry.paid_amount))}
+                helper="Recorded so far"
+                tone="success"
+              />
+              <MetricCard
+                label="Outstanding"
+                value={formatINR(toNumber(selectedVendorPaymentEntry.outstanding_amount))}
+                helper="Balance pending"
+                tone={toNumber(selectedVendorPaymentEntry.outstanding_amount) > 0 ? 'warning' : 'success'}
+              />
+            </div>
+
+            {selectedVendorPaymentBlockState && (
+              <div
+                className={`mt-5 rounded-2xl border p-4 ${
+                  selectedVendorPaymentBlockState.blocked
+                    ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300'
+                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                }`}
+              >
+                <p className="text-sm font-semibold">
+                  {selectedVendorPaymentBlockState.label}
+                </p>
+                <p className="mt-1 text-sm leading-6">
+                  {selectedVendorPaymentBlockState.helper}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-5 grid gap-4">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Payment Type
+                </p>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {[
+                    { value: 'advance', label: 'Advance' },
+                    { value: 'bill_payment', label: 'Bill Payment' },
+                    { value: 'adjustment', label: 'Adjustment' },
+                    { value: 'refund', label: 'Refund' },
+                  ].map(option => {
+                    const isSelected = vendorPaymentDraft.paymentType === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          setVendorPaymentDraft(current =>
+                            current
+                              ? {
+                                  ...current,
+                                  paymentType: option.value as VendorPaymentDraft['paymentType'],
+                                }
+                              : current
+                          )
+                        }
+                        className={`h-10 rounded-lg border px-3 text-sm font-medium transition ${
+                          isSelected
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-border bg-background text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Amount
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={vendorPaymentDraft.amount}
+                    onChange={event =>
+                      setVendorPaymentDraft(current =>
+                        current ? { ...current, amount: event.target.value } : current
+                      )
+                    }
+                    className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    placeholder="Enter amount"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Payment Date
+                  </span>
+                  <div className="mt-2">
+                    <DateInput
+                      value={vendorPaymentDraft.paymentDate}
+                      onChange={value =>
+                        setVendorPaymentDraft(current =>
+                          current ? { ...current, paymentDate: value } : current
+                        )
+                      }
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div ref={vendorPaymentModePickerRef} className="relative block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Payment Mode
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsVendorPaymentModePickerOpen(current => !current)}
+                    className="mt-2 flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition hover:bg-muted/40"
+                  >
+                    <span className="truncate">
+                      {vendorPaymentDraft.paymentMode || 'Select payment mode'}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+
+                  {isVendorPaymentModePickerOpen && (
+                    <div className="absolute left-0 right-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
+                      {[
+                        'Bank Transfer',
+                        'Cash',
+                        'UPI',
+                        'Bank Remittance',
+                        'Cheque',
+                        'Credit/Debit Card',
+                      ].map(option => {
+                        const isSelected = vendorPaymentDraft.paymentMode === option;
+
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setVendorPaymentDraft(current =>
+                                current
+                                  ? {
+                                      ...current,
+                                      paymentMode: option,
+                                    }
+                                  : current
+                              );
+                              setIsVendorPaymentModePickerOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
+                              isSelected
+                                ? 'bg-foreground text-background'
+                                : 'hover:bg-muted'
+                            }`}
+                          >
+                            <span>{option}</span>
+                            {isSelected && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Reference Number
+                  </span>
+                  <input
+                    value={vendorPaymentDraft.referenceNumber}
+                    onChange={event =>
+                      setVendorPaymentDraft(current =>
+                        current ? { ...current, referenceNumber: event.target.value } : current
+                      )
+                    }
+                    className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    placeholder="Optional"
+                  />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Notes
+                </span>
+                <textarea
+                  value={vendorPaymentDraft.notes}
+                  onChange={event =>
+                    setVendorPaymentDraft(current =>
+                      current ? { ...current, notes: event.target.value } : current
+                    )
+                  }
+                  className="mt-2 min-h-24 w-full rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  placeholder="Optional payment note"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setVendorPaymentDraft(null)}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveVendorPayment}
+                disabled={savingVendorPayment || selectedVendorPaymentBlockState?.blocked}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-transparent bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingVendorPayment ? 'Saving...' : 'Record Vendor Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
