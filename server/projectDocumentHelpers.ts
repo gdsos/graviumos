@@ -67,6 +67,13 @@ export function sendJson(res: any, statusCode: number, body: unknown) {
 }
 
 export function handleApiError(res: any, error: unknown) {
+  console.error('================ PROJECT DOCUMENT API ERROR ================');
+  console.error(error);
+
+  if (error instanceof Error) {
+    console.error(error.stack);
+  }
+
   const message = error instanceof Error ? error.message : 'Request failed.';
   const statusCode =
     typeof error === 'object' &&
