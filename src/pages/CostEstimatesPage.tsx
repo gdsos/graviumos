@@ -107,7 +107,7 @@ function createEstimateRequirementDescription({
 }) {
   if (notes.trim()) return notes.trim();
 
-  return `Design, supply, and installation of ${itemName || 'custom work item'} in ${areaName || 'selected area'}, measured as ${quantity || 0} ${unitLabel || 'unit'}, including required materials, fittings, finishing, and site installation.`;
+  return `Design, supply, and installation of ${itemName || 'custom work item'} in ${areaName || 'selected area'}, including required materials, fittings, finishing, and site installation.`;
 }
 
 function getRequirementAreaType(areaName: string): CostEstimateArea['type'] {

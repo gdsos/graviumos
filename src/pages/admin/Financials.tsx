@@ -115,6 +115,10 @@ type ProjectVendorPaymentRow = {
   amount: number | string | null;
   payment_type: 'advance' | 'bill_payment' | 'refund' | string;
   payment_mode: string | null;
+  journal_number: string | null;
+  journal_vendor_initials: string | null;
+  journal_fiscal_year: string | null;
+  journal_sequence: number | string | null;
   reference_number: string | null;
   notes: string | null;
   created_at: string | null;
@@ -204,8 +208,8 @@ function getFinanceGateStatusFromCollection(requiredAmount: number, collectedAmo
   return 'overpaid';
 }
 
-function getVendorLedgerDisplayName(entry: ProjectCogsEntryRow | null | undefined) {
-  if (!entry) return 'Vendor Ledger';
+function getVendorDisplayName(entry: ProjectCogsEntryRow | null | undefined) {
+  if (!entry) return 'Unassigned Vendor';
 
   const vendorName = entry.vendor_name?.trim();
 
@@ -213,13 +217,86 @@ function getVendorLedgerDisplayName(entry: ProjectCogsEntryRow | null | undefine
     return vendorName;
   }
 
-  return entry.source_type === 'vendor' ? 'Unassigned Vendor' : 'In-House Ledger';
+  const snapshot = entry.source_snapshot;
+  const linkedWorkPackage =
+    snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+      ? (snapshot.linkedWorkPackage as Record<string, unknown> | null | undefined)
+      : null;
+  const linkedVendorName =
+    typeof linkedWorkPackage?.vendorName === 'string'
+      ? linkedWorkPackage.vendorName
+      : typeof linkedWorkPackage?.vendor_name === 'string'
+        ? linkedWorkPackage.vendor_name
+        : typeof linkedWorkPackage?.assigneeName === 'string'
+          ? linkedWorkPackage.assigneeName
+          : typeof linkedWorkPackage?.assignee_name === 'string'
+            ? linkedWorkPackage.assignee_name
+            : '';
+
+  if (linkedVendorName && linkedVendorName !== 'Assign Vendor') {
+    return linkedVendorName;
+  }
+
+  return 'Unassigned Vendor';
 }
 
-function getVendorLedgerTypeLabel(entry: ProjectCogsEntryRow | null | undefined) {
-  if (!entry) return 'Vendor Ledger';
+function getVendorJournalInitials(vendorName: string) {
+  const initials = vendorName
+    .split(/\s+/)
+    .map(part => part.trim()[0] ?? '')
+    .join('')
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, 4);
 
-  return entry.source_type === 'vendor' ? 'Vendor Ledger' : 'In-House Ledger';
+  return initials || 'VN';
+}
+
+function getVendorJournalFiscalYear(dateValue: string) {
+  const date = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  const year = date.getFullYear();
+  const fiscalStartYear = date.getMonth() >= 3 ? year : year - 1;
+  const fiscalEndYear = fiscalStartYear + 1;
+
+  return `${String(fiscalStartYear).slice(-2)}${String(fiscalEndYear).slice(-2)}`;
+}
+
+async function getNextVendorJournalNumber({
+  vendorAccountId,
+  vendorName,
+  paymentDate,
+}: {
+  vendorAccountId: string;
+  vendorName: string;
+  paymentDate: string;
+}) {
+  const journalVendorInitials = getVendorJournalInitials(vendorName);
+  const journalFiscalYear = getVendorJournalFiscalYear(paymentDate);
+
+  const { data, error } = await supabase
+    .from('project_vendor_payments')
+    .select('journal_sequence')
+    .eq('vendor_account_id', vendorAccountId)
+    .eq('journal_fiscal_year', journalFiscalYear)
+    .order('journal_sequence', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+
+  const latestSequence = Array.isArray(data)
+    ? Math.max(
+        0,
+        ...data.map(row => toNumber((row as { journal_sequence?: number | string | null }).journal_sequence))
+      )
+    : 0;
+  const journalSequence = latestSequence + 1;
+
+  return {
+    journalNumber: `JRN${journalVendorInitials}${journalFiscalYear}${journalSequence}`,
+    journalVendorInitials,
+    journalFiscalYear,
+    journalSequence,
+  };
 }
 
 function getWorkPackageQcLabel(status: ProjectWorkPackageQcRow['status'] | undefined) {
@@ -316,18 +393,6 @@ function getProjectCogsPaymentStatusFromAmounts(payableAmount: number, paidAmoun
   return 'overpaid';
 }
 
-function getVendorPaymentTypeLabel(paymentType: ProjectVendorPaymentRow['payment_type']) {
-  switch (paymentType) {
-    case 'advance':
-      return 'Advance';
-    case 'bill_payment':
-      return 'Bill Payment';
-    case 'refund':
-      return 'Refund';
-    default:
-      return 'Payment';
-  }
-}
 
 function getVendorPaymentSignedAmount(payment: ProjectVendorPaymentRow) {
   const amount = toNumber(payment.amount);
@@ -347,15 +412,6 @@ function getCogsPaidAmountFromJournal(
   );
 }
 
-function getPaymentDateLabel(date: string | null) {
-  if (!date) return 'No date';
-
-  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 function getVendorPaymentBlockState({
   cogsEntry,
@@ -1305,16 +1361,6 @@ function FinancialsInner() {
         payment => payment.finance_account_id === selectedFinanceAccount.id
       )
     : [];
-  const selectedVendorPaymentsByCogsEntryId = new Map<string, ProjectVendorPaymentRow[]>();
-
-  selectedVendorPayments.forEach(payment => {
-    const existingPayments = selectedVendorPaymentsByCogsEntryId.get(payment.cogs_entry_id) ?? [];
-
-    selectedVendorPaymentsByCogsEntryId.set(payment.cogs_entry_id, [
-      ...existingPayments,
-      payment,
-    ]);
-  });
   const selectedWorkPackageQcByWorkPackageId = new Map(
     workPackageQcRecords
       .filter(record => record.project_id === selectedProject?.id)
@@ -1723,43 +1769,6 @@ function FinancialsInner() {
     if (vendorAccountUpdateError) throw vendorAccountUpdateError;
   };
 
-  const handleDeleteVendorPayment = async (payment: ProjectVendorPaymentRow) => {
-    try {
-      const { error: deleteError } = await supabase
-        .from('project_vendor_payments')
-        .delete()
-        .eq('id', payment.id);
-
-      if (deleteError) throw deleteError;
-
-      const nextPayments = selectedVendorPayments.filter(
-        existingPayment => existingPayment.id !== payment.id
-      );
-
-      await recalculateVendorLedgerFromJournal({
-        vendorAccountId: payment.vendor_account_id,
-        nextPayments,
-      });
-
-      setNotice({
-        state: 'success',
-        heading: 'Journal Entry Removed',
-        description: `${getVendorPaymentTypeLabel(payment.payment_type)} entry of ${formatINR(toNumber(payment.amount))} was removed and ledger balances were recalculated.`,
-      });
-
-      await fetchFinanceData();
-    } catch (deleteError) {
-      setNotice({
-        state: 'error',
-        heading: 'Could Not Remove Journal Entry',
-        description:
-          deleteError instanceof Error
-            ? deleteError.message
-            : 'Unable to remove this vendor payment journal entry.',
-      });
-    }
-  };
-
   const handleOpenVendorPaymentDraft = (entry: ProjectCogsEntryRow) => {
     setVendorPaymentDraft({
       cogsEntryId: entry.id,
@@ -1840,6 +1849,12 @@ function FinancialsInner() {
 
       if (userError) throw userError;
 
+      const nextJournal = await getNextVendorJournalNumber({
+        vendorAccountId: selectedEntry.vendor_account_id,
+        vendorName: getVendorDisplayName(selectedEntry),
+        paymentDate: vendorPaymentDraft.paymentDate,
+      });
+
       const { data: insertedPayment, error: paymentError } = await supabase
         .from('project_vendor_payments')
         .insert({
@@ -1854,6 +1869,10 @@ function FinancialsInner() {
           payment_mode: vendorPaymentDraft.paymentMode.trim() || 'Bank Transfer',
           reference_number: vendorPaymentDraft.referenceNumber.trim(),
           notes: vendorPaymentDraft.notes.trim(),
+          journal_number: nextJournal.journalNumber,
+          journal_vendor_initials: nextJournal.journalVendorInitials,
+          journal_fiscal_year: nextJournal.journalFiscalYear,
+          journal_sequence: nextJournal.journalSequence,
           created_by: userData.user?.id ?? null,
         })
         .select('*')
@@ -2794,8 +2813,6 @@ function FinancialsInner() {
                     payableAmount > 0
                       ? Math.min(100, Math.round((paidAmount / payableAmount) * 100))
                       : 0;
-                  const entryVendorPayments =
-                    selectedVendorPaymentsByCogsEntryId.get(entry.id) ?? [];
 
                   return (
                     <div
@@ -2804,13 +2821,12 @@ function FinancialsInner() {
                     >
                       <div className="flex flex-col gap-4">
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-foreground">
-                              {entry.category} - {entry.description}
-                            </p>
-                            <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                              {getVendorLedgerDisplayName(entry)}
-                            </span>
+                          <p className="text-sm font-semibold text-foreground">
+                            {entry.category} - {entry.description}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getWorkPackageQcTone(entry.source_work_package_id ? qcRecord?.status ?? 'pending' : undefined)}`}>
                               {getWorkPackageQcLabel(entry.source_work_package_id ? qcRecord?.status ?? 'pending' : undefined)}
                             </span>
@@ -2824,8 +2840,8 @@ function FinancialsInner() {
 
                           <div className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
                             <p>
-                              <span className="font-semibold text-foreground">Vendor / Ledger:</span>{' '}
-                              {getVendorLedgerDisplayName(entry)}
+                              <span className="font-semibold text-foreground">Vendor:</span>{' '}
+                              {getVendorDisplayName(entry)}
                             </p>
                             <p>
                               {entry.source_work_package_id
@@ -2895,43 +2911,6 @@ function FinancialsInner() {
                       </div>
 
                       <div className="mt-auto flex flex-col gap-3 pt-5">
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          {finalPaymentState.helper}
-                        </p>
-
-                        {entryVendorPayments.length > 0 && (
-                          <div className="rounded-2xl border border-border bg-card/60 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Payment Journal
-                            </p>
-                            <div className="mt-2 space-y-2">
-                              {entryVendorPayments.map(payment => (
-                                <div
-                                  key={payment.id}
-                                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2"
-                                >
-                                  <div className="min-w-0">
-                                    <p className="truncate text-xs font-semibold text-foreground">
-                                      {getVendorPaymentTypeLabel(payment.payment_type)} ? {formatINR(toNumber(payment.amount))}
-                                    </p>
-                                    <p className="truncate text-[11px] text-muted-foreground">
-                                      {getPaymentDateLabel(payment.payment_date)} ? {payment.payment_mode || 'Payment mode not set'}
-                                    </p>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteVendorPayment(payment)}
-                                    className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-destructive transition hover:bg-destructive/10"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
                         <button
                           type="button"
                           onClick={() => handleOpenVendorPaymentDraft(entry)}
@@ -2961,16 +2940,16 @@ function FinancialsInner() {
                   Vendor Payment Journal
                 </p>
                 <h3 className="mt-1 text-lg font-semibold text-foreground">
-                  {getVendorLedgerDisplayName(selectedVendorPaymentEntry)}
+                  {getVendorDisplayName(selectedVendorPaymentEntry)}
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {selectedVendorPaymentEntry.category} - {selectedVendorPaymentEntry.description}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                    <span>{getVendorLedgerTypeLabel(selectedVendorPaymentEntry)}</span>
+                    <span>Vendor</span>
                     <span className="text-foreground">
-                      {getVendorLedgerDisplayName(selectedVendorPaymentEntry)}
+                      {getVendorDisplayName(selectedVendorPaymentEntry)}
                     </span>
                   </span>
                   <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">

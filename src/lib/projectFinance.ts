@@ -234,7 +234,11 @@ interface TimelineWorkPackageSnapshot {
   title?: string;
   sourceEstimateLineItemId?: string;
   vendorId?: string | null;
+  vendor_id?: string | null;
+  vendorName?: string | null;
+  vendor_name?: string | null;
   assigneeName?: string | null;
+  assignee_name?: string | null;
 }
 
 function isTimelineWorkPackageSnapshot(
@@ -257,14 +261,6 @@ function normalizeAccountKey(value: string) {
 
 function getLineItemAmount(lineItem: CostEstimateLineItem) {
   return Math.round(toNumber(lineItem.quantity) * toNumber(lineItem.ratePerUnit));
-}
-
-function getLineItemVendorName(lineItem: CostEstimateLineItem) {
-  return lineItem.vendorName?.trim() || 'In-House';
-}
-
-function getLineItemSourceType(lineItem: CostEstimateLineItem) {
-  return lineItem.vendorName?.trim() ? 'vendor' : 'in_house';
 }
 
 function getLineItemCategory(
@@ -336,6 +332,72 @@ function findWorkPackageForLineItem({
   );
 }
 
+function getTimelineWorkPackageVendorName(
+  workPackage: TimelineWorkPackageSnapshot | null
+) {
+  const vendorName =
+    workPackage?.vendorName ??
+    workPackage?.vendor_name ??
+    workPackage?.assigneeName ??
+    workPackage?.assignee_name ??
+    '';
+
+  const trimmedVendorName = vendorName.trim();
+
+  if (!trimmedVendorName || trimmedVendorName === 'Assign Vendor') {
+    return '';
+  }
+
+  return trimmedVendorName;
+}
+
+function getTimelineWorkPackageVendorId(
+  workPackage: TimelineWorkPackageSnapshot | null
+) {
+  return (workPackage?.vendorId ?? workPackage?.vendor_id ?? '')?.trim() ?? '';
+}
+
+function getLineItemVendorAssignment({
+  lineItem,
+  linkedWorkPackage,
+}: {
+  lineItem: CostEstimateLineItem;
+  linkedWorkPackage: TimelineWorkPackageSnapshot | null;
+}) {
+  const timelineVendorName = getTimelineWorkPackageVendorName(linkedWorkPackage);
+  const timelineVendorId = getTimelineWorkPackageVendorId(linkedWorkPackage);
+  const estimateVendorName = lineItem.vendorName?.trim() ?? '';
+
+  if (timelineVendorName || timelineVendorId) {
+    const vendorName = timelineVendorName || estimateVendorName || 'Unassigned Vendor';
+
+    return {
+      sourceType: 'vendor',
+      vendorId: timelineVendorId || null,
+      vendorName,
+      accountKey: timelineVendorId
+        ? `vendor:${timelineVendorId}`
+        : `vendor:${normalizeAccountKey(vendorName)}`,
+    };
+  }
+
+  if (estimateVendorName) {
+    return {
+      sourceType: 'vendor',
+      vendorId: null,
+      vendorName: estimateVendorName,
+      accountKey: `vendor:${normalizeAccountKey(estimateVendorName)}`,
+    };
+  }
+
+  return {
+    sourceType: 'vendor',
+    vendorId: null,
+    vendorName: 'Unassigned Vendor',
+    accountKey: 'vendor:unassigned_vendor',
+  };
+}
+
 async function syncVendorAccountsAndCogsEntriesFromEstimate({
   account,
   estimate,
@@ -383,26 +445,35 @@ async function syncVendorAccountsAndCogsEntriesFromEstimate({
   );
 
   const lineItemsByVendorKey = new Map<string, CostEstimateLineItem[]>();
+  const vendorAssignmentByLineItemId = new Map<
+    string,
+    ReturnType<typeof getLineItemVendorAssignment>
+  >();
 
   estimate.lineItems.forEach(lineItem => {
-    const sourceType = getLineItemSourceType(lineItem);
-    const vendorName = getLineItemVendorName(lineItem);
-    const accountKey =
-      sourceType === 'vendor'
-        ? `vendor:${normalizeAccountKey(vendorName)}`
-        : 'in_house';
+    const linkedWorkPackage = findWorkPackageForLineItem({
+      lineItem,
+      estimate,
+      workPackages,
+    });
+    const vendorAssignment = getLineItemVendorAssignment({
+      lineItem,
+      linkedWorkPackage,
+    });
 
-    lineItemsByVendorKey.set(accountKey, [
-      ...(lineItemsByVendorKey.get(accountKey) ?? []),
+    vendorAssignmentByLineItemId.set(lineItem.id, vendorAssignment);
+    lineItemsByVendorKey.set(vendorAssignment.accountKey, [
+      ...(lineItemsByVendorKey.get(vendorAssignment.accountKey) ?? []),
       lineItem,
     ]);
   });
 
   for (const [accountKey, lineItems] of lineItemsByVendorKey.entries()) {
     const firstLineItem = lineItems[0];
-    const sourceType = getLineItemSourceType(firstLineItem);
-    const vendorName =
-      sourceType === 'vendor' ? getLineItemVendorName(firstLineItem) : 'In-House';
+    const firstVendorAssignment = vendorAssignmentByLineItemId.get(firstLineItem.id);
+    const sourceType = firstVendorAssignment?.sourceType ?? 'vendor';
+    const vendorName = firstVendorAssignment?.vendorName ?? 'Unassigned Vendor';
+    const vendorId = firstVendorAssignment?.vendorId ?? null;
     const payableAmount = lineItems.reduce(
       (total, lineItem) => total + getLineItemAmount(lineItem),
       0
@@ -416,7 +487,7 @@ async function syncVendorAccountsAndCogsEntriesFromEstimate({
           project_id: estimate.projectId,
           account_key: accountKey,
           account_type: sourceType,
-          vendor_id: null,
+          vendor_id: vendorId,
           vendor_name: vendorName,
           payable_amount: payableAmount,
           advance_paid_amount: 0,
@@ -441,12 +512,21 @@ async function syncVendorAccountsAndCogsEntriesFromEstimate({
   );
 
   for (const lineItem of estimate.lineItems) {
-    const sourceType = getLineItemSourceType(lineItem);
-    const vendorName = getLineItemVendorName(lineItem);
-    const accountKey =
-      sourceType === 'vendor'
-        ? `vendor:${normalizeAccountKey(vendorName)}`
-        : 'in_house';
+    const linkedWorkPackage = findWorkPackageForLineItem({
+      lineItem,
+      estimate,
+      workPackages,
+    });
+    const vendorAssignment =
+      vendorAssignmentByLineItemId.get(lineItem.id) ??
+      getLineItemVendorAssignment({
+        lineItem,
+        linkedWorkPackage,
+      });
+    const sourceType = vendorAssignment.sourceType;
+    const vendorName = vendorAssignment.vendorName;
+    const vendorId = vendorAssignment.vendorId;
+    const accountKey = vendorAssignment.accountKey;
     const vendorAccount = vendorAccountByKey.get(accountKey);
 
     if (!vendorAccount) continue;
@@ -454,18 +534,13 @@ async function syncVendorAccountsAndCogsEntriesFromEstimate({
     const payableAmount = getLineItemAmount(lineItem);
     const existingEntry = cogsByEstimateLineId.get(lineItem.id);
     const paidAmount = existingEntry ? toNumber(existingEntry.paid_amount) : 0;
-    const linkedWorkPackage = findWorkPackageForLineItem({
-      lineItem,
-      estimate,
-      workPackages,
-    });
 
     const rowPayload = {
       finance_account_id: account.id,
       project_id: estimate.projectId,
       vendor_account_id: vendorAccount.id,
       source_type: sourceType,
-      vendor_id: null,
+      vendor_id: vendorId,
       vendor_name: vendorName,
       category: getLineItemCategory(lineItem, estimate),
       description: lineItem.name,

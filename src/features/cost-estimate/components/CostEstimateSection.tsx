@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   FilePlus2,
+  Pencil,
   Minus,
   Plus,
   RefreshCcw,
@@ -477,6 +478,8 @@ interface CostEstimateConfirmDialog {
   onConfirm: () => void;
 }
 
+type LineItemIdSet = Set<string>;
+
 interface CostEstimateSectionProps {
   initialAreas?: CostEstimateArea[];
   initialLineItems?: CostEstimateLineItem[];
@@ -524,7 +527,7 @@ function createDefaultDescription({
   const safeAreaName = areaName || 'selected area';
   const safeItemName = itemName || 'custom work item';
 
-  return `Design, supply, and installation of ${safeItemName} in ${safeAreaName}, measured as ${quantity || 0} ${unitLabel}, including required materials, fittings, finishing, and site installation.`;
+  return `Design, supply, and installation of ${safeItemName} in ${safeAreaName}, including required materials, fittings, finishing, and site installation.`;
 }
 
 export function CostEstimateSection({
@@ -612,9 +615,15 @@ export function CostEstimateSection({
   const [newLineItemAreaId, setNewLineItemAreaId] = useState(
     initialPrimaryAreaId
   );
-  const [activeLineItemAreaId, setActiveLineItemAreaId] = useState(
-    initialPrimaryAreaId
+  const [activeLineItemAreaId, setActiveLineItemAreaId] = useState('');
+  const [editingLineItemIds, setEditingLineItemIds] = useState<LineItemIdSet>(
+    () => new Set()
   );
+  const [draftLineItemIds, setDraftLineItemIds] = useState<LineItemIdSet>(
+    () => new Set()
+  );
+  const [savedRowItemSuggestionId, setSavedRowItemSuggestionId] =
+    useState<string | null>(null);
   const [newLineItemName, setNewLineItemName] = useState('');
   const [newLineItemDescription, setNewLineItemDescription] = useState('');
   const [newLineItemQuantity, setNewLineItemQuantity] = useState('1');
@@ -684,7 +693,9 @@ export function CostEstimateSection({
   const summary = useMemo(
     () =>
       calculateCostEstimateSummary({
-        lineItems,
+        lineItems: lineItems.filter(
+          lineItem => !draftLineItemIds.has(lineItem.id)
+        ),
         serviceChargePercent: numericServiceChargePercent,
         miscChargePercent: numericMiscChargePercent,
         gstPercent: DEFAULT_GST_PERCENT,
@@ -692,6 +703,7 @@ export function CostEstimateSection({
       }),
     [
       lineItems,
+      draftLineItemIds,
       numericMiscChargePercent,
       numericServiceChargePercent,
       numericTargetProjectRevenue,
@@ -894,7 +906,10 @@ export function CostEstimateSection({
   const groupedAreas = areas.map(area => {
     const areaLineItems = lineItems.filter(lineItem => lineItem.areaId === area.id);
     const areaTotal = areaLineItems.reduce(
-      (total, lineItem) => total + calculateLineItemTotal(lineItem),
+      (total, lineItem) =>
+        draftLineItemIds.has(lineItem.id)
+          ? total
+          : total + calculateLineItemTotal(lineItem),
       0
     );
 
@@ -908,6 +923,16 @@ export function CostEstimateSection({
   const matchingItemPresets = itemPresets.filter(preset =>
     preset.name.toLowerCase().includes(newLineItemName.trim().toLowerCase())
   );
+
+  const getMatchingSavedRowItemPresets = (lineItem: CostEstimateLineItem) => {
+    const searchValue = lineItem.name.trim().toLowerCase();
+
+    return searchValue
+      ? itemPresets.filter(preset =>
+          preset.name.toLowerCase().includes(searchValue)
+        )
+      : itemPresets;
+  };
 
   useEffect(() => {
     if (!isSaveMenuOpen && !isBottomSaveMenuOpen) return;
@@ -950,7 +975,7 @@ export function CostEstimateSection({
     status: nextStatus,
     version: nextVersion,
     areas,
-    lineItems,
+    lineItems: lineItems.filter(lineItem => !draftLineItemIds.has(lineItem.id)),
     serviceChargePercent: numericServiceChargePercent,
     miscChargePercent: numericMiscChargePercent,
     targetProjectRevenue: numericTargetProjectRevenue,
@@ -973,7 +998,7 @@ export function CostEstimateSection({
       status: estimateStatusLabel,
       version: estimateVersion,
       areas,
-      lineItems,
+      lineItems: lineItems.filter(lineItem => !draftLineItemIds.has(lineItem.id)),
       summary,
     };
   };
@@ -1030,6 +1055,9 @@ export function CostEstimateSection({
     setNewLineItemUnit('sqft');
     setNewLineItemRate('500');
     setNewLineItemRemarks('');
+    setEditingLineItemIds(new Set());
+    setDraftLineItemIds(new Set());
+    setSavedRowItemSuggestionId(null);
   };
 
   const handleDeleteDraft = () => {
@@ -1251,8 +1279,25 @@ export function CostEstimateSection({
   };
 
   const handleStartAreaLineItem = (areaId: string) => {
+    const newLineItemId = createId('estimate-line');
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: newLineItemId,
+        areaId,
+        name: '',
+        description: '',
+        quantity: 0,
+        unitLabel: 'sqft',
+        ratePerUnit: 0,
+        remarks: undefined,
+      },
+    ]);
+    setEditingLineItemIds(current => new Set(current).add(newLineItemId));
+    setDraftLineItemIds(current => new Set(current).add(newLineItemId));
     setNewLineItemAreaId(areaId);
-    setActiveLineItemAreaId(areaId);
+    setActiveLineItemAreaId('');
   };
 
   const applyItemPreset = (preset: CostEstimateItemPreset) => {
@@ -1477,9 +1522,89 @@ export function CostEstimateSection({
     markEstimateDirty();
   };
 
+  const getLineItemPreviewDescription = (lineItem: CostEstimateLineItem) =>
+    createDefaultDescription({
+      areaName: getAreaName(areas, lineItem.areaId),
+      itemName: lineItem.name,
+      quantity: Number(lineItem.quantity) || 0,
+      unitLabel: getCostEstimateUnitDisplayLabel(units, lineItem.unitLabel),
+    });
+
+  const applySavedRowItemPreset = (
+    lineItemId: string,
+    preset: CostEstimateItemPreset
+  ) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+    const areaName = lineItem
+      ? getAreaName(areas, lineItem.areaId)
+      : 'selected area';
+
+    handleUpdateLineItem(lineItemId, {
+      name: preset.name,
+      unitLabel: preset.defaultUnitLabel,
+      ratePerUnit: preset.sellingRatePerUnit,
+      description: createEstimateLineItemDescription({
+        areaName,
+        itemDescription: preset.defaultDescription,
+      }),
+    });
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleEditLineItem = (lineItemId: string) => {
+    setEditingLineItemIds(current => new Set(current).add(lineItemId));
+  };
+
+  const handleSaveLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
+    const trimmedName = lineItem.name.trim();
+    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
+    const ratePerUnit = Math.max(0, Number(lineItem.ratePerUnit) || 0);
+
+    if (!trimmedName || quantity <= 0) return;
+
+    handleUpdateLineItem(lineItemId, {
+      name: trimmedName,
+      description:
+        lineItem.description.trim() || getLineItemPreviewDescription(lineItem),
+      quantity,
+      unitLabel: lineItem.unitLabel || 'sqft',
+      ratePerUnit,
+      remarks: lineItem.remarks?.trim() || undefined,
+    });
+    setEditingLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setDraftLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setSavedRowItemSuggestionId(null);
+    setSavedRowUnitDropdownId(null);
+  };
+
   const handleRemoveLineItem = (lineItemId: string) => {
     setLineItems(current =>
       current.filter(lineItem => lineItem.id !== lineItemId)
+    );
+    setEditingLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setDraftLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setSavedRowItemSuggestionId(current =>
+      current === lineItemId ? null : current
     );
     markEstimateDirty();
   };
@@ -2601,140 +2726,300 @@ export function CostEstimateSection({
 
               {group.lineItems.length > 0 ? (
                 <div className="grid gap-3 p-3 sm:p-4">
-                  {group.lineItems.map(lineItem => (
-                    <div
-                      key={lineItem.id}
-                      className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_auto] xl:items-center xl:gap-4 2xl:gap-5"
-                    >
-                      <div className="col-span-3 min-w-0 xl:col-span-1">
-                        <p className="font-medium text-foreground">{lineItem.name}</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          {lineItem.description}
-                        </p>
-                        {lineItem.vendorName && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Vendor: {lineItem.vendorName}
-                          </p>
-                        )}
-                        {lineItem.remarks && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Remarks: {lineItem.remarks}
-                          </p>
-                        )}
-                      </div>
+                  {group.lineItems.map(lineItem => {
+                    const isLineItemEditing = editingLineItemIds.has(lineItem.id);
+                    const isDraftLineItem = draftLineItemIds.has(lineItem.id);
+                    const matchingSavedRowItemPresets =
+                      getMatchingSavedRowItemPresets(lineItem);
+                    const rowPreviewDescription =
+                      getLineItemPreviewDescription(lineItem);
+                    const canSaveLineItem =
+                      lineItem.name.trim().length > 0 &&
+                      Number(lineItem.quantity) > 0;
 
-                      <input
-                        type="number"
-                        min="0"
-                        value={lineItem.quantity}
-                        onChange={event =>
-                          handleUpdateLineItem(lineItem.id, {
-                            quantity: Number(event.target.value),
-                          })
-                        }
-                        className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
+                    return (
+                      <div
+                        key={lineItem.id}
+                        className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_auto] xl:items-center xl:gap-4 2xl:gap-5"
+                      >
+                        <div className="col-span-3 grid min-w-0 gap-2 xl:col-span-1">
+                          {isLineItemEditing ? (
+                            <>
+                              <div className="relative">
+                                <input
+                                  value={lineItem.name}
+                                  onFocus={() =>
+                                    setSavedRowItemSuggestionId(lineItem.id)
+                                  }
+                                  onBlur={() => {
+                                    window.setTimeout(() => {
+                                      setSavedRowItemSuggestionId(current =>
+                                        current === lineItem.id ? null : current
+                                      );
+                                    }, 120);
+                                  }}
+                                  onChange={event => {
+                                    handleUpdateLineItem(lineItem.id, {
+                                      name: event.target.value,
+                                    });
+                                    setSavedRowItemSuggestionId(lineItem.id);
+                                  }}
+                                  placeholder="Type item name or search preset"
+                                  className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                />
 
-                      <div className="relative self-center">
+                                {savedRowItemSuggestionId === lineItem.id && (
+                                  <div className="absolute left-0 right-0 top-11 z-[100] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+                                    <div className="max-h-56 overflow-y-auto p-1">
+                                      {matchingSavedRowItemPresets.length > 0 ? (
+                                        matchingSavedRowItemPresets.map(preset => (
+                                          <button
+                                            key={preset.id}
+                                            type="button"
+                                            onMouseDown={event =>
+                                              event.preventDefault()
+                                            }
+                                            onClick={() =>
+                                              applySavedRowItemPreset(
+                                                lineItem.id,
+                                                preset
+                                              )
+                                            }
+                                            className="w-full rounded-lg px-3 py-2 text-left transition hover:bg-muted"
+                                          >
+                                            <span className="block text-sm font-medium text-foreground">
+                                              {preset.name}
+                                            </span>
+                                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                                              {getCostEstimateUnitDisplayLabel(
+                                                units,
+                                                preset.defaultUnitLabel
+                                              )}{' '}
+                                              @ {formatINR(preset.sellingRatePerUnit)}
+                                            </span>
+                                          </button>
+                                        ))
+                                      ) : (
+                                        <p className="px-3 py-2 text-xs text-muted-foreground">
+                                          No matching preset. Keep typing to use a custom item.
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <textarea
+                                value={lineItem.description}
+                                onChange={event =>
+                                  handleUpdateLineItem(lineItem.id, {
+                                    description: event.target.value,
+                                  })
+                                }
+                                rows={2}
+                                placeholder={rowPreviewDescription}
+                                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                              />
+
+                              <input
+                                value={lineItem.remarks ?? ''}
+                                onChange={event =>
+                                  handleUpdateLineItem(lineItem.id, {
+                                    remarks: event.target.value,
+                                  })
+                                }
+                                placeholder="Remarks optional"
+                                className="h-10 min-h-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <p className="font-medium text-foreground">
+                                  {lineItem.name}
+                                </p>
+                                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                  {lineItem.description}
+                                </p>
+                                {lineItem.vendorName && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Vendor: {lineItem.vendorName}
+                                  </p>
+                                )}
+                                {lineItem.remarks && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Remarks: {lineItem.remarks}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
                         <input
-                          value={
-                            savedRowUnitDropdownId === lineItem.id
-                              ? savedRowUnitQuery
-                              : lineItem.unitLabel
+                          type="number"
+                          min="0"
+                          value={lineItem.quantity}
+                          disabled={!isLineItemEditing}
+                          onChange={event =>
+                            handleUpdateLineItem(lineItem.id, {
+                              quantity: Number(event.target.value),
+                            })
                           }
-                          onFocus={() => {
-                            setSavedRowUnitDropdownId(lineItem.id);
-                            setSavedRowUnitQuery('');
-                          }}
-                          onBlur={() => {
-                            window.setTimeout(() => {
-                              setSavedRowUnitDropdownId(null);
-                            }, 120);
-                          }}
-                          onChange={event => {
-                            setSavedRowUnitDropdownId(lineItem.id);
-                            setSavedRowUnitQuery(event.target.value);
-                          }}
-                          onKeyDown={event => {
-                            if (event.key === 'Enter' && canAddSavedRowUnit) {
-                              event.preventDefault();
-                              registerSavedRowUnit(lineItem.id, savedRowUnitQuery);
-                            }
-                          }}
-                          placeholder="Unit"
-                          className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
                         />
 
-                        {savedRowUnitDropdownId === lineItem.id && (
-                          <div className="absolute left-0 right-0 top-11 z-[100] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
-                            {getMatchingSavedRowUnits().map(unit => (
-                              <button
-                                key={unit.id}
-                                type="button"
-                                onMouseDown={event => event.preventDefault()}
-                                onClick={() => {
-                                  handleUpdateLineItem(lineItem.id, {
-                                    unitLabel: unit.shortLabel,
-                                  });
-                                  setSavedRowUnitQuery('');
-                                  setSavedRowUnitDropdownId(null);
-                                }}
-                                className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
-                              >
-                                {unit.label}
-                              </button>
-                            ))}
+                        <div className="relative self-center">
+                          <input
+                            value={
+                              savedRowUnitDropdownId === lineItem.id
+                                ? savedRowUnitQuery
+                                : lineItem.unitLabel
+                            }
+                            disabled={!isLineItemEditing}
+                            onFocus={() => {
+                              if (!isLineItemEditing) return;
 
-                            {canAddSavedRowUnit && (
+                              setSavedRowUnitDropdownId(lineItem.id);
+                              setSavedRowUnitQuery('');
+                            }}
+                            onBlur={() => {
+                              window.setTimeout(() => {
+                                setSavedRowUnitDropdownId(null);
+                              }, 120);
+                            }}
+                            onChange={event => {
+                              if (!isLineItemEditing) return;
+
+                              setSavedRowUnitDropdownId(lineItem.id);
+                              setSavedRowUnitQuery(event.target.value);
+                            }}
+                            onKeyDown={event => {
+                              if (
+                                isLineItemEditing &&
+                                event.key === 'Enter' &&
+                                canAddSavedRowUnit
+                              ) {
+                                event.preventDefault();
+                                registerSavedRowUnit(lineItem.id, savedRowUnitQuery);
+                              }
+                            }}
+                            placeholder="Unit"
+                            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                          />
+
+                          {isLineItemEditing &&
+                            savedRowUnitDropdownId === lineItem.id && (
+                              <div className="absolute left-0 right-0 top-11 z-[100] max-h-56 overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl">
+                                {getMatchingSavedRowUnits().map(unit => (
+                                  <button
+                                    key={unit.id}
+                                    type="button"
+                                    onMouseDown={event => event.preventDefault()}
+                                    onClick={() => {
+                                      handleUpdateLineItem(lineItem.id, {
+                                        unitLabel: unit.shortLabel,
+                                      });
+                                      setSavedRowUnitQuery('');
+                                      setSavedRowUnitDropdownId(null);
+                                    }}
+                                    className="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                  >
+                                    {unit.label}
+                                  </button>
+                                ))}
+
+                                {canAddSavedRowUnit && (
+                                  <button
+                                    type="button"
+                                    onMouseDown={event => event.preventDefault()}
+                                    onClick={() =>
+                                      registerSavedRowUnit(
+                                        lineItem.id,
+                                        savedRowUnitQuery
+                                      )
+                                    }
+                                    className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                  >
+                                    Add Unit: {savedRowUnitQuery.trim()}
+                                  </button>
+                                )}
+
+                                {getMatchingSavedRowUnits().length === 0 &&
+                                  !canAddSavedRowUnit && (
+                                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                                      No units found.
+                                    </p>
+                                  )}
+                              </div>
+                            )}
+                        </div>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={lineItem.ratePerUnit}
+                          disabled={!isLineItemEditing}
+                          onChange={event =>
+                            handleUpdateLineItem(lineItem.id, {
+                              ratePerUnit: Number(event.target.value),
+                            })
+                          }
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">
+                              {isDraftLineItem
+                                ? 'Not saved'
+                                : formatINR(calculateLineItemTotal(lineItem))}
+                            </p>
+                            {isDraftLineItem && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                Save row to include in totals.
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            {isLineItemEditing ? (
                               <button
                                 type="button"
-                                onMouseDown={event => event.preventDefault()}
-                                onClick={() =>
-                                  registerSavedRowUnit(lineItem.id, savedRowUnitQuery)
-                                }
-                                className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                disabled={!canSaveLineItem}
+                                onClick={() => handleSaveLineItem(lineItem.id)}
+                                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                                aria-label="Save estimate line item"
+                                title="Save row"
                               >
-                                Add Unit: {savedRowUnitQuery.trim()}
+                                <Check className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleEditLineItem(lineItem.id)}
+                                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                aria-label="Edit estimate line item"
+                                title="Edit row"
+                              >
+                                <Pencil className="h-4 w-4" />
                               </button>
                             )}
 
-                            {getMatchingSavedRowUnits().length === 0 &&
-                              !canAddSavedRowUnit && (
-                                <p className="px-3 py-2 text-sm text-muted-foreground">
-                                  No units found.
-                                </p>
-                              )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLineItem(lineItem.id)}
+                              className="flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 text-destructive transition hover:bg-destructive/10"
+                              aria-label="Remove estimate line item"
+                              title="Delete row"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </div>
-
-                      <input
-                        type="number"
-                        min="0"
-                        value={lineItem.ratePerUnit}
-                        onChange={event =>
-                          handleUpdateLineItem(lineItem.id, {
-                            ratePerUnit: Number(event.target.value),
-                          })
-                        }
-                        className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-
-                      <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
-                        <p className="text-sm font-semibold text-foreground">
-                          {formatINR(calculateLineItemTotal(lineItem))}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLineItem(lineItem.id)}
-                          className="flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 text-destructive transition hover:bg-destructive/10"
-                          aria-label="Remove estimate line item"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="p-4 text-sm text-muted-foreground">

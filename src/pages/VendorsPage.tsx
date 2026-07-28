@@ -8,7 +8,6 @@ import {
   Pencil,
   Phone,
   Plus,
-  RefreshCcw,
   Store,
   Trash2,
   UsersRound,
@@ -77,6 +76,51 @@ type VendorProjectRow = {
   client_name?: string | null;
   clientName?: string | null;
 };
+
+type VendorPaymentJournalRow = {
+  id: string;
+  vendor_account_id: string | null;
+  finance_account_id: string | null;
+  project_id: string | null;
+  vendor_id: string | null;
+  cogs_entry_id: string | null;
+  payment_date: string | null;
+  amount: number | string | null;
+  payment_type: 'advance' | 'bill_payment' | 'refund' | string;
+  payment_mode: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  journal_number: string | null;
+  created_at: string | null;
+};
+
+type VendorAccountJournalRow = {
+  id: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+};
+
+type VendorCogsJournalRow = {
+  id: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  description: string | null;
+  category: string | null;
+  source_snapshot?: Record<string, unknown> | null;
+};
+
+interface VendorJournalEntry {
+  id: string;
+  date: string | null;
+  journalNumber: string;
+  projectName: string;
+  description: string;
+  paymentType: 'advance' | 'bill_payment' | 'refund' | string;
+  paymentMode: string;
+  referenceNumber: string;
+  notes: string;
+  amount: number;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -152,6 +196,181 @@ function formatCategoryLabel(value: string) {
 
 function normalizeCategoryValue(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function toNumber(value: number | string | null | undefined) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function formatINR(value: number) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function getJournalDateLabel(date: string | null) {
+  if (!date) return 'No date';
+
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getVendorJournalPaymentTypeLabel(paymentType: VendorJournalEntry['paymentType']) {
+  switch (paymentType) {
+    case 'advance':
+      return 'Advance';
+    case 'bill_payment':
+      return 'Bill';
+    case 'refund':
+      return 'Refund';
+    default:
+      return 'Payment';
+  }
+}
+
+function getVendorNameMatchKey(value: string | null | undefined) {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getCogsSnapshotVendorIdentity(cogsEntry: VendorCogsJournalRow | undefined) {
+  const snapshot = cogsEntry?.source_snapshot;
+
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    return { vendorId: '', vendorName: '' };
+  }
+
+  const linkedWorkPackage = snapshot.linkedWorkPackage;
+
+  if (!linkedWorkPackage || typeof linkedWorkPackage !== 'object' || Array.isArray(linkedWorkPackage)) {
+    return { vendorId: '', vendorName: '' };
+  }
+
+  const record = linkedWorkPackage as Record<string, unknown>;
+  const vendorId =
+    typeof record.vendorId === 'string'
+      ? record.vendorId
+      : typeof record.vendor_id === 'string'
+        ? record.vendor_id
+        : '';
+  const vendorName =
+    typeof record.vendorName === 'string'
+      ? record.vendorName
+      : typeof record.vendor_name === 'string'
+        ? record.vendor_name
+        : typeof record.assigneeName === 'string'
+          ? record.assigneeName
+          : typeof record.assignee_name === 'string'
+            ? record.assignee_name
+            : '';
+
+  return {
+    vendorId: vendorId.trim(),
+    vendorName: vendorName.trim(),
+  };
+}
+
+function buildVendorJournalEntriesMap({
+  paymentRows,
+  accountRows,
+  cogsRows,
+  projectRows,
+  vendorRows,
+}: {
+  paymentRows: VendorPaymentJournalRow[];
+  accountRows: VendorAccountJournalRow[];
+  cogsRows: VendorCogsJournalRow[];
+  projectRows: VendorProjectRow[];
+  vendorRows: Vendor[];
+}) {
+  const accountById = new Map(accountRows.map(account => [account.id, account]));
+  const cogsById = new Map(cogsRows.map(entry => [entry.id, entry]));
+  const projectById = new Map(projectRows.map(project => [project.id, project]));
+  const vendorIdByNameKey = new Map(
+    vendorRows.map(vendor => [getVendorNameMatchKey(vendor.name), vendor.id])
+  );
+  const entriesByVendorId: Record<string, VendorJournalEntry[]> = {};
+
+  paymentRows.forEach(payment => {
+    const cogsEntry = payment.cogs_entry_id
+      ? cogsById.get(payment.cogs_entry_id)
+      : undefined;
+    const vendorAccount = payment.vendor_account_id
+      ? accountById.get(payment.vendor_account_id)
+      : undefined;
+    const snapshotVendor = getCogsSnapshotVendorIdentity(cogsEntry);
+    const cogsVendorName = cogsEntry?.vendor_name?.trim() ?? '';
+    const accountVendorName = vendorAccount?.vendor_name?.trim() ?? '';
+    const journalVendorName = [
+      cogsVendorName && cogsVendorName.toLowerCase() !== 'in-house' ? cogsVendorName : '',
+      accountVendorName && accountVendorName.toLowerCase() !== 'in-house' ? accountVendorName : '',
+      snapshotVendor.vendorName,
+    ].find(Boolean) ?? '';
+
+    const vendorId =
+      payment.vendor_id?.trim() ||
+      cogsEntry?.vendor_id?.trim() ||
+      vendorAccount?.vendor_id?.trim() ||
+      snapshotVendor.vendorId ||
+      vendorIdByNameKey.get(getVendorNameMatchKey(journalVendorName)) ||
+      '';
+
+    if (!vendorId) return;
+
+    const project = payment.project_id ? projectById.get(payment.project_id) : undefined;
+    const description =
+      cogsEntry?.description?.trim() ||
+      payment.notes?.trim() ||
+      'Vendor payment journal entry';
+
+    if (!entriesByVendorId[vendorId]) {
+      entriesByVendorId[vendorId] = [];
+    }
+
+    entriesByVendorId[vendorId].push({
+      id: payment.id,
+      date: payment.payment_date,
+      journalNumber: payment.journal_number?.trim() || 'Journal Entry',
+      projectName:
+        project?.name?.trim() ||
+        project?.client_name?.trim() ||
+        project?.clientName?.trim() ||
+        'Project not linked',
+      description,
+      paymentType: payment.payment_type,
+      paymentMode: payment.payment_mode?.trim() || 'Mode not set',
+      referenceNumber: payment.reference_number?.trim() || '',
+      notes: payment.notes?.trim() || '',
+      amount: toNumber(payment.amount),
+    });
+  });
+
+  Object.values(entriesByVendorId).forEach(entries => {
+    entries.sort((a, b) => {
+      const dateCompare = (b.date ?? '').localeCompare(a.date ?? '');
+
+      if (dateCompare !== 0) return dateCompare;
+
+      return b.journalNumber.localeCompare(a.journalNumber);
+    });
+  });
+
+  return entriesByVendorId;
 }
 
 function createCategoryOption(value: string): ProcurementCategoryOption {
@@ -268,17 +487,20 @@ function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
 function VendorDetailsPanel({
   vendor,
   assignedProjects,
+  journalEntries,
   onClose,
   onEdit,
   onDelete,
 }: {
   vendor: Vendor | null;
   assignedProjects: VendorAssignedProject[];
+  journalEntries: VendorJournalEntry[];
   onClose: () => void;
   onEdit: (vendor: Vendor) => void;
   onDelete: (vendor: Vendor) => void;
 }) {
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'contact' | 'journal'>('contact');
   const [futureActionMessage, setFutureActionMessage] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
 
@@ -286,6 +508,7 @@ function VendorDetailsPanel({
     if (!vendor) return;
 
     setIsManageOpen(false);
+    setActiveTab('contact');
 
     window.requestAnimationFrame(() => {
       panelRef.current?.scrollIntoView({
@@ -474,146 +697,177 @@ function VendorDetailsPanel({
       </div>
 
       <div className="space-y-5 p-5">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Quick Actions</h3>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-background p-1">
+          {[
+            { id: 'contact' as const, label: 'Contact' },
+            { id: 'journal' as const, label: 'Journal' },
+          ].map(tab => (
+            <button
+              key={tab.id}
               type="button"
-              variant="outline"
-              className="justify-center gap-2"
-              onClick={() => handleFutureAction('Request updated pricing')}
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                activeTab === tab.id
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
             >
-              <RefreshCcw className="h-4 w-4" />
-              Request Pricing
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-center gap-2"
-              onClick={() => handleFutureAction('Assign vendor to project')}
-            >
-              <UsersRound className="h-4 w-4" />
-              Assign Project
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-center gap-2"
-              onClick={() => handleFutureAction('Log vendor interaction')}
-            >
-              <MessageCircle className="h-4 w-4" />
-              Log Interaction
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-center gap-2"
-              onClick={() => handleFutureAction('Schedule vendor site visit')}
-            >
-              <CalendarPlus className="h-4 w-4" />
-              Site Visit
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-center gap-2"
-              onClick={() => handleFutureAction('Mark vendor pricing as outdated')}
-            >
-              <RefreshCcw className="h-4 w-4" />
-              Pricing Outdated
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-center gap-2"
-              onClick={() => handleFutureAction('Create procurement task')}
-            >
-              <Store className="h-4 w-4" />
-              Procurement Task
-            </Button>
-          </div>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Contact</h3>
+        {activeTab === 'contact' ? (
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Contact</h3>
 
-          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <p className="flex min-w-0 items-center gap-2">
-              <UsersRound className="h-4 w-4 shrink-0" />
-              <span className="truncate">{vendor.contactPerson}</span>
-            </p>
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                <p className="flex min-w-0 items-center gap-2">
+                  <UsersRound className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{vendor.contactPerson}</span>
+                </p>
 
-            <p className="flex min-w-0 items-center gap-2">
-              <Phone className="h-4 w-4 shrink-0" />
-              <span className="truncate">{vendor.phone}</span>
-            </p>
+                <p className="flex min-w-0 items-center gap-2">
+                  <Phone className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{vendor.phone}</span>
+                </p>
 
-            {vendor.email && (
-              <p className="flex min-w-0 items-center gap-2">
-                <Mail className="h-4 w-4 shrink-0" />
-                <span className="break-all">{vendor.email}</span>
+                {vendor.email && (
+                  <p className="flex min-w-0 items-center gap-2">
+                    <Mail className="h-4 w-4 shrink-0" />
+                    <span className="break-all">{vendor.email}</span>
+                  </p>
+                )}
+
+                <p className="flex items-start gap-2">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{vendor.location}</span>
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Scope</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {vendor.scopeOfWork}
               </p>
-            )}
+            </div>
 
-            <p className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{vendor.location}</span>
-            </p>
-          </div>
-        </div>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-xs text-muted-foreground">Assigned Projects</p>
+              <p className="mt-1 text-2xl font-semibold text-foreground">
+                {assignedProjects.length}
+              </p>
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Scope</h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {vendor.scopeOfWork}
-          </p>
-        </div>
+              {assignedProjects.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {assignedProjects.slice(0, 4).map(project => (
+                    <div
+                      key={project.projectId}
+                      className="rounded-lg border border-border bg-card px-3 py-2"
+                    >
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {project.projectName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {[
+                          project.clientName,
+                          `${project.workPackageCount} work package${project.workPackageCount === 1 ? '' : 's'}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' - ')}
+                      </p>
+                    </div>
+                  ))}
 
-        <div className="rounded-xl border border-border bg-background p-4">
-          <p className="text-xs text-muted-foreground">Assigned Projects</p>
-          <p className="mt-1 text-2xl font-semibold text-foreground">
-            {assignedProjects.length}
-          </p>
-
-          {assignedProjects.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {assignedProjects.slice(0, 4).map(project => (
-                <div
-                  key={project.projectId}
-                  className="rounded-lg border border-border bg-card px-3 py-2"
-                >
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {project.projectName}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {[
-                      project.clientName,
-                      `${project.workPackageCount} work package${project.workPackageCount === 1 ? '' : 's'}`,
-                    ]
-                      .filter(Boolean)
-                      .join(' - ')}
-                  </p>
+                  {assignedProjects.length > 4 && (
+                    <p className="text-xs text-muted-foreground">
+                      +{assignedProjects.length - 4} more project{assignedProjects.length - 4 === 1 ? '' : 's'}
+                    </p>
+                  )}
                 </div>
-              ))}
-
-              {assignedProjects.length > 4 && (
-                <p className="text-xs text-muted-foreground">
-                  +{assignedProjects.length - 4} more project{assignedProjects.length - 4 === 1 ? '' : 's'}
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No active Timeline assignments yet.
                 </p>
               )}
             </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">
-              No active Timeline assignments yet.
-            </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Vendor Journal</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Advance, bill, and refund entries recorded from Finance for this vendor.
+              </p>
+            </div>
+
+            {journalEntries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-background p-4">
+                <p className="text-sm font-semibold text-foreground">
+                  No journal entries yet.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Vendor payments recorded from Finance will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {journalEntries.map(entry => (
+                  <div
+                    key={entry.id}
+                    className="rounded-2xl border border-border bg-background p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          {getJournalDateLabel(entry.date)}
+                        </p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                          {entry.journalNumber}
+                        </p>
+                      </div>
+
+                      <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                        {getVendorJournalPaymentTypeLabel(entry.paymentType)}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 text-sm font-medium text-foreground">
+                      {formatINR(entry.amount)}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {entry.description}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {entry.projectName}
+                    </p>
+
+                    <div className="mt-3 grid gap-2 text-[11px] text-muted-foreground">
+                      <p>
+                        <span className="font-semibold text-foreground">Mode:</span>{' '}
+                        {entry.paymentMode}
+                      </p>
+                      {entry.referenceNumber && (
+                        <p>
+                          <span className="font-semibold text-foreground">Reference:</span>{' '}
+                          {entry.referenceNumber}
+                        </p>
+                      )}
+                      {entry.notes && (
+                        <p>
+                          <span className="font-semibold text-foreground">Notes:</span>{' '}
+                          {entry.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -647,6 +901,8 @@ export default function VendorsPage() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [vendorAssignedProjectsByVendorId, setVendorAssignedProjectsByVendorId] =
     useState<Record<string, VendorAssignedProject[]>>({});
+  const [vendorJournalEntriesByVendorId, setVendorJournalEntriesByVendorId] =
+    useState<Record<string, VendorJournalEntry[]>>({});
   const {
     showOperationLoading,
     showOperationSuccess,
@@ -661,11 +917,15 @@ export default function VendorsPage() {
 
       let nextCategories: ProcurementOption[] = [];
       let assignedProjectsByVendorId: Record<string, VendorAssignedProject[]> = {};
+      let journalEntriesByVendorId: Record<string, VendorJournalEntry[]> = {};
 
       const [
         categoriesResult,
         timelinesResult,
         projectsResult,
+        vendorPaymentsResult,
+        vendorAccountsResult,
+        cogsEntriesResult,
       ] = await Promise.allSettled([
         fetchProcurementCategories(),
         supabase
@@ -675,6 +935,17 @@ export default function VendorsPage() {
         supabase
           .from('projects')
           .select('id, name, client_name'),
+        supabase
+          .from('project_vendor_payments')
+          .select('*')
+          .order('payment_date', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('project_vendor_accounts')
+          .select('id, vendor_id, vendor_name'),
+        supabase
+          .from('project_cogs_entries')
+          .select('id, vendor_id, vendor_name, description, category, source_snapshot'),
       ]);
 
       if (categoriesResult.status === 'fulfilled') {
@@ -705,6 +976,33 @@ export default function VendorsPage() {
         setDataError('Vendor assignment counts could not be loaded. Vendors are still shown.');
       }
 
+      if (
+        vendorPaymentsResult.status === 'fulfilled' &&
+        vendorAccountsResult.status === 'fulfilled' &&
+        cogsEntriesResult.status === 'fulfilled' &&
+        projectsResult.status === 'fulfilled'
+      ) {
+        if (vendorPaymentsResult.value.error) {
+          setDataError(vendorPaymentsResult.value.error.message);
+        } else if (vendorAccountsResult.value.error) {
+          setDataError(vendorAccountsResult.value.error.message);
+        } else if (cogsEntriesResult.value.error) {
+          setDataError(cogsEntriesResult.value.error.message);
+        } else if (projectsResult.value.error) {
+          setDataError(projectsResult.value.error.message);
+        } else {
+          journalEntriesByVendorId = buildVendorJournalEntriesMap({
+            paymentRows: (vendorPaymentsResult.value.data ?? []) as VendorPaymentJournalRow[],
+            accountRows: (vendorAccountsResult.value.data ?? []) as VendorAccountJournalRow[],
+            cogsRows: (cogsEntriesResult.value.data ?? []) as VendorCogsJournalRow[],
+            projectRows: (projectsResult.value.data ?? []) as VendorProjectRow[],
+            vendorRows: nextVendors,
+          });
+        }
+      } else {
+        setDataError('Vendor journal entries could not be loaded. Vendors are still shown.');
+      }
+
       const vendorsWithAssignmentCounts = nextVendors.map(vendor => ({
         ...vendor,
         assignedProjectCount: assignedProjectsByVendorId[vendor.id]?.length ?? 0,
@@ -712,6 +1010,7 @@ export default function VendorsPage() {
 
       setVendors(vendorsWithAssignmentCounts);
       setVendorAssignedProjectsByVendorId(assignedProjectsByVendorId);
+      setVendorJournalEntriesByVendorId(journalEntriesByVendorId);
       setSelectedVendor(currentVendor =>
         currentVendor
           ? vendorsWithAssignmentCounts.find(vendor => vendor.id === currentVendor.id) ?? null
@@ -732,6 +1031,7 @@ export default function VendorsPage() {
       setDataError(message);
       setVendors([]);
       setVendorAssignedProjectsByVendorId({});
+      setVendorJournalEntriesByVendorId({});
       setSelectedVendor(null);
       setCategoryOptions(getStoredCategoryOptions());
     } finally {
@@ -1040,6 +1340,11 @@ export default function VendorsPage() {
             assignedProjects={
               selectedVendor
                 ? vendorAssignedProjectsByVendorId[selectedVendor.id] ?? []
+                : []
+            }
+            journalEntries={
+              selectedVendor
+                ? vendorJournalEntriesByVendorId[selectedVendor.id] ?? []
                 : []
             }
             onClose={() => setSelectedVendor(null)}
