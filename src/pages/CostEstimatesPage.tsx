@@ -95,8 +95,6 @@ function toSafeString(value: unknown) {
 function createEstimateRequirementDescription({
   areaName,
   itemName,
-  quantity,
-  unitLabel,
   notes,
 }: {
   areaName: string;

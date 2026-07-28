@@ -516,13 +516,9 @@ function calculateSellingRate(purchaseRate: number, markupPercent: number) {
 function createDefaultDescription({
   areaName,
   itemName,
-  quantity,
-  unitLabel,
 }: {
   areaName: string;
   itemName: string;
-  quantity: number;
-  unitLabel: string;
 }) {
   const safeAreaName = areaName || 'selected area';
   const safeItemName = itemName || 'custom work item';
@@ -714,8 +710,6 @@ export function CostEstimateSection({
   const previewDescription = createDefaultDescription({
     areaName: selectedAreaName,
     itemName: newLineItemName,
-    quantity: Number(newLineItemQuantity) || 0,
-    unitLabel: getCostEstimateUnitDisplayLabel(units, newLineItemUnit),
   });
   const newPresetCategorySearchValue = newPresetCategoryQuery
     .trim()
@@ -1526,8 +1520,6 @@ export function CostEstimateSection({
     createDefaultDescription({
       areaName: getAreaName(areas, lineItem.areaId),
       itemName: lineItem.name,
-      quantity: Number(lineItem.quantity) || 0,
-      unitLabel: getCostEstimateUnitDisplayLabel(units, lineItem.unitLabel),
     });
 
   const applySavedRowItemPreset = (
