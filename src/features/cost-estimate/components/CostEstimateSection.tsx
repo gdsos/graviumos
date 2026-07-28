@@ -622,13 +622,13 @@ export function CostEstimateSection({
     useState<string | null>(null);
   const [newLineItemName, setNewLineItemName] = useState('');
   const [newLineItemDescription, setNewLineItemDescription] = useState('');
-  const [newLineItemQuantity, setNewLineItemQuantity] = useState('1');
-  const [newLineItemUnit, setNewLineItemUnit] = useState('sqft');
+  const [newLineItemQuantity, setNewLineItemQuantity] = useState('');
+  const [newLineItemUnit, setNewLineItemUnit] = useState('');
   const [newLineItemUnitQuery, setNewLineItemUnitQuery] = useState('');
   const [isNewLineItemUnitOpen, setIsNewLineItemUnitOpen] = useState(false);
   const [savedRowUnitDropdownId, setSavedRowUnitDropdownId] = useState<string | null>(null);
   const [savedRowUnitQuery, setSavedRowUnitQuery] = useState('');
-  const [newLineItemRate, setNewLineItemRate] = useState('500');
+  const [newLineItemRate, setNewLineItemRate] = useState('');
   const [newLineItemRemarks, setNewLineItemRemarks] = useState('');
 
   const numericServiceChargePercent =
@@ -1045,9 +1045,9 @@ export function CostEstimateSection({
     setActiveLineItemAreaId(initialPrimaryAreaId);
     setNewLineItemName('');
     setNewLineItemDescription('');
-    setNewLineItemQuantity('1');
-    setNewLineItemUnit('sqft');
-    setNewLineItemRate('500');
+    setNewLineItemQuantity('');
+    setNewLineItemUnit('');
+    setNewLineItemRate('');
     setNewLineItemRemarks('');
     setEditingLineItemIds(new Set());
     setDraftLineItemIds(new Set());
@@ -1315,11 +1315,11 @@ export function CostEstimateSection({
   const handleClearNewLineItem = () => {
     setNewLineItemName('');
     setNewLineItemDescription('');
-    setNewLineItemQuantity('1');
-    setNewLineItemUnit('sqft');
+    setNewLineItemQuantity('');
+    setNewLineItemUnit('');
     setNewLineItemUnitQuery('');
     setIsNewLineItemUnitOpen(false);
-    setNewLineItemRate('500');
+    setNewLineItemRate('');
     setNewLineItemRemarks('');
     setIsItemSuggestionOpen(false);
   };
@@ -1449,8 +1449,8 @@ export function CostEstimateSection({
     ]);
     setNewLineItemName('');
     setNewLineItemDescription('');
-    setNewLineItemQuantity('1');
-    setNewLineItemRate('500');
+    setNewLineItemQuantity('');
+    setNewLineItemRate('');
     setNewLineItemRemarks('');
     markEstimateDirty();
   };
@@ -1884,7 +1884,8 @@ export function CostEstimateSection({
               Service %
             </span>
             <input
-              type="number"
+              type="text"
+                      inputMode="decimal"
               min="10"
               max="20"
               value={serviceChargePercent}
@@ -1904,7 +1905,8 @@ export function CostEstimateSection({
               Misc %
             </span>
             <input
-              type="number"
+              type="text"
+                      inputMode="decimal"
               min="10"
               max="15"
               value={miscChargePercent}
@@ -2563,19 +2565,33 @@ export function CostEstimateSection({
                       )}
                     </div>
 
-                    <input
-                      type="number"
-                      min="0"
-                      value={newLineItemQuantity}
-                      onChange={event => {
-                        setNewLineItemQuantity(event.target.value);
-                        markEstimateDirty();
-                      }}
-                      placeholder="Qty"
-                      className="h-10 w-full min-w-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                    />
+                    <div className="grid gap-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Qty
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={newLineItemQuantity ?? ''}
+                        onChange={event => {
+                          const value = event.target.value;
 
-                    <div className="relative min-w-0 self-center">
+                          if (/^\d*\.?\d*$/.test(value)) {
+                            setNewLineItemQuantity(value);
+                            markEstimateDirty();
+                          }
+                        }}
+                        placeholder="Qty"
+                        className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+                    </div>
+
+                    <div className="grid gap-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Unit
+                      </label>
+                      <div className="relative min-w-0">
                       <input
                         value={
                           isNewLineItemUnitOpen
@@ -2676,19 +2692,30 @@ export function CostEstimateSection({
                           </div>
                         </div>
                       )}
+                      </div>
                     </div>
 
-                    <input
-                      type="number"
-                      min="0"
-                      value={newLineItemRate}
-                      onChange={event => {
-                        setNewLineItemRate(event.target.value);
-                        markEstimateDirty();
-                      }}
-                      placeholder="Rate/unit"
-                      className="h-10 w-full min-w-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
-                    />
+                    <div className="grid gap-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Rate
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={newLineItemRate ?? ''}
+                        onChange={event => {
+                          const value = event.target.value;
+
+                          if (/^\d*\.?\d*$/.test(value)) {
+                            setNewLineItemRate(value);
+                            markEstimateDirty();
+                          }
+                        }}
+                        placeholder="Rate"
+                        className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+                    </div>
 
                     <div className="col-span-3 flex min-w-0 items-center justify-between gap-2 self-center xl:col-span-1 xl:flex-col xl:items-stretch">
                       <div className="min-w-0 flex-1 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground xl:w-full">
@@ -2849,16 +2876,20 @@ export function CostEstimateSection({
                         </div>
 
                         <input
-                          type="number"
-                          min="0"
-                          value={lineItem.quantity}
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.quantity === 0 ? "" : String(lineItem.quantity)}
                           disabled={!isLineItemEditing}
-                          onChange={event =>
-                            handleUpdateLineItem(lineItem.id, {
-                              quantity: Number(event.target.value),
-                            })
-                          }
-                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^\d*\.?\d*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                quantity: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Qty"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
                         />
 
                         <div className="relative self-center">
@@ -2948,16 +2979,20 @@ export function CostEstimateSection({
                         </div>
 
                         <input
-                          type="number"
-                          min="0"
-                          value={lineItem.ratePerUnit}
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.ratePerUnit === 0 ? "" : String(lineItem.ratePerUnit)}
                           disabled={!isLineItemEditing}
-                          onChange={event =>
-                            handleUpdateLineItem(lineItem.id, {
-                              ratePerUnit: Number(event.target.value),
-                            })
-                          }
-                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^\d*\.?\d*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                ratePerUnit: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Rate"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
                         />
 
                         <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
