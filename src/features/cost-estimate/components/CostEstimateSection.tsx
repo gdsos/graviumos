@@ -480,6 +480,13 @@ interface CostEstimateConfirmDialog {
 
 type LineItemIdSet = Set<string>;
 
+interface EditingNumericValues {
+  quantity: string;
+  ratePerUnit: string;
+}
+
+type EditingNumericValuesByLineItemId = Record<string, EditingNumericValues>;
+
 interface CostEstimateSectionProps {
   initialAreas?: CostEstimateArea[];
   initialLineItems?: CostEstimateLineItem[];
@@ -615,6 +622,8 @@ export function CostEstimateSection({
   const [editingLineItemIds, setEditingLineItemIds] = useState<LineItemIdSet>(
     () => new Set()
   );
+  const [editingNumericValues, setEditingNumericValues] =
+    useState<EditingNumericValuesByLineItemId>({});
   const [draftLineItemIds, setDraftLineItemIds] = useState<LineItemIdSet>(
     () => new Set()
   );
@@ -928,6 +937,13 @@ export function CostEstimateSection({
       : itemPresets;
   };
 
+  const getEditingNumericValues = (lineItem: CostEstimateLineItem) =>
+    editingNumericValues[lineItem.id] ?? {
+      quantity: lineItem.quantity === 0 ? '' : String(lineItem.quantity),
+      ratePerUnit:
+        lineItem.ratePerUnit === 0 ? '' : String(lineItem.ratePerUnit),
+    };
+
   useEffect(() => {
     if (!isSaveMenuOpen && !isBottomSaveMenuOpen) return;
 
@@ -1050,6 +1066,7 @@ export function CostEstimateSection({
     setNewLineItemRate('');
     setNewLineItemRemarks('');
     setEditingLineItemIds(new Set());
+    setEditingNumericValues({});
     setDraftLineItemIds(new Set());
     setSavedRowItemSuggestionId(null);
   };
@@ -1241,6 +1258,21 @@ export function CostEstimateSection({
     setLineItems(current =>
       current.filter(lineItem => lineItem.areaId !== areaId)
     );
+    setEditingNumericValues(current => {
+      const remainingValues: EditingNumericValuesByLineItemId = {};
+
+      lineItems
+        .filter(lineItem => lineItem.areaId !== areaId)
+        .forEach(lineItem => {
+          const values = current[lineItem.id];
+
+          if (values) {
+            remainingValues[lineItem.id] = values;
+          }
+        });
+
+      return remainingValues;
+    });
     setNewLineItemAreaId(current => (current === areaId ? fallbackAreaId : current));
     setActiveLineItemAreaId(current =>
       current === areaId ? fallbackAreaId : current
@@ -1289,6 +1321,10 @@ export function CostEstimateSection({
       },
     ]);
     setEditingLineItemIds(current => new Set(current).add(newLineItemId));
+    setEditingNumericValues(current => ({
+      ...current,
+      [newLineItemId]: { quantity: '', ratePerUnit: '' },
+    }));
     setDraftLineItemIds(current => new Set(current).add(newLineItemId));
     setNewLineItemAreaId(areaId);
     setActiveLineItemAreaId('');
@@ -1540,11 +1576,42 @@ export function CostEstimateSection({
         itemDescription: preset.defaultDescription,
       }),
     });
+    setEditingNumericValues(current => ({
+      ...current,
+      [lineItemId]: {
+        quantity:
+          current[lineItemId]?.quantity ??
+          (lineItem?.quantity === 0 ? '' : String(lineItem?.quantity ?? 0)),
+        ratePerUnit: String(preset.sellingRatePerUnit),
+      },
+    }));
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleAddSavedRowCustomItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+    const name = lineItem?.name.trim();
+
+    if (!name) return;
+
+    handleUpdateLineItem(lineItemId, { name });
     setSavedRowItemSuggestionId(null);
   };
 
   const handleEditLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
     setEditingLineItemIds(current => new Set(current).add(lineItemId));
+    setEditingNumericValues(current => ({
+      ...current,
+      [lineItemId]: {
+        quantity: lineItem.quantity === 0 ? '' : String(lineItem.quantity),
+        ratePerUnit:
+          lineItem.ratePerUnit === 0 ? '' : String(lineItem.ratePerUnit),
+      },
+    }));
   };
 
   const handleSaveLineItem = (lineItemId: string) => {
@@ -1552,11 +1619,22 @@ export function CostEstimateSection({
 
     if (!lineItem) return;
 
+    const numericValues = getEditingNumericValues(lineItem);
     const trimmedName = lineItem.name.trim();
-    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
-    const ratePerUnit = Math.max(0, Number(lineItem.ratePerUnit) || 0);
+    const quantity = Number(numericValues.quantity);
+    const ratePerUnit = Number(numericValues.ratePerUnit);
 
-    if (!trimmedName || quantity <= 0) return;
+    if (
+      !trimmedName ||
+      !numericValues.quantity.trim() ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      !numericValues.ratePerUnit.trim() ||
+      !Number.isFinite(ratePerUnit) ||
+      ratePerUnit < 0
+    ) {
+      return;
+    }
 
     handleUpdateLineItem(lineItemId, {
       name: trimmedName,
@@ -1577,6 +1655,10 @@ export function CostEstimateSection({
       next.delete(lineItemId);
       return next;
     });
+    setEditingNumericValues(current => {
+      const { [lineItemId]: _discardedValues, ...remainingValues } = current;
+      return remainingValues;
+    });
     setSavedRowItemSuggestionId(null);
     setSavedRowUnitDropdownId(null);
   };
@@ -1594,6 +1676,10 @@ export function CostEstimateSection({
       const next = new Set(current);
       next.delete(lineItemId);
       return next;
+    });
+    setEditingNumericValues(current => {
+      const { [lineItemId]: _discardedValues, ...remainingValues } = current;
+      return remainingValues;
     });
     setSavedRowItemSuggestionId(current =>
       current === lineItemId ? null : current
@@ -2220,14 +2306,17 @@ export function CostEstimateSection({
                                 </p>
                               )}
 
-                              <button
-                                type="button"
-                                onMouseDown={event => event.preventDefault()}
-                                onClick={handleOpenNewItemPresetForm}
-                                className="mt-1 w-full rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted"
-                              >
-                                + Add New Item
-                              </button>
+                              {newLineItemName.trim() &&
+                                matchingItemPresets.length === 0 && (
+                                  <button
+                                    type="button"
+                                    onMouseDown={event => event.preventDefault()}
+                                    onClick={handleOpenNewItemPresetForm}
+                                    className="mt-1 w-full rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                                  >
+                                    Add &quot;{newLineItemName.trim()}&quot; as new Item
+                                  </button>
+                                )}
                             </div>
                           </div>
                         )}
@@ -2441,7 +2530,7 @@ export function CostEstimateSection({
                                           }
                                           className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
                                         >
-                                          Add Unit: {newPresetUnitQuery.trim()}
+                                          Add &quot;{newPresetUnitQuery.trim()}&quot; as new Unit
                                         </button>
                                       )}
 
@@ -2648,7 +2737,7 @@ export function CostEstimateSection({
                               }
                               className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
                             >
-                              Add Unit: {newLineItemUnitQuery.trim()}
+                              Add &quot;{newLineItemUnitQuery.trim()}&quot; as new Unit
                             </button>
                           )}
 
@@ -2752,9 +2841,15 @@ export function CostEstimateSection({
                       getMatchingSavedRowItemPresets(lineItem);
                     const rowPreviewDescription =
                       getLineItemPreviewDescription(lineItem);
+                    const numericValues = getEditingNumericValues(lineItem);
                     const canSaveLineItem =
                       lineItem.name.trim().length > 0 &&
-                      Number(lineItem.quantity) > 0;
+                      numericValues.quantity.trim().length > 0 &&
+                      Number.isFinite(Number(numericValues.quantity)) &&
+                      Number(numericValues.quantity) > 0 &&
+                      numericValues.ratePerUnit.trim().length > 0 &&
+                      Number.isFinite(Number(numericValues.ratePerUnit)) &&
+                      Number(numericValues.ratePerUnit) >= 0;
 
                     return (
                       <div
@@ -2823,6 +2918,25 @@ export function CostEstimateSection({
                                           No matching preset. Keep typing to use a custom item.
                                         </p>
                                       )}
+
+                                      {lineItem.name.trim() &&
+                                        matchingSavedRowItemPresets.length ===
+                                          0 && (
+                                          <button
+                                            type="button"
+                                            onMouseDown={event =>
+                                              event.preventDefault()
+                                            }
+                                            onClick={() =>
+                                              handleAddSavedRowCustomItem(
+                                                lineItem.id
+                                              )
+                                            }
+                                            className="w-full rounded-lg border-t border-border px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                                          >
+                                            Add &quot;{lineItem.name.trim()}&quot; as new Item
+                                          </button>
+                                        )}
                                     </div>
                                   </div>
                                 )}
@@ -2878,16 +2992,17 @@ export function CostEstimateSection({
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={lineItem.quantity === 0 ? "" : String(lineItem.quantity)}
+                          value={numericValues.quantity}
                           disabled={!isLineItemEditing}
-                          onChange={event => {
-                            const value = event.target.value;
-                            if (/^\d*\.?\d*$/.test(value)) {
-                              handleUpdateLineItem(lineItem.id, {
-                                quantity: value === "" ? 0 : Number(value),
-                              });
-                            }
-                          }}
+                          onChange={event =>
+                            setEditingNumericValues(current => ({
+                              ...current,
+                              [lineItem.id]: {
+                                ...(current[lineItem.id] ?? numericValues),
+                                quantity: event.target.value,
+                              },
+                            }))
+                          }
                           placeholder="Qty"
                           className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
                         />
@@ -2964,7 +3079,7 @@ export function CostEstimateSection({
                                     }
                                     className="block w-full border-t border-border px-3 py-2 text-left text-sm transition hover:bg-muted"
                                   >
-                                    Add Unit: {savedRowUnitQuery.trim()}
+                                    Add &quot;{savedRowUnitQuery.trim()}&quot; as new Unit
                                   </button>
                                 )}
 
@@ -2981,16 +3096,17 @@ export function CostEstimateSection({
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={lineItem.ratePerUnit === 0 ? "" : String(lineItem.ratePerUnit)}
+                          value={numericValues.ratePerUnit}
                           disabled={!isLineItemEditing}
-                          onChange={event => {
-                            const value = event.target.value;
-                            if (/^\d*\.?\d*$/.test(value)) {
-                              handleUpdateLineItem(lineItem.id, {
-                                ratePerUnit: value === "" ? 0 : Number(value),
-                              });
-                            }
-                          }}
+                          onChange={event =>
+                            setEditingNumericValues(current => ({
+                              ...current,
+                              [lineItem.id]: {
+                                ...(current[lineItem.id] ?? numericValues),
+                                ratePerUnit: event.target.value,
+                              },
+                            }))
+                          }
                           placeholder="Rate"
                           className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
                         />

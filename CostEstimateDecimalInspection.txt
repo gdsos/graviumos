@@ -1,0 +1,1439 @@
+================================================================================
+const handleUpdateLineItem
+================================================================================
+
+      shortLabel: trimmedUnit,
+      isCustom: true,
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
+      return nextUnits;
+    });
+
+    handleUpdateLineItem(lineItemId, { unitLabel: newUnit.shortLabel });
+    setSavedRowUnitQuery('');
+    setSavedRowUnitDropdownId(null);
+  };
+
+  const handleUpdateLineItem = (
+    lineItemId: string,
+    updates: Partial<CostEstimateLineItem>
+  ) => {
+    setLineItems(current =>
+      current.map(lineItem =>
+        lineItem.id === lineItemId ? { ...lineItem, ...updates } : lineItem
+      )
+    );
+    markEstimateDirty();
+  };
+
+  const getLineItemPreviewDescription = (lineItem: CostEstimateLineItem) =>
+    createDefaultDescription({
+      areaName: getAreaName(areas, lineItem.areaId),
+      itemName: lineItem.name,
+    });
+
+  const applySavedRowItemPreset = (
+    lineItemId: string,
+
+================================================================================
+quantity:
+================================================================================
+
+      tone: 'destructive',
+      onConfirm: () => executeDeleteArea(areaId),
+    });
+  };
+
+  const handleStartAreaLineItem = (areaId: string) => {
+    const newLineItemId = createId('estimate-line');
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: newLineItemId,
+        areaId,
+        name: '',
+        description: '',
+        quantity: 0,
+        unitLabel: 'sqft',
+        ratePerUnit: 0,
+        remarks: undefined,
+      },
+    ]);
+    setEditingLineItemIds(current => new Set(current).add(newLineItemId));
+    setDraftLineItemIds(current => new Set(current).add(newLineItemId));
+    setNewLineItemAreaId(areaId);
+    setActiveLineItemAreaId('');
+  };
+
+  const applyItemPreset = (preset: CostEstimateItemPreset) => {
+    setNewLineItemName(preset.name);
+    setNewLineItemUnit(preset.defaultUnitLabel);
+    setNewLineItemRate(String(preset.sellingRatePerUnit));
+    setNewLineItemDescription(
+      createEstimateLineItemDescription({
+        areaName: selectedAreaName,
+        itemDescription: preset.defaultDescription,
+
+
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.quantity === 0 ? "" : String(lineItem.quantity)}
+                          disabled={!isLineItemEditing}
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                quantity: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Qty"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="relative self-center">
+                          <input
+                            value={
+                              savedRowUnitDropdownId === lineItem.id
+                                ? savedRowUnitQuery
+                                : lineItem.unitLabel
+                            }
+                            disabled={!isLineItemEditing}
+                            onFocus={() => {
+                              if (!isLineItemEditing) return;
+
+                              setSavedRowUnitDropdownId(lineItem.id);
+
+================================================================================
+ratePerUnit:
+================================================================================
+
+    });
+  };
+
+  const handleStartAreaLineItem = (areaId: string) => {
+    const newLineItemId = createId('estimate-line');
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: newLineItemId,
+        areaId,
+        name: '',
+        description: '',
+        quantity: 0,
+        unitLabel: 'sqft',
+        ratePerUnit: 0,
+        remarks: undefined,
+      },
+    ]);
+    setEditingLineItemIds(current => new Set(current).add(newLineItemId));
+    setDraftLineItemIds(current => new Set(current).add(newLineItemId));
+    setNewLineItemAreaId(areaId);
+    setActiveLineItemAreaId('');
+  };
+
+  const applyItemPreset = (preset: CostEstimateItemPreset) => {
+    setNewLineItemName(preset.name);
+    setNewLineItemUnit(preset.defaultUnitLabel);
+    setNewLineItemRate(String(preset.sellingRatePerUnit));
+    setNewLineItemDescription(
+      createEstimateLineItemDescription({
+        areaName: selectedAreaName,
+        itemDescription: preset.defaultDescription,
+      })
+    );
+
+
+      itemName: lineItem.name,
+    });
+
+  const applySavedRowItemPreset = (
+    lineItemId: string,
+    preset: CostEstimateItemPreset
+  ) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+    const areaName = lineItem
+      ? getAreaName(areas, lineItem.areaId)
+      : 'selected area';
+
+    handleUpdateLineItem(lineItemId, {
+      name: preset.name,
+      unitLabel: preset.defaultUnitLabel,
+      ratePerUnit: preset.sellingRatePerUnit,
+      description: createEstimateLineItemDescription({
+        areaName,
+        itemDescription: preset.defaultDescription,
+      }),
+    });
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleEditLineItem = (lineItemId: string) => {
+    setEditingLineItemIds(current => new Set(current).add(lineItemId));
+  };
+
+  const handleSaveLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
+    const trimmedName = lineItem.name.trim();
+    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
+
+
+                                    </p>
+                                  )}
+                              </div>
+                            )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.ratePerUnit === 0 ? "" : String(lineItem.ratePerUnit)}
+                          disabled={!isLineItemEditing}
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                ratePerUnit: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Rate"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">
+                              {isDraftLineItem
+                                ? 'Not saved'
+                                : formatINR(calculateLineItemTotal(lineItem))}
+                            </p>
+                            {isDraftLineItem && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                Save row to include in totals.
+                              </p>
+                            )}
+
+================================================================================
+calculateLineItemTotal
+================================================================================
+
+  fetchProcurementItems,
+  fetchProcurementUnits,
+  mapItemRecordToProcurementItem,
+  mapProcurementItemToUpsertPayload,
+  type ProcurementOption,
+} from '@/lib/procurementMasters';
+
+import type { ProcurementItem } from '@/features/items/types';
+import { vendorCategoryLabels } from '@/features/vendors/data';
+
+import {
+  DEFAULT_GST_PERCENT,
+  DEFAULT_MISC_CHARGE_PERCENT,
+  DEFAULT_SERVICE_CHARGE_PERCENT,
+  calculateCostEstimateSummary,
+  calculateLineItemTotal,
+  formatEstimateDifferenceLabel,
+} from '../calculator';
+import {
+  defaultCostEstimateUnits,
+  demoCostEstimateAreas,
+} from '../data';
+
+import type {
+  CostEstimateArea,
+  CostEstimateItemPreset,
+  CostEstimateLineItem,
+  CostEstimateProject,
+  CostEstimateStatus,
+  CostEstimateUnit,
+} from '../types';
+import { exportCostEstimatePdf } from '../export';
+
+function formatINR(amount: number) {
+  return new Intl.NumberFormat('en-IN', {
+
+
+  const approvalButtonLabel =
+    status === 'approved'
+      ? 'Approved'
+      : !hasSavedEstimate
+        ? 'Save Draft First'
+        : isRevisionDraft
+          ? 'Approve Revision'
+          : 'Approve Estimate';
+
+  const groupedAreas = areas.map(area => {
+    const areaLineItems = lineItems.filter(lineItem => lineItem.areaId === area.id);
+    const areaTotal = areaLineItems.reduce(
+      (total, lineItem) =>
+        draftLineItemIds.has(lineItem.id)
+          ? total
+          : total + calculateLineItemTotal(lineItem),
+      0
+    );
+
+    return {
+      area,
+      lineItems: areaLineItems,
+      total: areaTotal,
+    };
+  });
+
+  const matchingItemPresets = itemPresets.filter(preset =>
+    preset.name.toLowerCase().includes(newLineItemName.trim().toLowerCase())
+  );
+
+  const getMatchingSavedRowItemPresets = (lineItem: CostEstimateLineItem) => {
+    const searchValue = lineItem.name.trim().toLowerCase();
+
+    return searchValue
+      ? itemPresets.filter(preset =>
+
+
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                ratePerUnit: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Rate"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">
+                              {isDraftLineItem
+                                ? 'Not saved'
+                                : formatINR(calculateLineItemTotal(lineItem))}
+                            </p>
+                            {isDraftLineItem && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                Save row to include in totals.
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            {isLineItemEditing ? (
+                              <button
+                                type="button"
+                                disabled={!canSaveLineItem}
+                                onClick={() => handleSaveLineItem(lineItem.id)}
+                                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                                aria-label="Save estimate line item"
+                                title="Save row"
+                              >
+                                <Check className="h-4 w-4" />
+
+================================================================================
+Number(
+================================================================================
+
+  };
+
+  const getNextBedroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area => /^bedroom\s+\d+$/i.test(area.name.trim()))
+      .length + 1;
+
+  const getNextAttachedBathroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area =>
+      /^attached bathroom\s+\d+$/i.test(area.name.trim())
+    ).length + 1;
+
+  const handleAddBedroomSet = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+      const nextSetNumber = Math.max(
+        getNextBedroomNumber(normalizedAreas),
+        getNextAttachedBathroomNumber(normalizedAreas)
+      );
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bedroom'),
+          name: `Bedroom ${nextSetNumber}`,
+          type: 'bedroom',
+        },
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${nextSetNumber}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+
+
+
+  const getNextBedroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area => /^bedroom\s+\d+$/i.test(area.name.trim()))
+      .length + 1;
+
+  const getNextAttachedBathroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area =>
+      /^attached bathroom\s+\d+$/i.test(area.name.trim())
+    ).length + 1;
+
+  const handleAddBedroomSet = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+      const nextSetNumber = Math.max(
+        getNextBedroomNumber(normalizedAreas),
+        getNextAttachedBathroomNumber(normalizedAreas)
+      );
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bedroom'),
+          name: `Bedroom ${nextSetNumber}`,
+          type: 'bedroom',
+        },
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${nextSetNumber}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddSingleBedroom = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bedroom'),
+          name: `Bedroom ${getNextBedroomNumber(normalizedAreas)}`,
+          type: 'bedroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddSingleBathroom = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${getNextAttachedBathroomNumber(normalizedAreas)}`,
+          type: 'bathroom',
+        },
+
+
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddSingleBathroom = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${getNextAttachedBathroomNumber(normalizedAreas)}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
+    markEstimateDirty();
+  };
+
+  const handleAddCommonBathroom = () => {
+    setAreas(current => {
+      const commonBathroomCount = current.filter(area =>
+        /^common bathroom(\s+\d+)?$/i.test(area.name.trim())
+      ).length;
+
+      return [
+        ...current,
+        {
+          id: createId('estimate-common-bathroom'),
+          name:
+
+
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleOpenNewItemPresetForm = () => {
+    const typedItemName = newLineItemName.trim();
+
+    setNewPresetName(typedItemName);
+    setNewPresetDescription(createItemMasterDefaultDescription(typedItemName));
+
+    setIsNewItemPresetFormOpen(true);
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleAddItemPreset = async () => {
+    const trimmedName = newPresetName.trim();
+    const purchaseRatePerUnit = Math.max(0, Number(newPresetPurchaseRate) || 0);
+    const markupPercent = Math.max(0, Number(newPresetMarkupPercent) || 0);
+    const sellingRatePerUnit = Math.round(
+      purchaseRatePerUnit * (1 + markupPercent / 100)
+    );
+
+    if (!trimmedName) return;
+
+    const selectedAreaName =
+      areas.find(area => area.id === newLineItemAreaId)?.name ?? 'selected area';
+
+    const newPreset: CostEstimateItemPreset = {
+      id: createId('estimate-item'),
+      name: trimmedName,
+      category: newPresetCategory,
+      defaultUnitLabel: newPresetUnit,
+      purchaseRatePerUnit,
+      markupPercent,
+      sellingRatePerUnit,
+      defaultDescription:
+
+
+  };
+
+  const handleOpenNewItemPresetForm = () => {
+    const typedItemName = newLineItemName.trim();
+
+    setNewPresetName(typedItemName);
+    setNewPresetDescription(createItemMasterDefaultDescription(typedItemName));
+
+    setIsNewItemPresetFormOpen(true);
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleAddItemPreset = async () => {
+    const trimmedName = newPresetName.trim();
+    const purchaseRatePerUnit = Math.max(0, Number(newPresetPurchaseRate) || 0);
+    const markupPercent = Math.max(0, Number(newPresetMarkupPercent) || 0);
+    const sellingRatePerUnit = Math.round(
+      purchaseRatePerUnit * (1 + markupPercent / 100)
+    );
+
+    if (!trimmedName) return;
+
+    const selectedAreaName =
+      areas.find(area => area.id === newLineItemAreaId)?.name ?? 'selected area';
+
+    const newPreset: CostEstimateItemPreset = {
+      id: createId('estimate-item'),
+      name: trimmedName,
+      category: newPresetCategory,
+      defaultUnitLabel: newPresetUnit,
+      purchaseRatePerUnit,
+      markupPercent,
+      sellingRatePerUnit,
+      defaultDescription:
+        newPresetDescription.trim() ||
+
+
+      isCustom: true,
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
+      return nextUnits;
+    });
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewUnitName('');
+    setIsNewUnitFormOpen(false);
+  };
+
+  const handleAddLineItem = () => {
+    const trimmedName = newLineItemName.trim();
+    const quantity = Math.max(0, Number(newLineItemQuantity) || 0);
+    const ratePerUnit = Math.max(0, Number(newLineItemRate) || 0);
+
+    if (!trimmedName || !newLineItemAreaId || quantity <= 0) return;
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: createId('estimate-line'),
+        areaId: newLineItemAreaId,
+        name: trimmedName,
+        description: newLineItemDescription.trim() || previewDescription,
+        quantity,
+        unitLabel: newLineItemUnit,
+        ratePerUnit,
+        remarks: newLineItemRemarks.trim() || undefined,
+      },
+    ]);
+    setNewLineItemName('');
+    setNewLineItemDescription('');
+
+
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
+      return nextUnits;
+    });
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewUnitName('');
+    setIsNewUnitFormOpen(false);
+  };
+
+  const handleAddLineItem = () => {
+    const trimmedName = newLineItemName.trim();
+    const quantity = Math.max(0, Number(newLineItemQuantity) || 0);
+    const ratePerUnit = Math.max(0, Number(newLineItemRate) || 0);
+
+    if (!trimmedName || !newLineItemAreaId || quantity <= 0) return;
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: createId('estimate-line'),
+        areaId: newLineItemAreaId,
+        name: trimmedName,
+        description: newLineItemDescription.trim() || previewDescription,
+        quantity,
+        unitLabel: newLineItemUnit,
+        ratePerUnit,
+        remarks: newLineItemRemarks.trim() || undefined,
+      },
+    ]);
+    setNewLineItemName('');
+    setNewLineItemDescription('');
+    setNewLineItemQuantity('');
+
+
+      }),
+    });
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleEditLineItem = (lineItemId: string) => {
+    setEditingLineItemIds(current => new Set(current).add(lineItemId));
+  };
+
+  const handleSaveLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
+    const trimmedName = lineItem.name.trim();
+    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
+    const ratePerUnit = Math.max(0, Number(lineItem.ratePerUnit) || 0);
+
+    if (!trimmedName || quantity <= 0) return;
+
+    handleUpdateLineItem(lineItemId, {
+      name: trimmedName,
+      description:
+        lineItem.description.trim() || getLineItemPreviewDescription(lineItem),
+      quantity,
+      unitLabel: lineItem.unitLabel || 'sqft',
+      ratePerUnit,
+      remarks: lineItem.remarks?.trim() || undefined,
+    });
+    setEditingLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setDraftLineItemIds(current => {
+
+
+    });
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleEditLineItem = (lineItemId: string) => {
+    setEditingLineItemIds(current => new Set(current).add(lineItemId));
+  };
+
+  const handleSaveLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
+    const trimmedName = lineItem.name.trim();
+    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
+    const ratePerUnit = Math.max(0, Number(lineItem.ratePerUnit) || 0);
+
+    if (!trimmedName || quantity <= 0) return;
+
+    handleUpdateLineItem(lineItemId, {
+      name: trimmedName,
+      description:
+        lineItem.description.trim() || getLineItemPreviewDescription(lineItem),
+      quantity,
+      unitLabel: lineItem.unitLabel || 'sqft',
+      ratePerUnit,
+      remarks: lineItem.remarks?.trim() || undefined,
+    });
+    setEditingLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setDraftLineItemIds(current => {
+      const next = new Set(current);
+
+
+
+        <div className="grid grid-cols-3 gap-2 lg:grid-cols-3 lg:gap-3">
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Service %
+            </span>
+            <input
+              type="text"
+                      inputMode="decimal"
+              min="10"
+              max="20"
+              value={serviceChargePercent}
+              onChange={event => {
+                const nextValue = event.target.value;
+
+                setServiceChargePercent(nextValue === '' ? '' : Number(nextValue));
+                markEstimateDirty();
+              }}
+              className="h-9 min-h-0 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition focus:border-foreground lg:mt-2 lg:h-10 lg:px-3"
+            />
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">Allowed: 10-20%</span>
+          </label>
+
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Misc %
+            </span>
+            <input
+              type="text"
+                      inputMode="decimal"
+              min="10"
+              max="15"
+              value={miscChargePercent}
+              onChange={event => {
+                const nextValue = event.target.value;
+
+
+          </label>
+
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Misc %
+            </span>
+            <input
+              type="text"
+                      inputMode="decimal"
+              min="10"
+              max="15"
+              value={miscChargePercent}
+              onChange={event => {
+                const nextValue = event.target.value;
+
+                setMiscChargePercent(nextValue === '' ? '' : Number(nextValue));
+                markEstimateDirty();
+              }}
+              className="h-9 min-h-0 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition focus:border-foreground lg:mt-2 lg:h-10 lg:px-3"
+            />
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">Allowed: 10-15%</span>
+          </label>
+
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Revenue
+            </span>
+            <input
+              type="number"
+              min="0"
+              value={targetProjectRevenue}
+              onChange={event => {
+                const nextValue = event.target.value;
+
+                setTargetProjectRevenue(nextValue === '' ? '' : Number(nextValue));
+
+
+            />
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">Allowed: 10-15%</span>
+          </label>
+
+          <label className="grid gap-1 rounded-xl border border-border bg-background px-2 py-2 lg:block lg:border-0 lg:bg-transparent lg:p-0">
+            <span className="truncate text-[10px] font-medium text-muted-foreground sm:text-xs lg:text-sm lg:text-foreground">
+              Revenue
+            </span>
+            <input
+              type="number"
+              min="0"
+              value={targetProjectRevenue}
+              onChange={event => {
+                const nextValue = event.target.value;
+
+                setTargetProjectRevenue(nextValue === '' ? '' : Number(nextValue));
+                markEstimateDirty();
+              }}
+              className="h-9 min-h-0 w-full rounded-lg border border-border bg-background px-2 text-sm text-foreground outline-none transition focus:border-foreground lg:mt-2 lg:h-10 lg:px-3"
+            />
+            <span className="hidden text-xs text-muted-foreground lg:mt-2 lg:block">
+              Used to validate the estimated grand total against the project value.
+            </span>
+          </label>
+        </div>
+
+        <div
+          className={`rounded-2xl border p-3 sm:p-4 ${
+            summary.isRevenueMatched
+              ? 'border-emerald-500/20 bg-emerald-500/10'
+              : 'border-amber-500/20 bg-amber-500/10'
+          }`}
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+
+
+                                      setNewPresetMarkupPercent(event.target.value)
+                                    }
+                                    placeholder="35"
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                  Calculated Sale Rate
+                                </p>
+                                <p className="mt-1 text-xl font-semibold text-foreground">
+                                  {formatINR(
+                                    calculateSellingRate(
+                                      Number(newPresetPurchaseRate) || 0,
+                                      Number(newPresetMarkupPercent) || 0
+                                    )
+                                  )}
+                                </p>
+                              </div>
+
+                              <label className="grid gap-2">
+                                <span className="text-sm font-medium text-foreground">
+                                  Default Description
+                                </span>
+                                <textarea
+                                  value={newPresetDescription}
+                                  onChange={event =>
+                                    setNewPresetDescription(event.target.value)
+                                  }
+                                  rows={4}
+                                  placeholder="Default estimate description for this item"
+                                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                />
+
+
+                                    }
+                                    placeholder="35"
+                                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                  Calculated Sale Rate
+                                </p>
+                                <p className="mt-1 text-xl font-semibold text-foreground">
+                                  {formatINR(
+                                    calculateSellingRate(
+                                      Number(newPresetPurchaseRate) || 0,
+                                      Number(newPresetMarkupPercent) || 0
+                                    )
+                                  )}
+                                </p>
+                              </div>
+
+                              <label className="grid gap-2">
+                                <span className="text-sm font-medium text-foreground">
+                                  Default Description
+                                </span>
+                                <textarea
+                                  value={newPresetDescription}
+                                  onChange={event =>
+                                    setNewPresetDescription(event.target.value)
+                                  }
+                                  rows={4}
+                                  placeholder="Default estimate description for this item"
+                                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                                />
+                              </label>
+
+
+                          if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                            setNewLineItemRate(value);
+                            markEstimateDirty();
+                          }
+                        }}
+                        placeholder="Rate"
+                        className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+                    </div>
+
+                    <div className="col-span-3 flex min-w-0 items-center justify-between gap-2 self-center xl:col-span-1 xl:flex-col xl:items-stretch">
+                      <div className="min-w-0 flex-1 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground xl:w-full">
+                        Amount:{' '}
+                        <span className="font-semibold text-foreground">
+                          {formatINR(
+                            (Number(newLineItemQuantity) || 0) *
+                              (Number(newLineItemRate) || 0)
+                          )}
+                        </span>
+                      </div>
+
+                      <Button
+                        type="button"
+                        onClick={handleAddLineItem}
+                        disabled={!newLineItemName.trim() || !newLineItemAreaId}
+                        className="h-10 w-11 shrink-0 justify-center px-0 sm:w-auto sm:gap-2 sm:px-3"
+                        aria-label="Save row"
+                      >
+                        <Check className="h-4 w-4" />
+                        <span className="hidden sm:inline">Save Row</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+                            setNewLineItemRate(value);
+                            markEstimateDirty();
+                          }
+                        }}
+                        placeholder="Rate"
+                        className="min-h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground"
+                      />
+                    </div>
+
+                    <div className="col-span-3 flex min-w-0 items-center justify-between gap-2 self-center xl:col-span-1 xl:flex-col xl:items-stretch">
+                      <div className="min-w-0 flex-1 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground xl:w-full">
+                        Amount:{' '}
+                        <span className="font-semibold text-foreground">
+                          {formatINR(
+                            (Number(newLineItemQuantity) || 0) *
+                              (Number(newLineItemRate) || 0)
+                          )}
+                        </span>
+                      </div>
+
+                      <Button
+                        type="button"
+                        onClick={handleAddLineItem}
+                        disabled={!newLineItemName.trim() || !newLineItemAreaId}
+                        className="h-10 w-11 shrink-0 justify-center px-0 sm:w-auto sm:gap-2 sm:px-3"
+                        aria-label="Save row"
+                      >
+                        <Check className="h-4 w-4" />
+                        <span className="hidden sm:inline">Save Row</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+
+                  </div>
+                </div>
+              )}
+
+              {group.lineItems.length > 0 ? (
+                <div className="grid gap-3 p-3 sm:p-4">
+                  {group.lineItems.map(lineItem => {
+                    const isLineItemEditing = editingLineItemIds.has(lineItem.id);
+                    const isDraftLineItem = draftLineItemIds.has(lineItem.id);
+                    const matchingSavedRowItemPresets =
+                      getMatchingSavedRowItemPresets(lineItem);
+                    const rowPreviewDescription =
+                      getLineItemPreviewDescription(lineItem);
+                    const canSaveLineItem =
+                      lineItem.name.trim().length > 0 &&
+                      Number(lineItem.quantity) > 0;
+
+                    return (
+                      <div
+                        key={lineItem.id}
+                        className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-card p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_120px_160px_160px_auto] xl:items-center xl:gap-4 2xl:gap-5"
+                      >
+                        <div className="col-span-3 grid min-w-0 gap-2 xl:col-span-1">
+                          {isLineItemEditing ? (
+                            <>
+                              <div className="relative">
+                                <input
+                                  value={lineItem.name}
+                                  onFocus={() =>
+                                    setSavedRowItemSuggestionId(lineItem.id)
+                                  }
+                                  onBlur={() => {
+                                    window.setTimeout(() => {
+                                      setSavedRowItemSuggestionId(current =>
+                                        current === lineItem.id ? null : current
+
+
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.quantity === 0 ? "" : String(lineItem.quantity)}
+                          disabled={!isLineItemEditing}
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                quantity: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Qty"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="relative self-center">
+                          <input
+                            value={
+                              savedRowUnitDropdownId === lineItem.id
+                                ? savedRowUnitQuery
+                                : lineItem.unitLabel
+                            }
+                            disabled={!isLineItemEditing}
+                            onFocus={() => {
+                              if (!isLineItemEditing) return;
+
+                              setSavedRowUnitDropdownId(lineItem.id);
+
+
+                                    </p>
+                                  )}
+                              </div>
+                            )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.ratePerUnit === 0 ? "" : String(lineItem.ratePerUnit)}
+                          disabled={!isLineItemEditing}
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                ratePerUnit: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Rate"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">
+                              {isDraftLineItem
+                                ? 'Not saved'
+                                : formatINR(calculateLineItemTotal(lineItem))}
+                            </p>
+                            {isDraftLineItem && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                Save row to include in totals.
+                              </p>
+                            )}
+
+================================================================================
+parseFloat(
+================================================================================
+NOT FOUND
+
+================================================================================
+parseInt(
+================================================================================
+NOT FOUND
+
+================================================================================
+Math.max(
+================================================================================
+
+    });
+  };
+
+  const getNextBedroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area => /^bedroom\s+\d+$/i.test(area.name.trim()))
+      .length + 1;
+
+  const getNextAttachedBathroomNumber = (currentAreas: CostEstimateArea[]) =>
+    currentAreas.filter(area =>
+      /^attached bathroom\s+\d+$/i.test(area.name.trim())
+    ).length + 1;
+
+  const handleAddBedroomSet = () => {
+    setAreas(current => {
+      const normalizedAreas = normalizeBedroomBathroomMasters(current);
+      const nextSetNumber = Math.max(
+        getNextBedroomNumber(normalizedAreas),
+        getNextAttachedBathroomNumber(normalizedAreas)
+      );
+
+      return [
+        ...normalizedAreas,
+        {
+          id: createId('estimate-bedroom'),
+          name: `Bedroom ${nextSetNumber}`,
+          type: 'bedroom',
+        },
+        {
+          id: createId('estimate-bathroom'),
+          name: `Attached Bathroom ${nextSetNumber}`,
+          type: 'bathroom',
+        },
+      ];
+    });
+
+
+
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleOpenNewItemPresetForm = () => {
+    const typedItemName = newLineItemName.trim();
+
+    setNewPresetName(typedItemName);
+    setNewPresetDescription(createItemMasterDefaultDescription(typedItemName));
+
+    setIsNewItemPresetFormOpen(true);
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleAddItemPreset = async () => {
+    const trimmedName = newPresetName.trim();
+    const purchaseRatePerUnit = Math.max(0, Number(newPresetPurchaseRate) || 0);
+    const markupPercent = Math.max(0, Number(newPresetMarkupPercent) || 0);
+    const sellingRatePerUnit = Math.round(
+      purchaseRatePerUnit * (1 + markupPercent / 100)
+    );
+
+    if (!trimmedName) return;
+
+    const selectedAreaName =
+      areas.find(area => area.id === newLineItemAreaId)?.name ?? 'selected area';
+
+    const newPreset: CostEstimateItemPreset = {
+      id: createId('estimate-item'),
+      name: trimmedName,
+      category: newPresetCategory,
+      defaultUnitLabel: newPresetUnit,
+      purchaseRatePerUnit,
+      markupPercent,
+      sellingRatePerUnit,
+      defaultDescription:
+
+
+  };
+
+  const handleOpenNewItemPresetForm = () => {
+    const typedItemName = newLineItemName.trim();
+
+    setNewPresetName(typedItemName);
+    setNewPresetDescription(createItemMasterDefaultDescription(typedItemName));
+
+    setIsNewItemPresetFormOpen(true);
+    setIsItemSuggestionOpen(false);
+  };
+
+  const handleAddItemPreset = async () => {
+    const trimmedName = newPresetName.trim();
+    const purchaseRatePerUnit = Math.max(0, Number(newPresetPurchaseRate) || 0);
+    const markupPercent = Math.max(0, Number(newPresetMarkupPercent) || 0);
+    const sellingRatePerUnit = Math.round(
+      purchaseRatePerUnit * (1 + markupPercent / 100)
+    );
+
+    if (!trimmedName) return;
+
+    const selectedAreaName =
+      areas.find(area => area.id === newLineItemAreaId)?.name ?? 'selected area';
+
+    const newPreset: CostEstimateItemPreset = {
+      id: createId('estimate-item'),
+      name: trimmedName,
+      category: newPresetCategory,
+      defaultUnitLabel: newPresetUnit,
+      purchaseRatePerUnit,
+      markupPercent,
+      sellingRatePerUnit,
+      defaultDescription:
+        newPresetDescription.trim() ||
+
+
+      isCustom: true,
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
+      return nextUnits;
+    });
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewUnitName('');
+    setIsNewUnitFormOpen(false);
+  };
+
+  const handleAddLineItem = () => {
+    const trimmedName = newLineItemName.trim();
+    const quantity = Math.max(0, Number(newLineItemQuantity) || 0);
+    const ratePerUnit = Math.max(0, Number(newLineItemRate) || 0);
+
+    if (!trimmedName || !newLineItemAreaId || quantity <= 0) return;
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: createId('estimate-line'),
+        areaId: newLineItemAreaId,
+        name: trimmedName,
+        description: newLineItemDescription.trim() || previewDescription,
+        quantity,
+        unitLabel: newLineItemUnit,
+        ratePerUnit,
+        remarks: newLineItemRemarks.trim() || undefined,
+      },
+    ]);
+    setNewLineItemName('');
+    setNewLineItemDescription('');
+
+
+    };
+
+    setUnits(current => {
+      const nextUnits = [...current, newUnit];
+      void saveCostEstimateUnitsToStorage(nextUnits).catch(handleMasterSourceError);
+      return nextUnits;
+    });
+    setNewLineItemUnit(newUnit.shortLabel);
+    setNewUnitName('');
+    setIsNewUnitFormOpen(false);
+  };
+
+  const handleAddLineItem = () => {
+    const trimmedName = newLineItemName.trim();
+    const quantity = Math.max(0, Number(newLineItemQuantity) || 0);
+    const ratePerUnit = Math.max(0, Number(newLineItemRate) || 0);
+
+    if (!trimmedName || !newLineItemAreaId || quantity <= 0) return;
+
+    setLineItems(current => [
+      ...current,
+      {
+        id: createId('estimate-line'),
+        areaId: newLineItemAreaId,
+        name: trimmedName,
+        description: newLineItemDescription.trim() || previewDescription,
+        quantity,
+        unitLabel: newLineItemUnit,
+        ratePerUnit,
+        remarks: newLineItemRemarks.trim() || undefined,
+      },
+    ]);
+    setNewLineItemName('');
+    setNewLineItemDescription('');
+    setNewLineItemQuantity('');
+
+
+      }),
+    });
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleEditLineItem = (lineItemId: string) => {
+    setEditingLineItemIds(current => new Set(current).add(lineItemId));
+  };
+
+  const handleSaveLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
+    const trimmedName = lineItem.name.trim();
+    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
+    const ratePerUnit = Math.max(0, Number(lineItem.ratePerUnit) || 0);
+
+    if (!trimmedName || quantity <= 0) return;
+
+    handleUpdateLineItem(lineItemId, {
+      name: trimmedName,
+      description:
+        lineItem.description.trim() || getLineItemPreviewDescription(lineItem),
+      quantity,
+      unitLabel: lineItem.unitLabel || 'sqft',
+      ratePerUnit,
+      remarks: lineItem.remarks?.trim() || undefined,
+    });
+    setEditingLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setDraftLineItemIds(current => {
+
+
+    });
+    setSavedRowItemSuggestionId(null);
+  };
+
+  const handleEditLineItem = (lineItemId: string) => {
+    setEditingLineItemIds(current => new Set(current).add(lineItemId));
+  };
+
+  const handleSaveLineItem = (lineItemId: string) => {
+    const lineItem = lineItems.find(item => item.id === lineItemId);
+
+    if (!lineItem) return;
+
+    const trimmedName = lineItem.name.trim();
+    const quantity = Math.max(0, Number(lineItem.quantity) || 0);
+    const ratePerUnit = Math.max(0, Number(lineItem.ratePerUnit) || 0);
+
+    if (!trimmedName || quantity <= 0) return;
+
+    handleUpdateLineItem(lineItemId, {
+      name: trimmedName,
+      description:
+        lineItem.description.trim() || getLineItemPreviewDescription(lineItem),
+      quantity,
+      unitLabel: lineItem.unitLabel || 'sqft',
+      ratePerUnit,
+      remarks: lineItem.remarks?.trim() || undefined,
+    });
+    setEditingLineItemIds(current => {
+      const next = new Set(current);
+      next.delete(lineItemId);
+      return next;
+    });
+    setDraftLineItemIds(current => {
+      const next = new Set(current);
+
+================================================================================
+lineItem.quantity === 0
+================================================================================
+
+                                  </p>
+                                )}
+                                {lineItem.remarks && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Remarks: {lineItem.remarks}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.quantity === 0 ? "" : String(lineItem.quantity)}
+                          disabled={!isLineItemEditing}
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                quantity: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Qty"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="relative self-center">
+                          <input
+                            value={
+                              savedRowUnitDropdownId === lineItem.id
+                                ? savedRowUnitQuery
+                                : lineItem.unitLabel
+
+================================================================================
+lineItem.ratePerUnit === 0
+================================================================================
+
+                                )}
+
+                                {getMatchingSavedRowUnits().length === 0 &&
+                                  !canAddSavedRowUnit && (
+                                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                                      No units found.
+                                    </p>
+                                  )}
+                              </div>
+                            )}
+                        </div>
+
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lineItem.ratePerUnit === 0 ? "" : String(lineItem.ratePerUnit)}
+                          disabled={!isLineItemEditing}
+                          onChange={event => {
+                            const value = event.target.value;
+                            if (/^[0-9]*\.?[0-9]*$/.test(value)) {
+                              handleUpdateLineItem(lineItem.id, {
+                                ratePerUnit: value === "" ? 0 : Number(value),
+                              });
+                            }
+                          }}
+                          placeholder="Rate"
+                          className="h-10 min-h-0 self-center rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 focus:border-foreground"
+                        />
+
+                        <div className="col-span-3 flex items-center justify-between gap-3 xl:col-span-1">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">
+                              {isDraftLineItem
+                                ? 'Not saved'
+                                : formatINR(calculateLineItemTotal(lineItem))}
