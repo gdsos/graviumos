@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import autoTable, { type RowInput } from 'jspdf-autotable';
 
 import { calculateLineItemTotal } from '../calculator';
 import type {
@@ -852,25 +852,49 @@ export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateE
   drawHeader(doc, settings, logo);
   drawProjectMeta(doc, payload, preparedDate);
 
-  const body =
-    payload.lineItems.length > 0
-      ? payload.lineItems.map((lineItem, index) => [
-          String(index + 1),
-          getAreaName(payload.areas, lineItem.areaId),
-          lineItem.name,
-          lineItem.description || '-',
-          String(lineItem.quantity),
-          lineItem.unitLabel,
-          formatPdfMoney(lineItem.ratePerUnit),
-          formatPdfMoney(calculateLineItemTotal(lineItem)),
-        ])
-      : [['-', '-', 'No line items added', '-', '-', '-', '-', '-']];
+  const body: RowInput[] = [];
+
+  if (payload.lineItems.length > 0) {
+    const itemsByArea = new Map<string, { name: string; items: RowInput[] }>();
+
+    payload.lineItems.forEach((lineItem, index) => {
+      const area = itemsByArea.get(lineItem.areaId) ?? {
+        name: getAreaName(payload.areas, lineItem.areaId),
+        items: [],
+      };
+
+      area.items.push([
+        String(index + 1),
+        lineItem.name,
+        lineItem.description || '-',
+        String(lineItem.quantity),
+        lineItem.unitLabel,
+        formatPdfMoney(lineItem.ratePerUnit),
+        formatPdfMoney(calculateLineItemTotal(lineItem)),
+      ]);
+      itemsByArea.set(lineItem.areaId, area);
+    });
+
+    itemsByArea.forEach(area => {
+      body.push([{
+        content: area.name,
+        colSpan: 7,
+        styles: {
+          fillColor: BRAND.softSurface,
+          fontStyle: 'bold',
+          textColor: BRAND.pearlBlack,
+        },
+      }]);
+      body.push(...area.items);
+    });
+  } else {
+    body.push(['-', 'No line items added', '-', '-', '-', '-', '-']);
+  }
 
   autoTable(doc, {
     startY: 250,
     head: [[
       '#',
-      'Area',
       'Item',
       'Description',
       'Qty',
@@ -898,20 +922,20 @@ export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateE
     alternateRowStyles: {
       fillColor: [250, 249, 247],
     },
+    rowPageBreak: 'avoid',
     columnStyles: {
       0: { cellWidth: 20, halign: 'center' },
-      1: { cellWidth: 56 },
-      2: { cellWidth: 64 },
-      3: { cellWidth: 164 },
-      4: { cellWidth: 32, halign: 'right' },
-      5: { cellWidth: 30 },
-      6: {
+      1: { cellWidth: 80 },
+      2: { cellWidth: 204 },
+      3: { cellWidth: 32, halign: 'right' },
+      4: { cellWidth: 30 },
+      5: {
         cellWidth: 70,
         halign: 'right',
         font: getMoneyFontFamily(),
         fontStyle: getMoneyAutoTableFontStyle('medium'),
       },
-      7: {
+      6: {
         cellWidth: 86,
         halign: 'right',
         font: getMoneyFontFamily(),
