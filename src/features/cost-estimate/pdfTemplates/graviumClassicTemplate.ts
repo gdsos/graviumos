@@ -882,6 +882,7 @@ export async function exportGraviumClassicCostEstimatePdf(payload: CostEstimateE
         styles: {
           fillColor: BRAND.softSurface,
           fontStyle: 'bold',
+          halign: 'left',
           textColor: BRAND.pearlBlack,
         },
       }]);
